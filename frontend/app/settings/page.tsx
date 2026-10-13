@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -20,13 +21,20 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { organization } = useAuth();
   const { skills, resetAllSyntheticData } = useMockStore();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = React.useState(false);
-  const [orgName, setOrgName] = React.useState('Acme Cloud Technologies');
+  const [orgName, setOrgName] = React.useState(organization?.name || 'Acme Cloud Technologies');
   const [orgDomain, setOrgDomain] = React.useState('acme.corp');
   const [newSkillName, setNewSkillName] = React.useState('');
   const [newSkillCategory, setNewSkillCategory] = React.useState('Frontend');
+
+  React.useEffect(() => {
+    if (organization?.name) {
+      setOrgName(organization.name);
+    }
+  }, [organization]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

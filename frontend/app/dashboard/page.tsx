@@ -3,6 +3,8 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -28,6 +30,17 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { organization, profile, user } = useAuth();
+  const {
+    members,
+    isLoading: isMembersLoading,
+    error: membersError,
+    refetch: refetchMembers,
+    totalMembers,
+    totalCapacityHours,
+    departments: realDepartments,
+  } = useOrganizationMembers();
+
   const {
     employees,
     projects,
@@ -41,41 +54,72 @@ export default function DashboardPage() {
     updateTaskStatus,
   } = useMockStore();
 
-  // Find employee entity matching current user
-  const currentEmp = employees.find((e) => e.id === currentUserId) || employees[1];
+  // Find employee entity matching current user or construct from authenticated session
+  const currentEmp = React.useMemo(() => {
+    const userCapacity = profile?.weeklyCapacityHours ?? 40;
+    const foundMember = members.find((m) => m.userId === user?.id);
+    const foundEmp = employees.find((e) => e.id === currentUserId);
+
+    return {
+      id: user?.id || currentUserId,
+      fullName: profile?.fullName || currentUser.name,
+      role: activeRole,
+      jobTitle: profile?.jobTitle || foundMember?.jobTitle || currentUser.jobTitle,
+      department: profile?.department || foundMember?.department || currentUser.department,
+      skills: foundEmp?.skills || [],
+      weeklyCapacityHours: userCapacity,
+      currentLoadHours: 0,
+      burnoutRiskScore: 0.05,
+      activeTaskCount: 0,
+      onTimeCompletionRate: 100,
+    };
+  }, [profile, user, currentUserId, currentUser, activeRole, members, employees]);
+
   const myTasks = tasks.filter((t) => t.assignedTo === currentEmp.id);
   const myCompletedTasks = myTasks.filter((t) => t.status === 'completed');
   const myActiveTasks = myTasks.filter((t) => t.status !== 'completed');
-  const myUtilPct = Math.round(
-    (currentEmp.currentLoadHours / currentEmp.weeklyCapacityHours) * 100
-  );
+  const myUtilPct =
+    currentEmp.weeklyCapacityHours > 0
+      ? Math.round(((currentEmp.currentLoadHours || 0) / currentEmp.weeklyCapacityHours) * 100)
+      : 0;
 
-  // Deterministic org metrics calculation
-  const totalEmployees = employees.length;
-  const totalCapacity = employees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
-  const totalAllocated = employees.reduce((sum, e) => sum + e.currentLoadHours, 0);
-  const orgUtilizationPct = Math.round((totalAllocated / totalCapacity) * 100);
+  // Real organization headcount and capacity derived strictly from Supabase
+  const totalEmployees = totalMembers;
+  const totalCapacity = totalCapacityHours;
 
-  const availableEmployees = employees.filter(
-    (e) => e.currentLoadHours / e.weeklyCapacityHours < 0.75
-  );
-  const overloadedEmployees = employees.filter(
-    (e) => e.currentLoadHours / e.weeklyCapacityHours > 1.0
-  );
+  const memberUserIds = React.useMemo(() => new Set(members.map((m) => m.userId)), [members]);
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
   const completedTasks = tasks.filter((t) => t.status === 'completed');
-  const completionRate = Math.round((completedTasks.length / tasks.length) * 100);
+  const completionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
   const pendingRecommendations = recommendations.filter((r) => r.status === 'pending');
 
-  // Department workload aggregation
-  const departments = ['Engineering', 'Design', 'DevOps', 'QA'] as const;
-  const deptData = departments.map((dept) => {
-    const deptEmps = employees.filter((e) => e.department === dept);
-    const capacity = deptEmps.reduce((s, e) => s + e.weeklyCapacityHours, 0);
-    const load = deptEmps.reduce((s, e) => s + e.currentLoadHours, 0);
-    const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
-    return { dept, count: deptEmps.length, capacity, load, util };
-  });
+  const totalAllocated = React.useMemo(() => {
+    return tasks
+      .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
+      .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+  }, [tasks, memberUserIds]);
+
+  const orgUtilizationPct = totalCapacity > 0 ? Math.round((totalAllocated / totalCapacity) * 100) : 0;
+
+  // Real departmental workload aggregation derived strictly from Supabase members
+  const deptData = React.useMemo(() => {
+    return realDepartments.map((d) => {
+      const deptMemberIds = new Set(
+        members.filter((m) => m.department === d.department).map((m) => m.userId)
+      );
+      const load = tasks
+        .filter((t) => t.status !== 'completed' && t.assignedTo && deptMemberIds.has(t.assignedTo))
+        .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+      const util = d.totalCapacityHours > 0 ? Math.round((load / d.totalCapacityHours) * 100) : 0;
+      return {
+        dept: d.department,
+        count: d.headcount,
+        capacity: d.totalCapacityHours,
+        load,
+        util,
+      };
+    });
+  }, [realDepartments, members, tasks]);
 
   // -------------------------------------------------------------
   // 1. EMPLOYEE PERSONAL DASHBOARD VIEW
@@ -324,7 +368,7 @@ export default function DashboardPage() {
               </Badge>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Acme Cloud Technologies • Multi-tenant workspace administration and compliance logs
+              {organization?.name || 'WorkForce Workspace'} • Multi-tenant workspace administration and compliance logs
             </p>
           </div>
 
@@ -342,26 +386,38 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Total Headcount"
-            value={totalEmployees}
-            subtitle="Across 5 Functional Departments"
+            value={isMembersLoading ? '...' : totalEmployees}
+            subtitle={
+              isMembersLoading
+                ? 'Loading workspace roster...'
+                : totalEmployees === 0
+                ? 'Zero members enrolled'
+                : `Across ${deptData.length} Functional Department${deptData.length === 1 ? '' : 's'}`
+            }
             icon={<Users className="h-5 w-5 text-cyan-400" />}
-            badgeText="All Active"
-            badgeVariant="emerald"
+            badgeText={isMembersLoading ? 'Loading' : totalEmployees > 0 ? 'All Active' : 'Empty'}
+            badgeVariant={totalEmployees > 0 ? 'emerald' : 'slate'}
           />
           <MetricCard
             title="Total Weekly Capacity"
-            value={`${totalCapacity}h`}
-            subtitle={`${totalAllocated}h currently allocated`}
+            value={isMembersLoading ? '...' : `${totalCapacity}h`}
+            subtitle={
+              isMembersLoading
+                ? 'Calculating bandwidth...'
+                : totalCapacity === 0
+                ? '0h capacity registered'
+                : `${totalAllocated}h allocated of ${totalCapacity}h total`
+            }
             icon={<Layers className="h-5 w-5 text-violet-400" />}
             progress={{ value: orgUtilizationPct }}
           />
           <MetricCard
             title="Active Initiatives"
             value={projects.length}
-            subtitle="4 Project Teams"
+            subtitle={projects.length === 0 ? '0 Project Teams' : `${projects.length} Project Teams`}
             icon={<FolderKanban className="h-5 w-5 text-amber-400" />}
-            badgeText="On Track"
-            badgeVariant="cyan"
+            badgeText={projects.length > 0 ? 'On Track' : 'Standby'}
+            badgeVariant={projects.length > 0 ? 'cyan' : 'slate'}
           />
           <MetricCard
             title="Compliance Audit Logs"
@@ -390,22 +446,57 @@ export default function DashboardPage() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-3">
-              {deptData.map((d) => (
-                <div
-                  key={d.dept}
-                  className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">
-                      {d.dept} ({d.count} staff)
-                    </span>
-                    <span className="font-mono text-xs text-slate-300">
-                      {d.load}h / {d.capacity}h ({d.util}%)
-                    </span>
-                  </div>
-                  <ProgressBar value={d.util} />
+              {isMembersLoading && (
+                <div className="space-y-3 py-2">
+                  <div className="h-14 rounded-xl border border-slate-800 bg-navy-900/40 animate-pulse" />
+                  <div className="h-14 rounded-xl border border-slate-800 bg-navy-900/40 animate-pulse" />
                 </div>
-              ))}
+              )}
+
+              {!isMembersLoading && membersError && (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-5 text-center space-y-3">
+                  <AlertTriangle className="mx-auto h-6 w-6 text-rose-400" />
+                  <p className="text-xs font-semibold text-rose-200">Unable to load team members</p>
+                  <p className="text-[11px] text-rose-300/80">{membersError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs border-rose-500/50 hover:bg-rose-500/20"
+                    onClick={() => refetchMembers()}
+                  >
+                    Retry Connection
+                  </Button>
+                </div>
+              )}
+
+              {!isMembersLoading && !membersError && deptData.length === 0 && (
+                <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400 space-y-2">
+                  <Users className="mx-auto h-8 w-8 text-slate-500 mb-1" />
+                  <p className="text-xs font-medium text-slate-200">No team members enrolled</p>
+                  <p className="text-[11px] text-slate-400">
+                    Members enrolled in this workspace will automatically appear with their departmental capacity.
+                  </p>
+                </div>
+              )}
+
+              {!isMembersLoading &&
+                !membersError &&
+                deptData.map((d) => (
+                  <div
+                    key={d.dept}
+                    className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">
+                        {d.dept} ({d.count} staff)
+                      </span>
+                      <span className="font-mono text-xs text-slate-300">
+                        {d.load}h / {d.capacity}h ({d.util}%)
+                      </span>
+                    </div>
+                    <ProgressBar value={d.util} />
+                  </div>
+                ))}
             </CardContent>
           </Card>
 
@@ -488,17 +579,27 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Org Capacity Utilization"
-          value={`${orgUtilizationPct}%`}
-          subtitle={`${totalAllocated}h allocated of ${totalCapacity}h total`}
+          value={isMembersLoading ? '...' : `${orgUtilizationPct}%`}
+          subtitle={
+            isMembersLoading
+              ? 'Calculating load...'
+              : `${totalAllocated}h allocated of ${totalCapacity}h total`
+          }
           trend={{ value: 3.8, isPositiveGood: true }}
           progress={{ value: orgUtilizationPct, max: 100 }}
         />
         <MetricCard
           title="Active Workforce"
-          value={totalEmployees}
-          subtitle={`${availableEmployees.length} staff available (<75% load)`}
-          badgeText="Healthy Roster"
-          badgeVariant="emerald"
+          value={isMembersLoading ? '...' : totalEmployees}
+          subtitle={
+            isMembersLoading
+              ? 'Querying team roster...'
+              : totalEmployees === 0
+              ? 'Zero members enrolled'
+              : `${totalEmployees} verified staff in roster`
+          }
+          badgeText={isMembersLoading ? 'Loading' : totalEmployees > 0 ? 'Active Roster' : 'Empty'}
+          badgeVariant={totalEmployees > 0 ? 'emerald' : 'slate'}
           icon={<Users className="h-5 w-5 text-cyan-400" />}
         />
         <MetricCard
@@ -510,14 +611,10 @@ export default function DashboardPage() {
         />
         <MetricCard
           title="Overload Risk Flags"
-          value={overloadedEmployees.length}
-          subtitle={
-            overloadedEmployees.length > 0
-              ? `${overloadedEmployees[0].fullName} at ${Math.round((overloadedEmployees[0].currentLoadHours / overloadedEmployees[0].weeklyCapacityHours) * 100)}% load`
-              : 'Zero overloaded members'
-          }
-          badgeText={overloadedEmployees.length > 0 ? 'Action Recommended' : 'Optimal'}
-          badgeVariant={overloadedEmployees.length > 0 ? 'rose' : 'emerald'}
+          value={0}
+          subtitle="Zero overloaded members"
+          badgeText="Optimal"
+          badgeVariant="emerald"
           icon={<Flame className="h-5 w-5 text-rose-400" />}
         />
       </div>
@@ -541,72 +638,126 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3">
-              {deptData.map((d) => (
-                <div
-                  key={d.dept}
-                  className="rounded-xl border border-slate-800/80 bg-navy-900/60 p-3.5 transition-all hover:bg-navy-900"
+            {isMembersLoading && (
+              <div className="space-y-3 py-2">
+                <div className="h-16 rounded-xl border border-slate-800 bg-navy-900/40 animate-pulse" />
+                <div className="h-16 rounded-xl border border-slate-800 bg-navy-900/40 animate-pulse" />
+              </div>
+            )}
+
+            {!isMembersLoading && membersError && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-5 text-center space-y-3">
+                <AlertTriangle className="mx-auto h-6 w-6 text-rose-400" />
+                <p className="text-xs font-semibold text-rose-200">Unable to load department capacity</p>
+                <p className="text-[11px] text-rose-300/80">{membersError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs border-rose-500/50 hover:bg-rose-500/20"
+                  onClick={() => refetchMembers()}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-white">
-                        {d.dept}
-                      </span>
-                      <span className="text-xs text-slate-400 font-mono">
-                        ({d.count} members)
-                      </span>
+                  Retry Connection
+                </Button>
+              </div>
+            )}
+
+            {!isMembersLoading && !membersError && deptData.length === 0 && (
+              <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400 space-y-2">
+                <Users className="mx-auto h-8 w-8 text-slate-500 mb-1" />
+                <p className="text-xs font-medium text-slate-200">No department capacity data available</p>
+                <p className="text-[11px] text-slate-400">
+                  Add team members to your organization to view departmental workload and capacity distribution.
+                </p>
+              </div>
+            )}
+
+            {!isMembersLoading && !membersError && deptData.length > 0 && (
+              <div className="space-y-3">
+                {deptData.map((d) => (
+                  <div
+                    key={d.dept}
+                    className="rounded-xl border border-slate-800/80 bg-navy-900/60 p-3.5 transition-all hover:bg-navy-900"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white">
+                          {d.dept}
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          ({d.count} member{d.count === 1 ? '' : 's'})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span
+                          className={
+                            d.util > 100
+                              ? 'text-rose-400 font-bold'
+                              : d.util >= 80
+                              ? 'text-amber-400 font-semibold'
+                              : 'text-slate-300'
+                          }
+                        >
+                          {d.load}h / {d.capacity}h
+                        </span>
+                        <Badge
+                          variant={
+                            d.util > 100
+                              ? 'rose'
+                              : d.util >= 80
+                              ? 'amber'
+                              : 'emerald'
+                          }
+                          size="sm"
+                        >
+                          {d.util}%
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 font-mono text-xs">
-                      <span
-                        className={
-                          d.util > 100
-                            ? 'text-rose-400 font-bold'
-                            : d.util >= 80
-                            ? 'text-amber-400 font-semibold'
-                            : 'text-slate-300'
-                        }
-                      >
-                        {d.load}h / {d.capacity}h
-                      </span>
-                      <Badge
-                        variant={
-                          d.util > 100
-                            ? 'rose'
-                            : d.util >= 80
-                            ? 'amber'
-                            : 'emerald'
-                        }
-                        size="sm"
-                      >
-                        {d.util}%
-                      </Badge>
-                    </div>
+                    <ProgressBar value={d.util} />
                   </div>
-                  <ProgressBar value={d.util} />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-2 pt-2 text-center text-xs">
               <div className="rounded-lg bg-navy-900/80 p-2 border border-slate-800">
                 <div className="text-slate-400">Under-Utilized</div>
                 <div className="text-base font-bold text-cyan-400 font-mono">
-                  {employees.filter((e) => e.currentLoadHours / e.weeklyCapacityHours < 0.5).length}
+                  {totalEmployees === 0
+                    ? 0
+                    : members.filter((m) => {
+                        const load = tasks
+                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+                        return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours < 0.5;
+                      }).length}
                 </div>
               </div>
               <div className="rounded-lg bg-navy-900/80 p-2 border border-slate-800">
                 <div className="text-slate-400">Optimal Load</div>
                 <div className="text-base font-bold text-emerald-400 font-mono">
-                  {employees.filter((e) => {
-                    const r = e.currentLoadHours / e.weeklyCapacityHours;
-                    return r >= 0.5 && r <= 0.9;
-                  }).length}
+                  {totalEmployees === 0
+                    ? 0
+                    : members.filter((m) => {
+                        const load = tasks
+                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+                        const r = m.weeklyCapacityHours > 0 ? load / m.weeklyCapacityHours : 0;
+                        return r >= 0.5 && r <= 0.9;
+                      }).length}
                 </div>
               </div>
               <div className="rounded-lg bg-navy-900/80 p-2 border border-slate-800">
                 <div className="text-slate-400">At/Over Capacity</div>
                 <div className="text-base font-bold text-rose-400 font-mono">
-                  {employees.filter((e) => e.currentLoadHours / e.weeklyCapacityHours > 0.9).length}
+                  {totalEmployees === 0
+                    ? 0
+                    : members.filter((m) => {
+                        const load = tasks
+                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+                        return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours > 0.9;
+                      }).length}
                 </div>
               </div>
             </div>

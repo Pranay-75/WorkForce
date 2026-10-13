@@ -23,6 +23,7 @@ import {
   initialNotifications,
   initialSkills,
 } from './mockData';
+import { useAuth } from './authContext';
 
 export interface DemoIdentity {
   id: string;
@@ -282,6 +283,8 @@ interface MockStoreContextType {
 const MockStoreContext = React.createContext<MockStoreContextType | null>(null);
 
 export function MockStoreProvider({ children }: { children: React.ReactNode }) {
+  const { user, profile, organization, role: authRole, isAuthenticated } = useAuth();
+
   const [rawEmployees, setRawEmployees] = React.useState<Employee[]>(initialEmployees);
   const [projects, setProjects] = React.useState<Project[]>(initialProjects);
   const [tasks, setTasks] = React.useState<Task[]>(initialTasks);
@@ -292,9 +295,32 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
   const [feedbackMessage, setFeedbackMessage] = React.useState<string | null>(null);
 
   // Active Role state
-  const [currentUserId, setCurrentUserId] = React.useState<string>('emp-1'); // Default Sarah Connor (Manager)
-  const currentUser = demoIdentities.find((i) => i.id === currentUserId) || demoIdentities[0];
-  const activeRole = currentUser.role;
+  const [demoUserId, setDemoUserId] = React.useState<string>('emp-1'); // Default Sarah Connor (Manager for unauthenticated showcase)
+  
+  const currentUser: DemoIdentity = React.useMemo(() => {
+    if (isAuthenticated && user) {
+      const name = profile?.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Team Lead';
+      const initials = name
+        .split(' ')
+        .filter(Boolean)
+        .map((part: string) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'TL';
+      return {
+        id: user.id,
+        name,
+        role: authRole,
+        jobTitle: profile?.jobTitle || (authRole === 'admin' ? 'Workspace Administrator' : 'Software Engineer'),
+        department: profile?.department || 'Engineering',
+        avatar: initials,
+      };
+    }
+    return demoIdentities.find((i) => i.id === demoUserId) || demoIdentities[0];
+  }, [isAuthenticated, user, profile, authRole, demoUserId]);
+
+  const activeRole: UserRole = isAuthenticated ? authRole : currentUser.role;
+  const currentUserId: string = currentUser.id;
 
   // Deterministic live workload recalculation across all employees
   const employees = React.useMemo(() => {
@@ -320,9 +346,13 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const switchDemoRole = (identityId: string) => {
+    if (isAuthenticated) {
+      showFeedback('Simulated role switching is rejected for authenticated sessions.');
+      return;
+    }
     const ident = demoIdentities.find((i) => i.id === identityId);
     if (!ident) return;
-    setCurrentUserId(ident.id);
+    setDemoUserId(ident.id);
     showFeedback(`Switched demo role to ${ident.name} (${ident.role.toUpperCase()})`);
   };
 

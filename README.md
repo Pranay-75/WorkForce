@@ -1,80 +1,108 @@
 # WorkForce: AI-Powered Workforce Capacity SaaS
 
-WorkForce is an intelligent workforce capacity and explainable task matching SaaS platform built with Next.js, Python FastAPI, Supabase PostgreSQL, and Google Gemini.
+WorkForce is an intelligent workforce capacity, explainable task matching, and workload balancing SaaS platform built with Next.js 15, Python FastAPI, Supabase PostgreSQL & Auth, and Google Gemini.
 
 ---
 
-## 🚀 Phase 1 Acceptance Complete: Frontend Design System & Role Experience
+## 🚀 Architecture & Phases
 
-Phase 1 UI development and acceptance testing are 100% complete and verified.
-
-### 🎭 Simulated Role-Adaptive Navigation & Views
-Using the **Demo Role Switcher** in the top header:
-1. **Manager (Sarah Connor)**:
-   - Access to: Dashboard, Employee Directory, Projects, Task Kanban, AI Recommendations Hub, Capacity Heatmap & Redistribution Sandbox, Reports, and Notifications.
-   - Dashboard View: Real-time org utilization, workload heatmap, pending AI approval cards, and overload risk flags.
-2. **Admin / HR (Chloe Dubois)**:
-   - Access to: Dashboard, Employee Directory, Skill Taxonomy Administration, Projects, Tasks, Reports, Immutable Compliance Audit Logs, and Workspace Settings / Demo Seeder.
-   - Dashboard View: Organization headcount, functional unit bandwidth, active initiatives, and recent compliance logs.
-3. **Employee (Alex Chen / Priya Patel)**:
-   - Access to: Personal Dashboard, Projects, Tasks (My Tasks), and Notifications.
-   - Dashboard View: Personal weekly load meter (e.g. 32h / 40h), "My Active Tasks" queue with direct progress advancement buttons, personal skill matrix, and personal deadlines.
+* **Phase 1 (Complete)**: Next.js App Router design system, 19 responsive routes, role-adaptive dashboards for Admin, Manager, and Employee, and deterministic capacity engine.
+* **Phase 2 (Active)**: Supabase PostgreSQL database schema with strict Row-Level Security (RLS), Supabase Auth server session integration, and Python FastAPI backend with zero-trust token verification and Role-Based Access Control (RBAC).
 
 ---
 
-## 🛠️ Local Development & Quick Start
+## 🛠️ Quick Start & Local Setup
 
 ### Prerequisites
-- Node.js `20.x` or higher
-- npm `10.x` or higher
+* **Node.js**: `20.x` or higher (`npm 10.x+`)
+* **Python**: `3.11` to `3.14` (`pip`)
+* **Supabase**: Active Supabase project (e.g. `wxkjygctdonpeypgrcnf`)
 
-### Commands to Run Locally:
+---
+
+### 1. Database Setup (Supabase)
+
+The migration and seed files are located in `supabase/`:
+* [20261010000001_initial_auth_schema.sql](file:///d:/WorkForce/supabase/migrations/20261010000001_initial_auth_schema.sql): Creates `organizations`, `user_profiles`, `organization_memberships`, ENUMs, security definer functions, auto-profile trigger, and strict multi-tenant RLS policies.
+* [seed.sql](file:///d:/WorkForce/supabase/seed.sql): Creates demo organization and seed profiles for Admin, Manager, and Employee roles.
+
+**Apply via Supabase Dashboard**:
+1. Open your Supabase Dashboard SQL Editor: [https://supabase.com/dashboard](https://supabase.com/dashboard)
+2. Run the SQL from `supabase/migrations/20261010000001_initial_auth_schema.sql`.
+3. Run the SQL from `supabase/seed.sql`.
+
+---
+
+### 2. Frontend Setup (Next.js)
+
 ```bash
-# 1. Navigate to the frontend directory
+# Navigate to frontend
 cd frontend
 
-# 2. Install dependencies (if not already installed)
+# Install dependencies
 npm install
 
-# 3. Start the production server (Fast & fully optimized)
-npm run build
-npm run start
+# Environment variables (.env.local)
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
-# Or run in development hot-reload mode:
+# Start the frontend server (runs on http://localhost:3000)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) (or [/dashboard](http://localhost:3000/dashboard)) in your browser.
+Visit [http://localhost:3000/login](http://localhost:3000/login) to sign in or use the quick-fill demo buttons.
 
 ---
 
-## 📂 Project Architecture
+### 3. Backend Setup (FastAPI)
+
+```bash
+# Navigate to backend
+cd backend
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Run automated tests
+python -m pytest -v
+
+# Start FastAPI backend server (runs on http://localhost:8000)
+python run.py
+```
+
+API documentation is accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+---
+
+## 📂 Project Structure
 
 ```
 WorkForce/
-├── frontend/               # Next.js 15 App Router, React 19, Tailwind CSS
-│   ├── app/                # 15 Static & Dynamic routes
-│   │   ├── dashboard/      # Role-adaptive dashboard (Employee / Manager / Admin)
-│   │   ├── employees/      # Directory & [id] profile pages
-│   │   ├── projects/       # Portfolio & [id] project board pages
-│   │   ├── tasks/          # Kanban board, Table & [id] task detail pages
-│   │   ├── matching/       # Explainable AI Matching Hub with Manager approvals
-│   │   ├── workload/       # Capacity Heatmap & Redistribution Sandbox
-│   │   ├── insights/       # Operational Risk Matrix & velocity charts
-│   │   ├── reports/        # Utilization tables & working CSV export
-│   │   ├── audit/          # Immutable compliance audit log
-│   │   ├── notifications/  # In-app alert triage & dispatch
-│   │   └── settings/       # Org settings & one-click synthetic seeder
+├── frontend/                       # Next.js 15 App Router, React 19, Tailwind CSS
+│   ├── app/                        # 19 Static & Dynamic routes (/dashboard, /tasks, /login, etc.)
 │   ├── components/
-│   │   ├── layout/         # AppSidebar (role-filtered), AppHeader (demo switcher), AppShell
-│   │   └── ui/             # Button, Badge, Card, MetricCard, ProgressBar, DataTable, Dialog, etc.
-│   └── lib/                # mockStore.tsx (reactive state), mockData.ts, types.ts
-├── docs/                   # Full System Specifications
-│   ├── PRODUCT_SPEC.md
-│   ├── SCREEN_MAP.md
-│   ├── DATA_MODEL.md
-│   ├── API_SPEC.md
-│   └── ACCEPTANCE_TESTS.md
-├── AGENTS.md               # Mandatory architectural constitution & rules
+│   │   ├── layout/                 # AppSidebar, AppHeader, AppShell
+│   │   └── ui/                     # Design system component library
+│   ├── lib/
+│   │   ├── authContext.tsx         # Supabase Auth session provider
+│   │   ├── supabase/               # SSR client, browser client, middleware
+│   │   ├── mockStore.tsx           # Reactive deterministic workload store
+│   │   └── types.ts                # TypeScript domain models
+│   └── middleware.ts               # Next.js session refresh & route protection
+├── backend/                        # Python FastAPI Backend
+│   ├── app/
+│   │   ├── api/                    # V1 routers (auth, health) & dependencies (deps.py)
+│   │   ├── core/                   # config.py, database.py, security.py (JWT verification)
+│   │   ├── models/                 # Pydantic schemas (users, orgs, profiles)
+│   │   └── main.py                 # FastAPI application factory
+│   ├── tests/
+│   │   └── test_auth.py            # Automated token & RBAC tests (9/9 passed)
+│   └── requirements.txt
+├── supabase/                       # Supabase Database Migrations & Seeds
+│   ├── migrations/
+│   │   └── 20261010000001_initial_auth_schema.sql
+│   └── seed.sql
+├── docs/                           # Architecture Specifications & Acceptance Criteria
+├── AGENTS.md                       # Core project guidelines & agent directives
 └── README.md
 ```

@@ -1,15 +1,60 @@
 'use client';
 
 import * as React from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || '/';
+  const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const { feedbackMessage } = useMockStore();
+  const { isAuthenticated, organization, isLoading } = useAuth();
+
+  const isAuthOrOnboardingRoute =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/auth');
+
+  // Enforce zero-trust authentication & onboarding routing guards
+  React.useEffect(() => {
+    if (!isLoading) {
+      if (!isAuthenticated && !isAuthOrOnboardingRoute) {
+        router.push('/login');
+      } else if (isAuthenticated && !organization && !isAuthOrOnboardingRoute) {
+        router.push('/onboarding');
+      }
+    }
+  }, [isLoading, isAuthenticated, organization, isAuthOrOnboardingRoute, router]);
+
+  // Auth and Onboarding pages render cleanly as standalone full-screen pages
+  if (isAuthOrOnboardingRoute) {
+    return <div className="min-h-screen bg-navy-950 text-slate-100">{children}</div>;
+  }
+
+  // If loading session on protected routes, show clean loading placeholder
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+          <span className="text-xs text-slate-400 font-mono">Verifying workspace session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If unauthenticated or un-onboarded, prevent rendering protected layout while redirecting
+  if (!isAuthenticated || !organization) {
+    return <div className="min-h-screen bg-navy-950 text-slate-100" />;
+  }
 
   return (
     <div className="min-h-screen bg-background-base text-slate-100 flex">
@@ -33,12 +78,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col">
               <span className="font-medium text-white">{feedbackMessage}</span>
               <span className="text-[10px] text-slate-400 font-mono">
-                Simulated frontend state • Not persisted to backend
+                Live Workspace State
               </span>
             </div>
-            <Badge variant="cyan" size="sm" className="ml-2">
-              <Sparkles className="h-2.5 w-2.5" />
-              Live Demo
+            <Badge variant="violet" size="sm" className="ml-2">
+              <Sparkles className="h-2.5 w-2.5 mr-1" />
+              Live
             </Badge>
           </div>
         )}

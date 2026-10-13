@@ -147,3 +147,27 @@ export interface NotificationItem {
   isRead: boolean;
   timestamp: string;
 }
+
+export interface OrganizationMember {
+  id: string; // membership id
+  membershipId: string;
+  userId: string;
+  organizationId: string;
+  role: UserRole;
+  status: 'active' | 'invited' | 'suspended';
+  fullName: string;
+  email: string;
+  avatarUrl?: string | null;
+  phone?: string | null;
+  department: string;
+  jobTitle: string;
+  weeklyCapacityHours: number;
+  joinedAt: string;
+}
+
+export interface DepartmentSummary {
+  department: string;
+  headcount: number;
+  totalCapacityHours: number;
+}
+

@@ -2,9 +2,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMockStore, demoIdentities } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import {
   Menu,
   Bell,
@@ -13,6 +15,9 @@ import {
   Command,
   UserCheck,
   ChevronDown,
+  LogOut,
+  LogIn,
+  Shield,
 } from 'lucide-react';
 
 const routeTitleMap: Record<string, { title: string; subtitle: string }> = {
@@ -36,7 +41,9 @@ export function AppHeader({
   onMobileMenuToggle?: () => void;
 }) {
   const pathname = usePathname() || '/dashboard';
+  const router = useRouter();
   const { currentUser, switchDemoRole, notifications } = useMockStore();
+  const { user, profile, role, organization, isAuthenticated, signOut } = useAuth();
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = React.useState(false);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -47,6 +54,11 @@ export function AppHeader({
   };
 
   const pathSegments = pathname.split('/').filter(Boolean);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800/80 bg-navy-900/90 px-4 sm:px-6 backdrop-blur-md">
@@ -66,7 +78,7 @@ export function AppHeader({
               href="/dashboard"
               className="hover:text-violet-400 transition-colors"
             >
-              WorkForce
+              {organization?.name || 'WorkForce'}
             </Link>
             {pathSegments.length > 0 && (
               <>
@@ -83,89 +95,127 @@ export function AppHeader({
         </div>
       </div>
 
-      {/* Right section: Simulated Role Switcher, Notifications, Profile */}
+      {/* Right section: Auth status, Demo Role Switcher, Notifications */}
       <div className="flex items-center gap-3">
-        {/* Simulated Role Switcher Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-            className="flex items-center gap-2 rounded-xl border border-violet-500/40 bg-navy-950/80 px-3 py-1.5 text-xs text-slate-200 hover:border-violet-500 transition-all shadow-sm focus:outline-none"
-            title="Switch Simulated Role (Demo Only - Not Secure Authentication)"
-          >
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[9px] font-bold text-white">
-              {currentUser.avatar}
-            </div>
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="text-[11px] font-bold text-white leading-none">
-                {currentUser.name}
-              </span>
-              <span className="text-[9px] text-violet-400 font-mono capitalize">
-                Role: {currentUser.role} (Simulated)
-              </span>
-            </div>
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-          </button>
-
-          {/* Role Dropdown Menu */}
-          {isRoleDropdownOpen && (
-            <div className="absolute right-0 top-12 z-50 w-72 rounded-2xl border border-slate-700 bg-navy-900 p-2 shadow-elevated backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
-              <div className="px-3 py-2 border-b border-slate-800 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  ⚡ Simulated Demo Identities
+        {/* Real Supabase Auth or Simulated Mode */}
+        {isAuthenticated && user ? (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-navy-950/90 px-3 py-1.5 text-xs text-slate-200 shadow-sm">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 text-[10px] font-bold text-white shadow-glow">
+                {(profile?.fullName || user.email || 'U')[0].toUpperCase()}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[11px] font-bold text-white leading-none">
+                  {profile?.fullName || user.email?.split('@')[0]}
                 </span>
-                <span className="text-[10px] text-amber-400 font-mono">
-                  Demo-only preview • Not secure auth
+                <span className="text-[9px] text-cyan-400 font-mono capitalize">
+                  {organization?.name ? `${organization.name} • ` : ''}Role: {role}
                 </span>
               </div>
-
-              <div className="space-y-1">
-                {demoIdentities.map((identity) => {
-                  const isSelected = identity.id === currentUser.id;
-                  return (
-                    <button
-                      key={identity.id}
-                      onClick={() => {
-                        switchDemoRole(identity.id);
-                        setIsRoleDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors ${
-                        isSelected
-                          ? 'bg-violet-600/20 text-white border border-violet-500/40'
-                          : 'text-slate-300 hover:bg-navy-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white shrink-0">
-                          {identity.avatar}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-white truncate">
-                            {identity.name}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">
-                            {identity.jobTitle}
-                          </div>
-                        </div>
-                      </div>
-                      <Badge
-                        variant={
-                          identity.role === 'admin'
-                            ? 'rose'
-                            : identity.role === 'manager'
-                            ? 'violet'
-                            : 'cyan'
-                        }
-                        size="sm"
-                      >
-                        {identity.role.toUpperCase()}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
-          )}
-        </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleSignOut}
+              className="text-xs text-slate-300 hover:text-rose-400"
+              title="Sign out of Supabase session"
+            >
+              <LogOut className="h-3.5 w-3.5 mr-1" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="hidden sm:block">
+              <Button variant="secondary" size="sm" className="text-xs text-violet-300">
+                <LogIn className="h-3.5 w-3.5 mr-1" />
+                <span>Sign In</span>
+              </Button>
+            </Link>
+
+            {/* Simulated Demo Identity Switcher (Showcase Mode Only) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                className="flex items-center gap-2 rounded-xl border border-violet-500/40 bg-navy-950/80 px-3 py-1.5 text-xs text-slate-200 hover:border-violet-500 transition-all shadow-sm focus:outline-none"
+                title="Switch Simulated Role (Demo Mode)"
+              >
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[9px] font-bold text-white">
+                  {currentUser.avatar}
+                </div>
+                <div className="hidden sm:flex flex-col text-left">
+                  <span className="text-[11px] font-bold text-white leading-none">
+                    {currentUser.name}
+                  </span>
+                  <span className="text-[9px] text-violet-400 font-mono capitalize">
+                    Demo Role: {currentUser.role}
+                  </span>
+                </div>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+
+              {/* Role Dropdown Menu */}
+              {isRoleDropdownOpen && (
+                <div className="absolute right-0 top-12 z-50 w-72 rounded-2xl border border-slate-700 bg-navy-900 p-2 shadow-elevated backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2 border-b border-slate-800 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      ⚡ Demo Showcase Identities
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-mono">
+                      Showcase Mode • Sign in for real workspace
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    {demoIdentities.map((identity) => {
+                      const isSelected = identity.id === currentUser.id;
+                      return (
+                        <button
+                          key={identity.id}
+                          onClick={() => {
+                            switchDemoRole(identity.id);
+                            setIsRoleDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors ${
+                            isSelected
+                              ? 'bg-violet-600/20 text-white border border-violet-500/40'
+                              : 'text-slate-300 hover:bg-navy-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white shrink-0">
+                              {identity.avatar}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-white truncate">
+                                {identity.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {identity.jobTitle}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge
+                            variant={
+                              identity.role === 'admin'
+                                ? 'rose'
+                                : identity.role === 'manager'
+                                ? 'violet'
+                                : 'cyan'
+                            }
+                            size="sm"
+                          >
+                            {identity.role.toUpperCase()}
+                          </Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Notification Bell */}
         <Link
