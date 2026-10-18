@@ -13,6 +13,9 @@ export interface UseOrganizationMembersResult {
   totalMembers: number;
   totalCapacityHours: number;
   departments: DepartmentSummary[];
+  inviteMember: (email: string, role?: UserRole) => Promise<{ error: string | null; data?: any }>;
+  updateMemberRole: (targetUserId: string, newRole: UserRole) => Promise<{ error: string | null; data?: any }>;
+  removeMember: (targetUserId: string) => Promise<{ error: string | null }>;
 }
 
 /**
@@ -198,6 +201,62 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
     );
   }, [members]);
 
+  const inviteMember = React.useCallback(
+    async (email: string, role: UserRole = 'employee') => {
+      if (!verifiedOrgId) return { error: 'No active organization found.' };
+      try {
+        const { data, error: rpcError } = await supabase.rpc('invite_organization_member', {
+          p_organization_id: verifiedOrgId,
+          p_email: email.trim().toLowerCase(),
+          p_role: role,
+        });
+        if (rpcError) return { error: rpcError.message };
+        await fetchMembers();
+        return { error: null, data };
+      } catch (err: any) {
+        return { error: err.message || 'Failed to invite member' };
+      }
+    },
+    [supabase, verifiedOrgId, fetchMembers]
+  );
+
+  const updateMemberRole = React.useCallback(
+    async (targetUserId: string, newRole: UserRole) => {
+      if (!verifiedOrgId) return { error: 'No active organization found.' };
+      try {
+        const { data, error: rpcError } = await supabase.rpc('update_member_role', {
+          p_organization_id: verifiedOrgId,
+          p_member_user_id: targetUserId,
+          p_new_role: newRole,
+        });
+        if (rpcError) return { error: rpcError.message };
+        await fetchMembers();
+        return { error: null, data };
+      } catch (err: any) {
+        return { error: err.message || 'Failed to update member role' };
+      }
+    },
+    [supabase, verifiedOrgId, fetchMembers]
+  );
+
+  const removeMember = React.useCallback(
+    async (targetUserId: string) => {
+      if (!verifiedOrgId) return { error: 'No active organization found.' };
+      try {
+        const { data: _res, error: rpcError } = await supabase.rpc('remove_organization_member', {
+          p_organization_id: verifiedOrgId,
+          p_member_user_id: targetUserId,
+        });
+        if (rpcError) return { error: rpcError.message };
+        await fetchMembers();
+        return { error: null };
+      } catch (err: any) {
+        return { error: err.message || 'Failed to remove member' };
+      }
+    },
+    [supabase, verifiedOrgId, fetchMembers]
+  );
+
   return {
     members,
     isLoading,
@@ -206,5 +265,8 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
     totalMembers,
     totalCapacityHours,
     departments,
+    inviteMember,
+    updateMemberRole,
+    removeMember,
   };
 }

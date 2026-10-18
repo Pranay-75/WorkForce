@@ -23,7 +23,18 @@ import {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, profile, organization, bootstrapOrganization, isAuthenticated, isLoading, signOut } = useAuth();
+  const {
+    user,
+    profile,
+    organization,
+    availableOrganizations,
+    hasAmbiguousMembership,
+    selectOrganization,
+    bootstrapOrganization,
+    isAuthenticated,
+    isLoading,
+    signOut,
+  } = useAuth();
 
   const [orgName, setOrgName] = React.useState('');
   const [customSlug, setCustomSlug] = React.useState('');
@@ -149,7 +160,40 @@ export default function OnboardingPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
-        <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl">
+        <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-5">
+          {hasAmbiguousMembership && availableOrganizations.length > 1 && (
+            <div className="rounded-xl border border-violet-500/40 bg-violet-950/30 p-4 space-y-3 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-violet-400 shrink-0" />
+                <span className="text-xs font-bold text-white">Select Active Workspace</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                You belong to multiple organizations. Please choose which workspace you wish to enter:
+              </p>
+              <div className="space-y-2">
+                {availableOrganizations.map((org) => (
+                  <button
+                    key={org.id}
+                    type="button"
+                    onClick={() => selectOrganization(org.id)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-navy-950/80 hover:border-violet-500 hover:bg-violet-950/40 transition-all text-left group"
+                  >
+                    <div>
+                      <span className="text-xs font-bold text-white group-hover:text-violet-300 block">
+                        {org.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">slug: {org.slug}</span>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-violet-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-400 text-center pt-2 border-t border-slate-800">
+                Or create a brand new organization below:
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleCreateWorkspace} className="space-y-5">
             {errorMessage && (
               <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-300 flex items-start gap-2.5 animate-in fade-in duration-200">

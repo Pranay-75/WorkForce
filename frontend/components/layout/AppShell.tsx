@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,6 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, organization, isLoading } = useAuth();
 
   const isAuthOrOnboardingRoute =
+    pathname.startsWith('/presentation') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||

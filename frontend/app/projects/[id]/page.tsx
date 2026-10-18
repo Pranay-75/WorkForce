@@ -3,6 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/lib/authContext';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -18,23 +22,47 @@ import {
   Clock,
   Sparkles,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const params = useParams();
-  const { projects, employees, tasks } = useMockStore();
-
   const projectId = params?.id as string;
-  const project = projects.find((p) => p.id === projectId);
 
+  const { isAuthenticated, organization } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  // Live hooks
+  const { projects: dbProjects, isLoading: isProjectsLoading } = useProjects();
+  const { tasks: dbTasks, isLoading: isTasksLoading } = useTasks();
+  const { members: orgMembers, isLoading: isMembersLoading } = useOrganizationMembers();
+
+  // Mock store fallback
+  const { projects: mockProjects, employees: mockEmployees, tasks: mockTasks } = useMockStore();
+
+  const projects = isLive ? dbProjects : mockProjects;
+  const tasks = isLive ? dbTasks : mockTasks;
+
+  const project = projects.find((p) => p.id === projectId);
   const [activeTab, setActiveTab] = React.useState<'all' | 'todo' | 'in_progress' | 'completed'>('all');
+
+  // Loading skeleton
+  if (isLive && isProjectsLoading) {
+    return (
+      <div className="space-y-6 animate-pulse p-6">
+        <div className="h-6 w-32 bg-slate-800 rounded" />
+        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
+        <div className="h-32 bg-navy-900/40 rounded-xl border border-slate-800" />
+      </div>
+    );
+  }
 
   if (!project) {
     return (
       <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-12 text-center space-y-3">
         <h3 className="text-lg font-bold text-white">Project Not Found</h3>
         <p className="text-xs text-slate-400">
-          The requested project does not exist in the active workspace.
+          The requested project does not exist in the active organization portfolio.
         </p>
         <Link href="/projects">
           <Button variant="secondary" size="sm">
@@ -51,12 +79,22 @@ export default function ProjectDetailPage() {
     activeTab === 'all' ? true : t.status === activeTab
   );
 
-  const projectMembers = employees.filter((e) =>
-    project.memberIds.includes(e.id)
-  );
-  const progressPct = Math.round(
-    (project.completedHours / project.totalHours) * 100
-  );
+  // Resolve members allocated to this project
+  const projectMembers = isLive
+    ? orgMembers
+        .filter((m) => project.memberIds.includes(m.userId))
+        .map((m) => ({
+          id: m.userId,
+          fullName: m.fullName,
+          jobTitle: m.jobTitle || 'Team Member',
+          department: m.department || 'Engineering',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: 0,
+        }))
+    : mockEmployees.filter((e) => project.memberIds.includes(e.id));
+
+  const progressPct =
+    project.totalHours > 0 ? Math.round((project.completedHours / project.totalHours) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -98,15 +136,15 @@ export default function ProjectDetailPage() {
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              {project.description}
+              {project.description || 'No detailed scope description provided.'}
             </p>
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
               <span className="flex items-center gap-1 font-mono">
                 <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-                Target: {project.targetEndDate}
+                Target: {project.targetEndDate || 'Unscheduled'}
               </span>
               <span>•</span>
-              <span>Lead: {project.managerName}</span>
+              <span>Lead: {project.managerName || 'Unassigned'}</span>
               <span>•</span>
               <span className="font-mono">{projectTasks.length} Total Tasks</span>
             </div>
@@ -135,44 +173,37 @@ export default function ProjectDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {projectMembers.map((m) => {
-              const util = Math.round(
-                (m.currentLoadHours / m.weeklyCapacityHours) * 100
-              );
-              return (
-                <Link key={m.id} href={`/employees/${m.id}`}>
-                  <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/50 transition-all group">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white">
-                        {m.fullName
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-xs font-semibold text-white group-hover:text-violet-300 transition-colors truncate">
-                          {m.fullName}
-                        </h4>
-                        <span className="text-[10px] text-slate-400 truncate block">
-                          {m.jobTitle}
-                        </span>
-                      </div>
+          {projectMembers.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3 text-center">
+              No team members have been specifically assigned to this project.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {projectMembers.map((m) => (
+                <div
+                  key={m.id}
+                  className="rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/50 transition-all group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white">
+                      {m.fullName
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')}
                     </div>
-                    <div className="mt-2.5 space-y-1">
-                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                        <span>Load:</span>
-                        <span className={util > 100 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                          {m.currentLoadHours}h ({util}%)
-                        </span>
-                      </div>
-                      <ProgressBar value={util} />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-semibold text-white group-hover:text-violet-300 transition-colors truncate">
+                        {m.fullName}
+                      </h4>
+                      <span className="text-[10px] text-slate-400 truncate block">
+                        {m.jobTitle}
+                      </span>
                     </div>
                   </div>
-                </Link>
-              );
-            })}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -244,7 +275,7 @@ export default function ProjectDetailPage() {
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-1 font-mono">
-                      <Calendar className="h-3 w-3" /> Due {t.dueDate}
+                      <Calendar className="h-3 w-3" /> Due {t.dueDate || 'Unscheduled'}
                     </span>
                     <span>•</span>
                     <span>

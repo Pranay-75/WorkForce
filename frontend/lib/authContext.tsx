@@ -3,35 +3,18 @@
 import * as React from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createClient } from './supabase/client';
-import { UserRole } from './types';
+import { UserRole, UserProfileData, OrganizationData, SignUpResult } from './types';
 import { generateSlug, isValidSlug } from './slug';
 
-export interface UserProfileData {
-  id: string;
-  email: string;
-  fullName: string;
-  avatarUrl?: string;
-  department: string;
-  jobTitle: string;
-  weeklyCapacityHours: number;
-}
-
-export interface OrganizationData {
-  id: string;
-  name: string;
-  slug: string;
-}
-
-export interface SignUpResult {
-  error: string | null;
-  requiresConfirmation?: boolean;
-}
+export type { UserProfileData, OrganizationData, SignUpResult };
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: UserProfileData | null;
   organization: OrganizationData | null;
+  availableOrganizations: OrganizationData[];
+  hasAmbiguousMembership: boolean;
   role: UserRole;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -40,13 +23,14 @@ interface AuthContextType {
     email: string,
     password: string,
     fullName: string,
-    organizationName: string,
+    organizationName?: string,
     customSlug?: string
   ) => Promise<SignUpResult>;
   bootstrapOrganization: (
     organizationName: string,
     customSlug?: string
   ) => Promise<{ error: string | null; orgId?: string }>;
+  selectOrganization: (organizationId: string) => void;
   refreshUserData: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<{ error: string | null }>;
@@ -59,8 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [profile, setProfile] = React.useState<UserProfileData | null>(null);
   const [organization, setOrganization] = React.useState<OrganizationData | null>(null);
+  const [availableOrganizations, setAvailableOrganizations] = React.useState<OrganizationData[]>([]);
+  const [hasAmbiguousMembership, setHasAmbiguousMembership] = React.useState(false);
   const [role, setRole] = React.useState<UserRole>('employee');
   const [isLoading, setIsLoading] = React.useState(true);
+
+  const allMembershipsRef = React.useRef<any[]>([]);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -102,6 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { error: rpcError.message || 'Failed to create organization workspace.' };
         }
 
+        // Save active org in localStorage
+        if (typeof window !== 'undefined' && orgId) {
+          localStorage.setItem('workforce_active_org_id', orgId as string);
+        }
+
         // Immediately query and set active organization & admin role
         const { data: membershipData } = await supabase
           .from('organization_memberships')
@@ -111,23 +104,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .limit(1)
           .maybeSingle();
 
-        if (membershipData) {
-          setRole((membershipData.role as UserRole) || 'admin');
+        if (membershipData?.role) {
+          setRole(membershipData.role as UserRole);
           if (membershipData.organizations) {
             const org = membershipData.organizations as any;
-            setOrganization({
+            const orgObj = {
               id: org.id,
               name: org.name,
               slug: org.slug,
-            });
+            };
+            setOrganization(orgObj);
+            setAvailableOrganizations([orgObj]);
+            setHasAmbiguousMembership(false);
           }
-        } else if (orgId) {
-          setRole('admin');
-          setOrganization({
-            id: orgId as string,
-            name: trimmedName,
-            slug: finalSlug,
-          });
+        } else {
+          // Fail closed: never assume admin on missing or unverified membership
+          setRole('employee');
+          setOrganization(null);
+          setAvailableOrganizations([]);
+          setHasAmbiguousMembership(false);
         }
 
         return { error: null, orgId: orgId as string };
@@ -160,35 +155,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        // 2. Fetch active organization membership & role
-        const { data: membershipData, error: memberErr } = await supabase
+        // 2. Fetch all active memberships deterministically (ordered by created_at DESC)
+        const { data: allMemberships, error: memberErr } = await supabase
           .from('organization_memberships')
-          .select('role, organization_id, organizations(id, name, slug)')
+          .select('role, organization_id, created_at, organizations(id, name, slug)')
           .eq('user_id', currentUser.id)
           .eq('status', 'active')
-          .limit(1)
-          .maybeSingle();
+          .order('created_at', { ascending: false });
 
-        if (membershipData && !memberErr) {
-          if (membershipData.role) {
-            setRole(membershipData.role as UserRole);
+        allMembershipsRef.current = allMemberships || [];
+
+        if (memberErr || !allMemberships || allMemberships.length === 0) {
+          // Zero memberships: strictly fail closed
+          setRole('employee');
+          setOrganization(null);
+          setAvailableOrganizations([]);
+          setHasAmbiguousMembership(false);
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('workforce_active_org_id');
           }
-          if (membershipData.organizations) {
-            const org = membershipData.organizations as any;
+        } else {
+          // Map all valid organization summaries
+          const orgsList: OrganizationData[] = allMemberships
+            .filter((m: any) => m.organizations)
+            .map((m: any) => ({
+              id: m.organizations.id,
+              name: m.organizations.name,
+              slug: m.organizations.slug,
+            }));
+          setAvailableOrganizations(orgsList);
+
+          if (allMemberships.length === 1) {
+            // Exactly 1 membership: deterministically select it
+            const m = allMemberships[0];
+            const org = m.organizations as any;
+            // Role is strictly derived from verified membership row
+            setRole(m.role as UserRole);
             setOrganization({
               id: org.id,
               name: org.name,
               slug: org.slug,
             });
+            setHasAmbiguousMembership(false);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('workforce_active_org_id', org.id);
+            }
+          } else {
+            // Multiple memberships exist: require explicit selection
+            const storedOrgId = typeof window !== 'undefined' ? localStorage.getItem('workforce_active_org_id') : null;
+            const matched = storedOrgId
+              ? allMemberships.find((m: any) => m.organization_id === storedOrgId)
+              : null;
+
+            if (matched && matched.organizations) {
+              const org = matched.organizations as any;
+              // Role is strictly derived from verified membership row
+              setRole(matched.role as UserRole);
+              setOrganization({
+                id: org.id,
+                name: org.name,
+                slug: org.slug,
+              });
+              setHasAmbiguousMembership(false);
+            } else {
+              // Fail closed: multiple memberships with no explicit selection
+              // Do NOT silently pick an arbitrary organization
+              setRole('employee');
+              setOrganization(null);
+              setHasAmbiguousMembership(true);
+            }
           }
-        } else {
-          setOrganization(null);
         }
       } catch (err) {
         console.warn('Could not fetch Supabase profile data:', err);
       }
     },
     [supabase]
+  );
+
+  const selectOrganization = React.useCallback(
+    (targetOrgId: string) => {
+      const matched = allMembershipsRef.current.find((m: any) => m.organization_id === targetOrgId);
+      if (!matched || !matched.organizations) {
+        console.warn('Cannot select organization: verified active membership not found.');
+        return;
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('workforce_active_org_id', targetOrgId);
+      }
+      const org = matched.organizations as any;
+      setRole(matched.role as UserRole);
+      setOrganization({
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+      });
+      setHasAmbiguousMembership(false);
+    },
+    []
   );
 
   const refreshUserData = React.useCallback(async () => {
@@ -265,24 +329,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    organizationName: string,
+    organizationName?: string,
     customSlug?: string
   ): Promise<SignUpResult> => {
     try {
       const trimmedName = fullName.trim();
-      const trimmedOrg = organizationName.trim();
+      const trimmedOrg = organizationName?.trim() || '';
 
       if (trimmedName.length < 2) {
         return { error: 'Full name must be at least 2 characters.' };
       }
-      if (trimmedOrg.length < 2) {
-        return { error: 'Organization name must be at least 2 characters.' };
+
+      let slug = '';
+      if (trimmedOrg.length > 0) {
+        if (trimmedOrg.length < 2) {
+          return { error: 'Organization name must be at least 2 characters.' };
+        }
+        slug = customSlug ? generateSlug(customSlug) : generateSlug(trimmedOrg);
+        if (!isValidSlug(slug)) {
+          return { error: 'Invalid organization slug format. Use lowercase alphanumeric characters and hyphens.' };
+        }
       }
 
-      const slug = customSlug ? generateSlug(customSlug) : generateSlug(trimmedOrg);
-      if (!isValidSlug(slug)) {
-        return { error: 'Invalid organization slug format. Use lowercase alphanumeric characters and hyphens.' };
-      }
+      // Role assignment is strictly governed:
+      // - Creating an organization bootstraps the creator as administrator via secure DB function.
+      // - Joining without organization creation defaults metadata role strictly to employee.
+      // - Users cannot pick or self-elevate their role during registration.
+      const userDepartment = trimmedOrg ? 'Administration' : 'Engineering';
+      const userJobTitle = trimmedOrg ? 'Workspace Administrator' : 'Software Engineer';
+      const defaultRole: UserRole = trimmedOrg ? 'admin' : 'employee';
 
       // 1. Sign up user via Supabase Auth with metadata
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -291,8 +366,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             full_name: trimmedName,
-            organization_name: trimmedOrg,
-            organization_slug: slug,
+            ...(trimmedOrg ? { organization_name: trimmedOrg, organization_slug: slug } : {}),
+            role: defaultRole,
+            department: userDepartment,
+            job_title: userJobTitle,
           },
           emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
         },
@@ -304,9 +381,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 2. Check if an active session is returned immediately (instant sign-up without email confirmation)
       if (data?.session && data.user) {
-        const { error: bootstrapErr } = await bootstrapOrganization(trimmedOrg, slug);
-        if (bootstrapErr) {
-          return { error: bootstrapErr };
+        if (trimmedOrg && slug) {
+          const { error: bootstrapErr } = await bootstrapOrganization(trimmedOrg, slug);
+          if (bootstrapErr) {
+            return { error: bootstrapErr };
+          }
         }
         await fetchUserData(data.user);
         return { error: null, requiresConfirmation: false };
@@ -321,10 +400,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('workforce_active_org_id');
+    }
     setUser(null);
     setSession(null);
     setProfile(null);
     setOrganization(null);
+    setAvailableOrganizations([]);
+    setHasAmbiguousMembership(false);
+    allMembershipsRef.current = [];
   };
 
   const resetPasswordForEmail = async (email: string) => {
@@ -346,12 +431,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session,
         profile,
         organization,
+        availableOrganizations,
+        hasAmbiguousMembership,
         role,
         isAuthenticated: !!user,
         isLoading,
         signInWithPassword,
         signUpWithPassword,
         bootstrapOrganization,
+        selectOrganization,
         refreshUserData,
         signOut,
         resetPasswordForEmail,

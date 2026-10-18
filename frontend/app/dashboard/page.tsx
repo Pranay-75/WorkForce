@@ -29,6 +29,47 @@ import {
   History,
 } from 'lucide-react';
 
+function DemoModeBanner() {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 via-navy-900 to-navy-950 p-5 sm:p-6 shadow-lg shadow-violet-950/20">
+      <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-violet-600/10 blur-2xl pointer-events-none" />
+      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
+              Interactive Guided Preview
+            </span>
+            <Badge variant="violet" size="sm" className="hidden sm:inline-flex">
+              Simulated Environment
+            </Badge>
+          </div>
+          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+            Explore WorkForce AI in Demo Mode
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            Demo Mode lets users explore sample employees, projects, tasks, workload analytics, reports, and simulated AI recommendations in a fully interactive, risk-free preview.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <Link href="/presentation?from=dashboard">
+            <Button
+              variant="primary"
+              size="md"
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md shadow-violet-900/30 font-semibold px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2"
+            >
+              <Sparkles className="h-4 w-4 text-violet-200" />
+              <span>Explore Demo Mode</span>
+              <ArrowRight className="h-4 w-4 ml-0.5" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { organization, profile, user } = useAuth();
   const {
@@ -143,7 +184,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/presentation?from=dashboard">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-violet-500/40 text-violet-300 hover:bg-violet-950/40 hover:text-white"
+              >
+                <Sparkles className="h-4 w-4 mr-1.5 text-violet-400" />
+                <span>Explore Demo Mode</span>
+              </Button>
+            </Link>
             <Badge
               variant={
                 myUtilPct > 100 ? 'rose' : myUtilPct >= 80 ? 'amber' : 'emerald'
@@ -158,6 +209,9 @@ export default function DashboardPage() {
             </Badge>
           </div>
         </div>
+
+        {/* Demo Mode Announcement */}
+        <DemoModeBanner />
 
         {/* Personal Metrics Row */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -372,7 +426,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/presentation?from=dashboard">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-violet-500/40 text-violet-300 hover:bg-violet-950/40 hover:text-white"
+              >
+                <Sparkles className="h-4 w-4 mr-1.5 text-violet-400" />
+                <span>Explore Demo Mode</span>
+              </Button>
+            </Link>
             <Link href="/settings">
               <Button variant="primary" size="sm">
                 <Building2 className="h-4 w-4 mr-1.5" />
@@ -381,6 +445,9 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+
+        {/* Demo Mode Announcement */}
+        <DemoModeBanner />
 
         {/* Admin KPI Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -559,7 +626,17 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link href="/presentation?from=dashboard">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-violet-500/40 text-violet-300 hover:bg-violet-950/40 hover:text-white"
+            >
+              <Sparkles className="h-4 w-4 mr-1.5 text-violet-400" />
+              <span>Explore Demo Mode</span>
+            </Button>
+          </Link>
           <Link href="/matching">
             <Button variant="primary" size="sm">
               <Sparkles className="h-4 w-4 mr-1.5" />
@@ -574,6 +651,9 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Demo Mode Announcement Banner */}
+      <DemoModeBanner />
 
       {/* Metric Cards Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

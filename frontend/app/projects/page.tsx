@@ -2,6 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/authContext';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
 import { PriorityLevel, ProjectStatus } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -21,12 +25,63 @@ import {
   Sparkles,
   ShieldCheck,
   Check,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, employees, tasks, activeRole, currentUser, addNewProject } = useMockStore();
+  const { isAuthenticated, user, organization, role: authRole } = useAuth();
+
+  // Supabase Phase 2.2B real data hooks
+  const {
+    projects: dbProjects,
+    isLoading: isProjectsLoading,
+    error: projectsError,
+    refetch: refetchProjects,
+    createProject,
+  } = useProjects();
+
+  const { tasks: dbTasks, isLoading: isTasksLoading } = useTasks();
+  const { members: orgMembers } = useOrganizationMembers();
+
+  // Mock store fallback for unauthenticated showcase
+  const {
+    projects: mockProjects,
+    employees: mockEmployees,
+    tasks: mockTasks,
+    activeRole: mockRole,
+    currentUser: mockUser,
+    addNewProject: mockAddNewProject,
+  } = useMockStore();
+
+  const isLive = isAuthenticated && Boolean(organization?.id);
+  const projects = isLive ? dbProjects : mockProjects;
+  const tasks = isLive ? dbTasks : mockTasks;
+  const activeRole = isLive ? authRole : mockRole;
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+
+  // Available employees/members for assignment
+  const selectableMembers = React.useMemo(() => {
+    if (isLive) {
+      return orgMembers.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        department: m.department || 'Engineering',
+        currentLoadHours: 0,
+      }));
+    }
+    return mockEmployees.map((e) => ({
+      id: e.id,
+      fullName: e.fullName,
+      department: e.department,
+      currentLoadHours: e.currentLoadHours,
+    }));
+  }, [isLive, orgMembers, mockEmployees]);
+
   const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formError, setFormError] = React.useState<string | null>(null);
 
   // Form State
   const [projectName, setProjectName] = React.useState('');
@@ -36,9 +91,16 @@ export default function ProjectsPage() {
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split('T')[0]);
   const [targetEndDate, setTargetEndDate] = React.useState('2026-12-31');
   const [totalHours, setTotalHours] = React.useState('200');
-  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([currentUser.id]);
+  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
 
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+  // Initialize selected member to current user if available
+  React.useEffect(() => {
+    if (isLive && user?.id) {
+      setSelectedMemberIds([user.id]);
+    } else if (mockUser?.id) {
+      setSelectedMemberIds([mockUser.id]);
+    }
+  }, [isLive, user?.id, mockUser?.id]);
 
   const filteredProjects = projects.filter((p) =>
     selectedStatus === 'all' ? true : p.status === selectedStatus
@@ -50,27 +112,52 @@ export default function ProjectsPage() {
     );
   };
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectName.trim()) return;
 
-    addNewProject({
-      name: projectName,
-      description: projectDesc || 'Strategic engineering initiative delivering key product milestones.',
-      priority,
-      status,
-      startDate,
-      targetEndDate,
-      managerId: currentUser.id,
-      managerName: currentUser.name,
-      memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [currentUser.id],
-      totalHours: parseFloat(totalHours) || 160,
-    });
+    setSubmitting(true);
+    setFormError(null);
+
+    if (isLive) {
+      const res = await createProject({
+        name: projectName.trim(),
+        description: projectDesc.trim() || undefined,
+        priority,
+        status,
+        startDate: startDate || undefined,
+        targetEndDate: targetEndDate || undefined,
+        managerId: user?.id || null,
+        totalHours: parseFloat(totalHours) || 160,
+        memberIds: selectedMemberIds,
+      });
+
+      setSubmitting(false);
+
+      if (res.error) {
+        setFormError(res.error);
+        return;
+      }
+    } else {
+      mockAddNewProject({
+        name: projectName,
+        description: projectDesc || 'Strategic engineering initiative delivering key product milestones.',
+        priority,
+        status,
+        startDate,
+        targetEndDate,
+        managerId: mockUser.id,
+        managerName: mockUser.name,
+        memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [mockUser.id],
+        totalHours: parseFloat(totalHours) || 160,
+      });
+      setSubmitting(false);
+    }
 
     setIsCreateModalOpen(false);
     setProjectName('');
     setProjectDesc('');
-    setSelectedMemberIds([currentUser.id]);
+    setFormError(null);
   };
 
   return (
@@ -100,6 +187,7 @@ export default function ProjectsPage() {
             <option value="all">All Project Statuses</option>
             <option value="in_progress">In Progress</option>
             <option value="planning">Planning</option>
+            <option value="on_hold">On Hold</option>
             <option value="completed">Completed</option>
           </select>
 
@@ -116,131 +204,179 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {filteredProjects.map((proj) => {
-          const progressPct = Math.round((proj.completedHours / proj.totalHours) * 100);
-          const projectTasks = tasks.filter((t) => t.projectId === proj.id);
-          const projectMembers = employees.filter((e) =>
-            proj.memberIds.includes(e.id)
-          );
+      {/* Error Banner */}
+      {isLive && projectsError && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <span>{projectsError}</span>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => refetchProjects()}>
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
 
-          return (
-            <Card
-              key={proj.id}
-              className="flex flex-col justify-between border-slate-800/90 hover:border-violet-500/50 transition-all hover:shadow-card group"
+      {/* Loading Skeleton */}
+      {isLive && isProjectsLoading && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-64 rounded-xl border border-slate-800 bg-navy-900/40 p-6 animate-pulse space-y-4"
             >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-3">
+              <div className="h-5 w-48 bg-slate-800 rounded" />
+              <div className="h-4 w-full bg-slate-800/60 rounded" />
+              <div className="h-8 w-full bg-slate-800/40 rounded mt-6" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isProjectsLoading && filteredProjects.length === 0 && (
+        <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-12 text-center space-y-3">
+          <FolderKanban className="mx-auto h-10 w-10 text-slate-500" />
+          <h3 className="text-base font-bold text-white">No Projects Found</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            {isManagerOrAdmin
+              ? 'No project initiatives match your criteria. Click "Create Project" to launch your first delivery milestone.'
+              : 'There are currently no active projects assigned to your team in this organization.'}
+          </p>
+          {isManagerOrAdmin && (
+            <div className="pt-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                <span>Launch New Project</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Projects Grid */}
+      {!isProjectsLoading && filteredProjects.length > 0 && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {filteredProjects.map((proj) => {
+            const progressPct =
+              proj.totalHours > 0 ? Math.round((proj.completedHours / proj.totalHours) * 100) : 0;
+            const projectTasks = tasks.filter((t) => t.projectId === proj.id);
+
+            return (
+              <Card
+                key={proj.id}
+                className="flex flex-col justify-between border-slate-800/90 hover:border-violet-500/50 transition-all hover:shadow-card group"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-4 w-4 text-violet-400" />
+                        <h3 className="text-base font-bold text-white group-hover:text-violet-300 transition-colors">
+                          {proj.name}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {proj.description}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        proj.priority === 'critical'
+                          ? 'rose'
+                          : proj.priority === 'high'
+                          ? 'amber'
+                          : 'slate'
+                      }
+                      size="sm"
+                    >
+                      {proj.priority}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4 flex-1">
+                  {/* Progress Bar */}
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <FolderKanban className="h-4 w-4 text-violet-400" />
-                      <h3 className="text-base font-bold text-white group-hover:text-violet-300 transition-colors">
-                        {proj.name}
-                      </h3>
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-400">Total Completion</span>
+                      <span className="text-slate-200 font-bold">
+                        {proj.completedHours}h / {proj.totalHours}h ({progressPct}%)
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                      {proj.description}
-                    </p>
+                    <ProgressBar value={progressPct} />
                   </div>
-                  <Badge
-                    variant={
-                      proj.priority === 'critical'
-                        ? 'rose'
-                        : proj.priority === 'high'
-                        ? 'amber'
-                        : 'slate'
-                    }
-                    size="sm"
-                  >
-                    {proj.priority}
+
+                  {/* Dates & Lead */}
+                  <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-400 rounded-xl bg-navy-900/60 p-3 border border-slate-800/60">
+                    <div className="space-y-0.5">
+                      <span className="text-slate-400 block">Target Deadline</span>
+                      <span className="text-slate-200 font-mono font-semibold flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-cyan-400" />
+                        {proj.targetEndDate || 'Unscheduled'}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-slate-400 block">Project Lead</span>
+                      <span className="text-slate-200 font-semibold truncate block">
+                        {proj.managerName || 'Unassigned'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Member Count & Task Count */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <Users className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>{proj.memberIds.length} member{proj.memberIds.length !== 1 ? 's' : ''} allocated</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <CheckSquare className="h-3.5 w-3.5 text-violet-400" />
+                      <span className="font-mono">
+                        {projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+
+                <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex items-center justify-between">
+                  <Badge variant={proj.status === 'in_progress' ? 'cyan' : 'slate'} size="sm">
+                    {proj.status.replace('_', ' ').toUpperCase()}
                   </Badge>
+                  <Link href={`/projects/${proj.id}`}>
+                    <Button variant="ghost" size="sm" className="text-xs">
+                      <span>Project Dashboard</span>
+                      <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </Link>
                 </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4 flex-1">
-                {/* Progress Bar */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-400">Total Completion</span>
-                    <span className="text-slate-200 font-bold">
-                      {proj.completedHours}h / {proj.totalHours}h ({progressPct}%)
-                    </span>
-                  </div>
-                  <ProgressBar value={progressPct} />
-                </div>
-
-                {/* Dates & Lead */}
-                <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-400 rounded-xl bg-navy-900/60 p-3 border border-slate-800/60">
-                  <div className="space-y-0.5">
-                    <span className="text-slate-400 block">Target Deadline</span>
-                    <span className="text-slate-200 font-mono font-semibold flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-cyan-400" />
-                      {proj.targetEndDate}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    <span className="text-slate-400 block">Project Lead</span>
-                    <span className="text-slate-200 font-semibold truncate block">
-                      {proj.managerName}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Team Avatars & Task Count */}
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">Team:</span>
-                    <div className="flex -space-x-2 overflow-hidden">
-                      {projectMembers.map((m) => (
-                        <div
-                          key={m.id}
-                          title={m.fullName}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white ring-2 ring-navy-900"
-                        >
-                          {m.fullName
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <CheckSquare className="h-3.5 w-3.5 text-violet-400" />
-                    <span className="font-mono">
-                      {projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-
-              <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex items-center justify-between">
-                <Badge variant={proj.status === 'in_progress' ? 'cyan' : 'slate'} size="sm">
-                  {proj.status.replace('_', ' ').toUpperCase()}
-                </Badge>
-                <Link href={`/projects/${proj.id}`}>
-                  <Button variant="ghost" size="sm" className="text-xs">
-                    <span>Project Dashboard</span>
-                    <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create Project Dialog Modal */}
       <Dialog
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Project Initiative"
-        description={`Author a new project portfolio managed by ${currentUser.name} (${currentUser.role.toUpperCase()}).`}
+        description="Author a new project portfolio initiative for your organization."
         maxWidth="lg"
       >
         <form onSubmit={handleCreateProject} className="space-y-4 py-2">
+          {formError && (
+            <div className="rounded-lg border border-rose-500/40 bg-rose-950/20 p-2.5 text-xs text-rose-300">
+              {formError}
+            </div>
+          )}
+
           <Input
             label="Project Name *"
             placeholder="e.g. Edge Ingestion Pipeline v3"
@@ -288,8 +424,8 @@ export default function ProjectsPage() {
               type="number"
               value={totalHours}
               onChange={(e) => setTotalHours(e.target.value)}
-              min="10"
-              max="2000"
+              min="1"
+              max="10000"
               required
             />
           </div>
@@ -300,30 +436,23 @@ export default function ProjectsPage() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              required
             />
             <Input
               label="Target Completion Date"
               type="date"
               value={targetEndDate}
               onChange={(e) => setTargetEndDate(e.target.value)}
-              required
             />
           </div>
 
           {/* Team Members Assignment Selector */}
           <div className="space-y-2 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-medium text-slate-300">
-                Allocate Team Members ({selectedMemberIds.length} Selected)
-              </label>
-              <span className="text-[11px] text-slate-400 font-mono">
-                Manager: {currentUser.name}
-              </span>
-            </div>
+            <label className="block text-xs font-medium text-slate-300">
+              Allocate Team Members ({selectedMemberIds.length} Selected)
+            </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-navy-950/60 p-2.5">
-              {employees.map((emp) => {
+              {selectableMembers.map((emp) => {
                 const isSelected = selectedMemberIds.includes(emp.id);
                 return (
                   <button
@@ -348,7 +477,7 @@ export default function ProjectsPage() {
                           {emp.fullName}
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">
-                          {emp.department} • {emp.currentLoadHours}h load
+                          {emp.department}
                         </div>
                       </div>
                     </div>
@@ -367,12 +496,22 @@ export default function ProjectsPage() {
               variant="secondary"
               size="sm"
               onClick={() => setIsCreateModalOpen(false)}
+              disabled={submitting}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              <span>Launch Project</span>
+            <Button type="submit" variant="primary" size="sm" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  <span>Launching...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-1" />
+                  <span>Launch Project</span>
+                </>
+              )}
             </Button>
           </div>
         </form>

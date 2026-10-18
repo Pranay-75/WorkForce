@@ -1,6 +1,6 @@
-export type UserRole = 'admin' | 'manager' | 'employee';
+export type UserRole = 'admin' | 'manager' | 'employee' | 'hr';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed';
+export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
 export type PriorityLevel = 'low' | 'medium' | 'high' | 'critical';
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'completed' | 'blocked';
 export type RecommendationStatus = 'pending' | 'accepted' | 'rejected' | 'overridden';
@@ -169,5 +169,72 @@ export interface DepartmentSummary {
   department: string;
   headcount: number;
   totalCapacityHours: number;
+}
+
+export interface UserProfileData {
+  id: string;
+  email: string;
+  fullName: string;
+  avatarUrl?: string;
+  department: string;
+  jobTitle: string;
+  weeklyCapacityHours: number;
+}
+
+export interface OrganizationData {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface SignUpResult {
+  error: string | null;
+  requiresConfirmation?: boolean;
+}
+
+export interface CreateTaskInput {
+  projectId: string;
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: PriorityLevel;
+  complexity?: 'Low' | 'Medium' | 'High';
+  estimatedHours?: number;
+  dueDate?: string;
+  assignedTo?: string | null;
+  requiredSkills?: TaskSkillPrerequisite[];
+}
+
+export interface UpdateTaskDetailsInput {
+  title?: string;
+  description?: string;
+  priority?: PriorityLevel;
+  complexity?: 'Low' | 'Medium' | 'High';
+  estimatedHours?: number;
+  dueDate?: string;
+  requiredSkills?: TaskSkillPrerequisite[];
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  priority: PriorityLevel;
+  status: ProjectStatus;
+  startDate?: string;
+  targetEndDate?: string;
+  managerId?: string | null;
+  totalHours?: number;
+  memberIds?: string[];
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string;
+  priority?: PriorityLevel;
+  status?: ProjectStatus;
+  startDate?: string;
+  targetEndDate?: string;
+  managerId?: string | null;
+  totalHours?: number;
 }
 

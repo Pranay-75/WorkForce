@@ -2,6 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/authContext';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
 import { Task, TaskStatus, PriorityLevel } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -21,6 +25,8 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 
 const kanbanColumns: { status: TaskStatus; label: string; color: string }[] = [
@@ -31,7 +37,50 @@ const kanbanColumns: { status: TaskStatus; label: string; color: string }[] = [
 ];
 
 export default function TasksPage() {
-  const { tasks, projects, employees, activeRole, currentUserId, updateTaskStatus, addNewTask } = useMockStore();
+  const { isAuthenticated, user, organization, role: authRole } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  // Live Supabase Phase 2.2B hooks
+  const {
+    tasks: dbTasks,
+    isLoading: isTasksLoading,
+    error: tasksError,
+    refetch: refetchTasks,
+    createTask,
+    updateTaskStatus: dbUpdateTaskStatus,
+  } = useTasks();
+
+  const { projects: dbProjects } = useProjects();
+  const { members: orgMembers } = useOrganizationMembers();
+
+  // Mock store fallback for unauthenticated showcase
+  const {
+    tasks: mockTasks,
+    projects: mockProjects,
+    employees: mockEmployees,
+    activeRole: mockRole,
+    currentUserId: mockUserId,
+    updateTaskStatus: mockUpdateTaskStatus,
+    addNewTask: mockAddNewTask,
+  } = useMockStore();
+
+  const tasks = isLive ? dbTasks : mockTasks;
+  const projects = isLive ? dbProjects : mockProjects;
+  const activeRole = isLive ? authRole : mockRole;
+  const currentUserId = isLive ? (user?.id || '') : mockUserId;
+
+  const employees = React.useMemo(() => {
+    if (isLive) {
+      return orgMembers.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        department: m.department || 'Engineering',
+        weeklyCapacityHours: m.weeklyCapacityHours || 40,
+        currentLoadHours: 0,
+      }));
+    }
+    return mockEmployees;
+  }, [isLive, orgMembers, mockEmployees]);
 
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -40,13 +89,23 @@ export default function TasksPage() {
 
   // Task Creation Modal Form State
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formError, setFormError] = React.useState<string | null>(null);
+
   const [newTitle, setNewTitle] = React.useState('');
   const [newDesc, setNewDesc] = React.useState('');
-  const [newProjId, setNewProjId] = React.useState(projects[0]?.id || '');
+  const [newProjId, setNewProjId] = React.useState('');
   const [newPriority, setNewPriority] = React.useState<PriorityLevel>('medium');
   const [newHours, setNewHours] = React.useState('8');
   const [newDueDate, setNewDueDate] = React.useState('2026-10-25');
   const [newAssigneeId, setNewAssigneeId] = React.useState('unassigned');
+
+  // Default project selection
+  React.useEffect(() => {
+    if (!newProjId && projects.length > 0) {
+      setNewProjId(projects[0].id);
+    }
+  }, [projects, newProjId]);
 
   const filteredTasks = tasks.filter((t) => {
     const matchesSearch =
@@ -60,36 +119,69 @@ export default function TasksPage() {
     return matchesSearch && matchesProj && matchesPrio;
   });
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
     const proj = projects.find((p) => p.id === newProjId) || projects[0];
-    const assignedEmp = employees.find((e) => e.id === newAssigneeId);
+    if (!proj) {
+      setFormError('Please select or create a project first.');
+      return;
+    }
 
-    addNewTask({
-      projectId: proj.id,
-      projectName: proj.name,
-      title: newTitle,
-      description: newDesc,
-      status: 'todo',
-      priority: newPriority,
-      complexity: 'Medium',
-      estimatedHours: parseFloat(newHours) || 8,
-      dueDate: newDueDate,
-      assignedTo: assignedEmp ? assignedEmp.id : undefined,
-      assignedEmployeeName: assignedEmp ? assignedEmp.fullName : undefined,
-      assignedEmployeeAvatar: assignedEmp
-        ? assignedEmp.fullName
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-        : undefined,
-      requiredSkills: [
-        { skillId: 's1', skillName: 'React', minProficiency: 'intermediate' },
-        { skillId: 's2', skillName: 'TypeScript', minProficiency: 'intermediate' },
-      ],
-    });
+    setSubmitting(true);
+    setFormError(null);
+
+    if (isLive) {
+      const res = await createTask({
+        projectId: proj.id,
+        title: newTitle.trim(),
+        description: newDesc.trim() || undefined,
+        status: 'todo',
+        priority: newPriority,
+        complexity: 'Medium',
+        estimatedHours: parseFloat(newHours) || 8,
+        dueDate: newDueDate || undefined,
+        assignedTo: newAssigneeId === 'unassigned' ? null : newAssigneeId,
+        requiredSkills: [
+          { skillId: 's1', skillName: 'React', minProficiency: 'intermediate' },
+          { skillId: 's2', skillName: 'TypeScript', minProficiency: 'intermediate' },
+        ],
+      });
+
+      setSubmitting(false);
+
+      if (res.error) {
+        setFormError(res.error);
+        return;
+      }
+    } else {
+      const assignedEmp = employees.find((emp) => emp.id === newAssigneeId);
+      mockAddNewTask({
+        projectId: proj.id,
+        projectName: proj.name,
+        title: newTitle,
+        description: newDesc,
+        status: 'todo',
+        priority: newPriority,
+        complexity: 'Medium',
+        estimatedHours: parseFloat(newHours) || 8,
+        dueDate: newDueDate,
+        assignedTo: assignedEmp ? assignedEmp.id : undefined,
+        assignedEmployeeName: assignedEmp ? assignedEmp.fullName : undefined,
+        assignedEmployeeAvatar: assignedEmp
+          ? assignedEmp.fullName
+              .split(' ')
+              .map((n) => n[0])
+              .join('')
+          : undefined,
+        requiredSkills: [
+          { skillId: 's1', skillName: 'React', minProficiency: 'intermediate' },
+          { skillId: 's2', skillName: 'TypeScript', minProficiency: 'intermediate' },
+        ],
+      });
+      setSubmitting(false);
+    }
 
     setIsCreateOpen(false);
     setNewTitle('');
@@ -97,19 +189,29 @@ export default function TasksPage() {
     setNewAssigneeId('unassigned');
   };
 
-  const advanceTaskStatus = (t: Task) => {
+  const advanceTaskStatus = async (t: Task) => {
     const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
     const currIdx = sequence.indexOf(t.status);
     if (currIdx < sequence.length - 1) {
-      updateTaskStatus(t.id, sequence[currIdx + 1]);
+      const nextStatus = sequence[currIdx + 1];
+      if (isLive) {
+        await dbUpdateTaskStatus(t.id, nextStatus);
+      } else {
+        mockUpdateTaskStatus(t.id, nextStatus);
+      }
     }
   };
 
-  const regressTaskStatus = (t: Task) => {
+  const regressTaskStatus = async (t: Task) => {
     const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
     const currIdx = sequence.indexOf(t.status);
     if (currIdx > 0) {
-      updateTaskStatus(t.id, sequence[currIdx - 1]);
+      const prevStatus = sequence[currIdx - 1];
+      if (isLive) {
+        await dbUpdateTaskStatus(t.id, prevStatus);
+      } else {
+        mockUpdateTaskStatus(t.id, prevStatus);
+      }
     }
   };
 
@@ -167,6 +269,20 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {isLive && tasksError && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <span>{tasksError}</span>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => refetchTasks()}>
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Filter and Search Controls */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 rounded-xl border border-slate-800 bg-navy-900/80 p-4">
         <div className="relative">
@@ -206,8 +322,24 @@ export default function TasksPage() {
         </select>
       </div>
 
+      {/* Loading Skeleton */}
+      {isLive && isTasksLoading && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-96 rounded-2xl border border-slate-800 bg-navy-950/60 p-4 animate-pulse space-y-3"
+            >
+              <div className="h-4 w-24 bg-slate-800 rounded" />
+              <div className="h-28 bg-navy-900/40 rounded-xl border border-slate-800/80" />
+              <div className="h-28 bg-navy-900/40 rounded-xl border border-slate-800/80" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Kanban Board Mode */}
-      {viewMode === 'kanban' && (
+      {!isTasksLoading && viewMode === 'kanban' && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
           {kanbanColumns.map((col) => {
             const columnTasks = filteredTasks.filter((t) => t.status === col.status);
@@ -263,7 +395,7 @@ export default function TasksPage() {
 
                         <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 truncate">
                           <Calendar className="h-3 w-3 text-slate-500" />
-                          Due {t.dueDate}
+                          Due {t.dueDate || 'Unscheduled'}
                         </div>
 
                         {/* Assignee & Actions */}
@@ -340,7 +472,7 @@ export default function TasksPage() {
       )}
 
       {/* Data Table Mode */}
-      {viewMode === 'table' && (
+      {!isTasksLoading && viewMode === 'table' && (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-200">
@@ -387,7 +519,7 @@ export default function TasksPage() {
                     <td className="px-4 py-3 font-mono font-bold text-cyan-400">
                       {t.estimatedHours}h
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400">{t.dueDate}</td>
+                    <td className="px-4 py-3 font-mono text-slate-400">{t.dueDate || 'Unscheduled'}</td>
                     <td className="px-4 py-3">
                       {t.assignedEmployeeName ? (
                         <span className="text-slate-200 font-medium">
@@ -417,9 +549,15 @@ export default function TasksPage() {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         title="Create New Sprint Task"
-        description="Simulated task creator with required technical skills and effort estimation."
+        description="Author an authorized task with effort estimation and project scoping."
       >
         <form onSubmit={handleCreateTask} className="space-y-3.5 py-2">
+          {formError && (
+            <div className="rounded-lg border border-rose-500/40 bg-rose-950/20 p-2.5 text-xs text-rose-300">
+              {formError}
+            </div>
+          )}
+
           <Input
             label="Task Title *"
             placeholder="e.g. Implement Webhook Deduplication"
@@ -435,7 +573,7 @@ export default function TasksPage() {
           />
           <div className="grid grid-cols-2 gap-3">
             <Select
-              label="Associated Project"
+              label="Associated Project *"
               value={newProjId}
               onChange={(e) => setNewProjId(e.target.value)}
               options={projects.map((p) => ({ label: p.name, value: p.id }))}
@@ -459,7 +597,7 @@ export default function TasksPage() {
               value={newHours}
               onChange={(e) => setNewHours(e.target.value)}
               min="1"
-              max="80"
+              max="200"
               required
             />
             <Input
@@ -467,7 +605,6 @@ export default function TasksPage() {
               type="date"
               value={newDueDate}
               onChange={(e) => setNewDueDate(e.target.value)}
-              required
             />
           </div>
 
@@ -478,23 +615,31 @@ export default function TasksPage() {
             options={[
               { label: 'Unassigned (Route to AI Matching Hub)', value: 'unassigned' },
               ...employees.map((emp) => ({
-                label: `${emp.fullName} (${emp.currentLoadHours}h / ${emp.weeklyCapacityHours}h - ${emp.department})`,
+                label: `${emp.fullName} (${emp.department})`,
                 value: emp.id,
               })),
             ]}
           />
 
-          <div className="pt-3 flex items-center justify-end gap-2">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
             <Button
               type="button"
               variant="secondary"
               size="sm"
               onClick={() => setIsCreateOpen(false)}
+              disabled={submitting}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Create Task
+            <Button type="submit" variant="primary" size="sm" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <span>Create Task</span>
+              )}
             </Button>
           </div>
         </form>

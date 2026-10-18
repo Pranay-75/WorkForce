@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/authContext';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { generateSlug, isValidSlug } from '@/lib/slug';
+import { cn } from '@/lib/utils';
+import { UserRole } from '@/lib/types';
 import {
   Sparkles,
   Lock,
@@ -17,6 +19,9 @@ import {
   CheckCircle2,
   Globe,
   ArrowRight,
+  ShieldCheck,
+  Briefcase,
+  Users,
 } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -108,7 +113,7 @@ export default function RegisterPage() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-80 h-80 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-3 z-10">
+      <div className="sm:mx-auto sm:w-full sm:max-w-lg text-center space-y-3 z-10">
         <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 shadow-glow mb-2">
           <Sparkles className="h-7 w-7 text-white" />
         </div>
@@ -120,7 +125,7 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
         <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl">
           {pendingConfirmationEmail ? (
             <div className="text-center space-y-4 py-2">
@@ -233,6 +238,26 @@ export default function RegisterPage() {
                     className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Creator Workspace Authorization Notice */}
+              <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-lg bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      Organization Creator Authority
+                    </span>
+                    <span className="text-[10px] text-violet-300 font-mono">
+                      Role: Workspace Administrator
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  As the organization creator, you will receive workspace administrative permissions. Once registered, you can securely invite Managers, HR, and Employees from the Talent Directory.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -3,6 +3,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/lib/authContext';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
 import { TaskStatus } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -23,21 +26,89 @@ import {
   RefreshCw,
   Plus,
   Minus,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function TaskDetailPage() {
   const params = useParams();
-  const { tasks, employees, activeRole, currentUserId, updateTaskStatus, updateTaskDetails } = useMockStore();
-
   const taskId = params?.id as string;
+
+  const { isAuthenticated, user, organization, role: authRole } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  // Live hooks
+  const {
+    tasks: dbTasks,
+    isLoading: isTasksLoading,
+    error: tasksError,
+    updateTaskStatus: dbUpdateTaskStatus,
+    updateTaskDetails: dbUpdateTaskDetails,
+    assignTask: dbAssignTask,
+  } = useTasks();
+
+  const { members: orgMembers } = useOrganizationMembers();
+
+  // Mock store fallback
+  const {
+    tasks: mockTasks,
+    employees: mockEmployees,
+    activeRole: mockRole,
+    currentUserId: mockUserId,
+    updateTaskStatus: mockUpdateTaskStatus,
+    updateTaskDetails: mockUpdateTaskDetails,
+  } = useMockStore();
+
+  const tasks = isLive ? dbTasks : mockTasks;
+  const activeRole = isLive ? authRole : mockRole;
+  const currentUserId = isLive ? (user?.id || '') : mockUserId;
+
   const task = tasks.find((t) => t.id === taskId);
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+  const isAssignedToMe = task?.assignedTo === currentUserId;
+  const canUpdateStatus = isManagerOrAdmin || isAssignedToMe;
+
+  const [feedback, setFeedback] = React.useState<string | null>(null);
+  const [isMutating, setIsMutating] = React.useState(false);
+
+  const showNotification = (msg: string) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  const employees = React.useMemo(() => {
+    if (isLive) {
+      return orgMembers.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        jobTitle: m.jobTitle || 'Team Member',
+        department: m.department || 'Engineering',
+        weeklyCapacityHours: m.weeklyCapacityHours || 40,
+        currentLoadHours: 0,
+      }));
+    }
+    return mockEmployees;
+  }, [isLive, orgMembers, mockEmployees]);
+
+  // Loading skeleton
+  if (isLive && isTasksLoading) {
+    return (
+      <div className="space-y-6 animate-pulse p-6">
+        <div className="h-6 w-32 bg-slate-800 rounded" />
+        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+        </div>
+      </div>
+    );
+  }
 
   if (!task) {
     return (
       <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-12 text-center space-y-3">
         <h3 className="text-lg font-bold text-white">Task Not Found</h3>
         <p className="text-xs text-slate-400">
-          The requested task identifier does not exist in the active project backlog.
+          The requested task identifier does not exist in the active organization backlog.
         </p>
         <Link href="/tasks">
           <Button variant="secondary" size="sm">
@@ -49,22 +120,81 @@ export default function TaskDetailPage() {
     );
   }
 
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
   const assignee = employees.find((e) => e.id === task.assignedTo);
   const assigneeUtilPct = assignee
     ? Math.round((assignee.currentLoadHours / assignee.weeklyCapacityHours) * 100)
     : 0;
 
-  const handleAdjustHours = (delta: number) => {
+  const handleAdjustHours = async (delta: number) => {
+    if (!isManagerOrAdmin) {
+      showNotification('Permission Denied: Only managers and admins can adjust task estimates.');
+      return;
+    }
+
     const newHours = Math.max(1, (task.estimatedHours || 0) + delta);
-    updateTaskDetails(task.id, { estimatedHours: newHours });
+    setIsMutating(true);
+
+    if (isLive) {
+      const res = await dbUpdateTaskDetails(task.id, { estimatedHours: newHours });
+      setIsMutating(false);
+      if (res.error) {
+        showNotification(`Failed to adjust hours: ${res.error}`);
+      } else {
+        showNotification(`Updated effort to ${newHours}h`);
+      }
+    } else {
+      mockUpdateTaskDetails(task.id, { estimatedHours: newHours });
+      setIsMutating(false);
+      showNotification(`Updated effort to ${newHours}h`);
+    }
   };
 
-  const handleReassign = (newEmpId: string) => {
-    updateTaskDetails(task.id, {
-      assignedTo: newEmpId === 'unassigned' ? undefined : newEmpId,
-      status: newEmpId === 'unassigned' ? 'todo' : task.status,
-    });
+  const handleStatusChange = async (newStatus: TaskStatus) => {
+    if (!canUpdateStatus) {
+      showNotification('Permission Denied: Employees may only update their own assigned tasks.');
+      return;
+    }
+
+    setIsMutating(true);
+    if (isLive) {
+      const res = await dbUpdateTaskStatus(task.id, newStatus);
+      setIsMutating(false);
+      if (res.error) {
+        showNotification(`Failed to update status: ${res.error}`);
+      } else {
+        showNotification(`Status updated to ${newStatus.replace('_', ' ').toUpperCase()}`);
+      }
+    } else {
+      mockUpdateTaskStatus(task.id, newStatus);
+      setIsMutating(false);
+      showNotification(`Status updated to ${newStatus.replace('_', ' ').toUpperCase()}`);
+    }
+  };
+
+  const handleReassign = async (newEmpId: string) => {
+    if (!isManagerOrAdmin) {
+      showNotification('Permission Denied: Only managers and admins can assign or reassign tasks.');
+      return;
+    }
+
+    setIsMutating(true);
+    if (isLive) {
+      const targetId = newEmpId === 'unassigned' ? null : newEmpId;
+      const res = await dbAssignTask(task.id, targetId);
+      setIsMutating(false);
+      if (res.error) {
+        showNotification(`Reassignment failed: ${res.error}`);
+      } else {
+        showNotification('Task successfully reassigned via authorized RPC.');
+      }
+    } else {
+      mockUpdateTaskDetails(task.id, {
+        assignedTo: newEmpId === 'unassigned' ? undefined : newEmpId,
+        status: newEmpId === 'unassigned' ? 'todo' : task.status,
+      });
+      setIsMutating(false);
+      showNotification('Task successfully reassigned.');
+    }
   };
 
   return (
@@ -96,6 +226,13 @@ export default function TaskDetailPage() {
         </div>
       </div>
 
+      {/* Notification Toast */}
+      {feedback && (
+        <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-4 py-2.5 text-xs text-cyan-200 animate-in fade-in">
+          {feedback}
+        </div>
+      )}
+
       {/* Task Specification Card */}
       <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
         <div className="space-y-4">
@@ -104,13 +241,13 @@ export default function TaskDetailPage() {
               <FolderKanban className="h-3.5 w-3.5" />
               <span>{task.projectName}</span>
               <span>•</span>
-              <span>ID: {task.id}</span>
+              <span className="truncate max-w-[200px]">ID: {task.id}</span>
             </div>
             <h2 className="text-2xl font-extrabold text-white tracking-tight">
               {task.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl">
-              {task.description}
+              {task.description || 'No detailed task specifications provided.'}
             </p>
           </div>
 
@@ -128,16 +265,17 @@ export default function TaskDetailPage() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleAdjustHours(-2)}
-                      disabled={task.estimatedHours <= 2}
-                      className="rounded bg-navy-800 p-1 text-slate-300 hover:bg-navy-700 hover:text-white disabled:opacity-40"
-                      title="Reduce effort by 2 hours"
+                      disabled={isMutating}
+                      className="rounded p-1 bg-navy-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      title="Decrease 2 hours"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <button
                       onClick={() => handleAdjustHours(2)}
-                      className="rounded bg-navy-800 p-1 text-slate-300 hover:bg-navy-700 hover:text-white"
-                      title="Increase effort by 2 hours"
+                      disabled={isMutating}
+                      className="rounded p-1 bg-navy-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      title="Increase 2 hours"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
@@ -146,97 +284,93 @@ export default function TaskDetailPage() {
               </div>
             </div>
 
+            {/* Target Deadline */}
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-semibold text-slate-400">
                 Target Deadline
               </span>
-              <div className="text-base font-bold font-mono text-white flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                {task.dueDate}
+              <div className="flex items-center gap-1.5 text-xs font-mono text-slate-200">
+                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                <span>{task.dueDate || 'Unscheduled'}</span>
               </div>
             </div>
 
+            {/* Complexity Indicator */}
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-semibold text-slate-400">
-                Complexity
+                Technical Complexity
               </span>
-              <div className="text-base font-bold text-slate-200">
-                {task.complexity}
+              <div className="flex items-center gap-1 text-xs font-semibold text-slate-200">
+                <Award className="h-3.5 w-3.5 text-amber-400" />
+                <span>{task.complexity}</span>
               </div>
             </div>
 
+            {/* Status Transition Control */}
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-semibold text-slate-400">
-                Task Workflow
+                Workflow Status
               </span>
-              {(() => {
-                const canModify = activeRole !== 'employee' || task.assignedTo === currentUserId;
-                return (
-                  <div>
-                    <select
-                      value={task.status}
-                      disabled={!canModify}
-                      onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-                      className="rounded-lg border border-slate-700 bg-navy-850 px-2.5 py-1 text-xs text-slate-100 font-semibold focus:border-violet-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <option value="todo">Todo</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="in_review">In Review</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    {!canModify && (
-                      <span className="text-[10px] text-slate-400 font-mono block mt-1">
-                        Read-only (Assigned to {task.assignedEmployeeName || 'someone else'})
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+              <select
+                value={task.status}
+                disabled={!canUpdateStatus || isMutating}
+                onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
+                className="w-full rounded-lg border border-slate-700 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="todo">Todo</option>
+                <option value="in_progress">In Progress</option>
+                <option value="in_review">In Review</option>
+                <option value="completed">Completed</option>
+                <option value="blocked">Blocked</option>
+              </select>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Grid: Required Skills + Assignee / Dynamic Workload Recalculation Card */}
+      {/* Two Column Layout: Skills & Assignee Impact */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Required Technical Skills */}
-        <Card>
+        <Card className="flex flex-col justify-between">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Award className="h-4 w-4 text-cyan-400" />
-              <CardTitle>Mandatory Technical Prerequisites</CardTitle>
+              <ShieldCheck className="h-4 w-4 text-cyan-400" />
+              <CardTitle>Required Technical Skills ({task.requiredSkills.length})</CardTitle>
             </div>
-            <CardDescription>
-              Deterministic skill requirements validated before matching candidates
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {task.requiredSkills.map((req, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3"
-              >
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span className="text-xs font-bold text-white">
-                    {req.skillName}
-                  </span>
+          <CardContent className="space-y-3 flex-1">
+            {task.requiredSkills.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">
+                No prerequisite skills attached to this task.
+              </p>
+            ) : (
+              task.requiredSkills.map((req) => (
+                <div
+                  key={req.skillId}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span className="text-xs font-bold text-white">
+                      {req.skillName}
+                    </span>
+                  </div>
+                  <Badge variant="cyan" size="sm">
+                    MIN: {req.minProficiency.toUpperCase()}
+                  </Badge>
                 </div>
-                <Badge variant="cyan" size="sm">
-                  MIN: {req.minProficiency.toUpperCase()}
-                </Badge>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
 
-        {/* Assignment & Dynamic Workload Recalculation Card */}
+        {/* Assignment & Workload Impact Card */}
         <Card className="flex flex-col justify-between">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-violet-400" />
-                <CardTitle>Assignee & Live Workload Impact</CardTitle>
+                <CardTitle>Assignee & Workload Impact</CardTitle>
               </div>
               <Badge variant={task.assignedTo ? 'emerald' : 'amber'} size="sm">
                 {task.assignedTo ? 'Assigned' : 'Unassigned'}
@@ -262,45 +396,24 @@ export default function TaskDetailPage() {
                       {assignee.jobTitle} • {assignee.department}
                     </p>
                   </div>
-                  <Link href={`/employees/${assignee.id}`}>
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      Profile
-                    </Button>
-                  </Link>
-                </div>
-
-                {/* Assignee Current Live Workload */}
-                <div className="rounded-xl border border-slate-800/80 bg-navy-900/60 p-3.5 space-y-2">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-400">Live Calculated Workload</span>
-                    <span
-                      className={
-                        assigneeUtilPct > 100
-                          ? 'text-rose-400 font-bold'
-                          : 'text-slate-200 font-semibold'
-                      }
-                    >
-                      {assignee.currentLoadHours}h / {assignee.weeklyCapacityHours}h ({assigneeUtilPct}%)
-                    </span>
-                  </div>
-                  <ProgressBar value={assigneeUtilPct} />
                 </div>
 
                 {/* Manager Reassignment Control */}
                 {isManagerOrAdmin && (
                   <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
                     <label className="block text-xs font-medium text-slate-400">
-                      Reassign to Team Member:
+                      Reassign via assign_task() RPC:
                     </label>
                     <select
                       value={task.assignedTo || 'unassigned'}
+                      disabled={isMutating}
                       onChange={(e) => handleReassign(e.target.value)}
                       className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
                     >
                       <option value="unassigned">Unassigned (Send to AI Matching Hub)</option>
                       {employees.map((e) => (
                         <option key={e.id} value={e.id}>
-                          {e.fullName} ({e.department} - {e.currentLoadHours}h load)
+                          {e.fullName} ({e.department})
                         </option>
                       ))}
                     </select>
@@ -316,7 +429,29 @@ export default function TaskDetailPage() {
                 <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
                   Run explainable AI candidate ranking to match available team members based on skills, capacity, and deadlines.
                 </p>
-                <div className="pt-1 flex justify-center gap-2">
+
+                {isManagerOrAdmin && (
+                  <div className="pt-2 text-left space-y-1.5 max-w-xs mx-auto">
+                    <label className="block text-xs font-medium text-slate-400">
+                      Direct Assign (Manager RPC):
+                    </label>
+                    <select
+                      value="unassigned"
+                      disabled={isMutating}
+                      onChange={(e) => handleReassign(e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                    >
+                      <option value="unassigned">Select team member...</option>
+                      {employees.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.fullName} ({e.department})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-center gap-2">
                   <Link href="/matching">
                     <Button variant="primary" size="sm">
                       <Sparkles className="h-3.5 w-3.5 mr-1.5" />
