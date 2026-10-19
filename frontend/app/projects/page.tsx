@@ -63,12 +63,17 @@ export default function ProjectsPage() {
   // Available employees/members for assignment
   const selectableMembers = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.map((m) => ({
-        id: m.userId,
-        fullName: m.fullName,
-        department: m.department || 'Engineering',
-        currentLoadHours: 0,
-      }));
+      return orgMembers.map((m) => {
+        const load = tasks
+          .filter((t) => t.assignedTo === m.userId && t.status !== 'completed')
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          currentLoadHours: load,
+        };
+      });
     }
     return mockEmployees.map((e) => ({
       id: e.id,
@@ -76,7 +81,7 @@ export default function ProjectsPage() {
       department: e.department,
       currentLoadHours: e.currentLoadHours,
     }));
-  }, [isLive, orgMembers, mockEmployees]);
+  }, [isLive, orgMembers, mockEmployees, tasks]);
 
   const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);

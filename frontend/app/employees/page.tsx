@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
 import { Employee, UserRole } from '@/lib/types';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -40,6 +41,23 @@ export default function EmployeesDirectoryPage() {
     updateMemberRole,
     removeMember,
   } = useOrganizationMembers();
+
+  const { tasks: liveTasks } = useTasks();
+
+  // Compute live load hours per member from active tasks
+  const memberLoads = React.useMemo(() => {
+    const map = new Map<string, { count: number; hours: number }>();
+    liveTasks.forEach((t) => {
+      if (t.assignedTo && t.status !== 'completed') {
+        const cur = map.get(t.assignedTo) || { count: 0, hours: 0 };
+        map.set(t.assignedTo, {
+          count: cur.count + 1,
+          hours: cur.hours + (Number(t.estimatedHours) || 0),
+        });
+      }
+    });
+    return map;
+  }, [liveTasks]);
 
   // Mock store fallback for unauthenticated / demo exploration
   const { employees: mockEmployees, skills: mockSkills, addNewEmployee } = useMockStore();
@@ -348,6 +366,9 @@ export default function EmployeesDirectoryPage() {
                 employee: { badge: 'slate', label: 'Employee' },
               };
               const roleInfo = roleColors[m.role] || roleColors.employee;
+              const loadInfo = memberLoads.get(m.userId) || { count: 0, hours: 0 };
+              const cap = m.weeklyCapacityHours || 40;
+              const utilPct = cap > 0 ? Math.round((loadInfo.hours / cap) * 100) : 0;
 
               return (
                 <Card
@@ -357,13 +378,17 @@ export default function EmployeesDirectoryPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-sm font-bold text-white shadow-sm border border-violet-400/30">
-                          {initials}
-                        </div>
+                        <Link href={`/employees/${m.userId}`}>
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-sm font-bold text-white shadow-sm border border-violet-400/30 hover:scale-105 transition-transform cursor-pointer">
+                            {initials}
+                          </div>
+                        </Link>
                         <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-white group-hover:text-violet-300 transition-colors truncate">
-                            {m.fullName}
-                          </h3>
+                          <Link href={`/employees/${m.userId}`}>
+                            <h3 className="text-sm font-bold text-white group-hover:text-violet-300 transition-colors truncate hover:underline cursor-pointer">
+                              {m.fullName}
+                            </h3>
+                          </Link>
                           <p className="text-xs text-slate-400 truncate">{m.jobTitle}</p>
                           <p className="text-[11px] text-slate-500 font-mono truncate">{m.email}</p>
                         </div>
@@ -375,11 +400,24 @@ export default function EmployeesDirectoryPage() {
                   </CardHeader>
 
                   <CardContent className="space-y-4 flex-1">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800/60 pb-2.5">
-                      <span className="font-semibold text-slate-300">{m.department}</span>
-                      <span className="text-slate-400 font-mono">
-                        {m.weeklyCapacityHours}h / week capacity
-                      </span>
+                    <div className="space-y-2 border-b border-slate-800/60 pb-3">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span className="font-semibold text-slate-300">{m.department}</span>
+                        <span className="font-mono text-slate-300 font-semibold">
+                          {loadInfo.hours}h / {cap}h ({utilPct}%)
+                        </span>
+                      </div>
+                      <ProgressBar value={utilPct} />
+                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <span>Active Tasks: <strong className="text-slate-300">{loadInfo.count}</strong></span>
+                        <Badge
+                          variant={utilPct > 100 ? 'rose' : utilPct >= 80 ? 'amber' : 'emerald'}
+                          size="sm"
+                          className="text-[9px] py-0 px-1.5"
+                        >
+                          {utilPct > 100 ? 'Overloaded' : utilPct >= 80 ? 'Near Limit' : 'Optimal'}
+                        </Badge>
+                      </div>
                     </div>
 
                     {/* Role Administration Controls for Organization Admin */}

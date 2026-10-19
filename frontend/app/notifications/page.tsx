@@ -3,6 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,12 +18,113 @@ import {
   Calendar,
   ArrowRight,
   CheckCheck,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 
-export default function NotificationsPage() {
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useMockStore();
+interface LiveNotification {
+  id: string;
+  type: 'capacity_alert' | 'recommendation_ready' | 'deadline_warning' | 'task_assigned';
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  linkUrl?: string;
+}
 
+export default function NotificationsPage() {
+  const { isAuthenticated, organization } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  const { tasks, isLoading: isTasksLoading } = useTasks();
+  const { members, isLoading: isMembersLoading } = useOrganizationMembers();
+  const { auditLogs, isLoading: isLogsLoading, refetch: refetchLogs } = useAuditLogs();
+
+  const {
+    notifications: mockNotifications,
+    markNotificationAsRead: mockMarkRead,
+    markAllNotificationsAsRead: mockMarkAllRead,
+  } = useMockStore();
+
+  const [readIds, setReadIds] = React.useState<Set<string>>(new Set());
+
+  // Derive live alerts from real organization data
+  const liveNotifications = React.useMemo<LiveNotification[]>(() => {
+    if (!isLive) return [];
+    const alerts: LiveNotification[] = [];
+
+    // 1. Capacity Overload Alerts
+    members.forEach((m) => {
+      const activeTasks = tasks.filter(
+        (t) => t.assignedTo === m.userId && t.status !== 'completed'
+      );
+      const load = activeTasks.reduce((acc, t) => acc + (t.estimatedHours || 0), 0);
+      const cap = m.weeklyCapacityHours || 40;
+      const pct = Math.round((load / cap) * 100);
+
+      if (pct > 100) {
+        alerts.push({
+          id: `cap-${m.userId}`,
+          type: 'capacity_alert',
+          title: `Capacity Overload Alert: ${m.fullName}`,
+          message: `${m.fullName} is allocated at ${pct}% (${load}h / ${cap}h target capacity). Operational workload rebalancing required.`,
+          timestamp: 'Live Heuristic',
+          isRead: readIds.has(`cap-${m.userId}`),
+          linkUrl: '/workload',
+        });
+      }
+    });
+
+    // 2. Unassigned Tasks
+    const unassignedTasks = tasks.filter(
+      (t) => (!t.assignedTo || t.assignedTo === '') && t.status !== 'completed'
+    );
+    unassignedTasks.forEach((t) => {
+      alerts.push({
+        id: `unassigned-${t.id}`,
+        type: 'deadline_warning',
+        title: `Unassigned Task: ${t.title}`,
+        message: `Task is awaiting member allocation (${t.estimatedHours || 0}h, ${t.priority} priority).`,
+        timestamp: t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Active',
+        isRead: readIds.has(`unassigned-${t.id}`),
+        linkUrl: '/matching',
+      });
+    });
+
+    // 3. Recent Audit Activity
+    auditLogs.slice(0, 5).forEach((l) => {
+      alerts.push({
+        id: `audit-${l.id}`,
+        type: 'task_assigned',
+        title: `Audit Event: ${l.action.replace('_', ' ').toUpperCase()}`,
+        message: `${l.actorName || 'System'} modified ${l.entityType} ${l.entityId ? `#${l.entityId.slice(0, 8)}` : ''}`,
+        timestamp: new Date(l.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isRead: readIds.has(`audit-${l.id}`),
+        linkUrl: '/audit',
+      });
+    });
+
+    return alerts;
+  }, [isLive, members, tasks, auditLogs, readIds]);
+
+  const notifications = isLive ? liveNotifications : mockNotifications;
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const markNotificationAsRead = (id: string) => {
+    if (isLive) {
+      setReadIds((prev) => new Set(prev).add(id));
+    } else {
+      mockMarkRead(id);
+    }
+  };
+
+  const markAllNotificationsAsRead = () => {
+    if (isLive) {
+      setReadIds(new Set(notifications.map((n) => n.id)));
+    } else {
+      mockMarkAllRead();
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -50,6 +155,37 @@ export default function NotificationsPage() {
           </Button>
         )}
       </div>
+
+      {/* Loading Skeleton */}
+      {isLive && (isTasksLoading || isMembersLoading || isLogsLoading) && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-20 rounded-xl border border-slate-800 bg-navy-900/40 p-4 animate-pulse flex items-center gap-4"
+            >
+              <div className="h-10 w-10 bg-slate-800 rounded-xl shrink-0" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-40 bg-slate-800 rounded" />
+                <div className="h-3 w-80 bg-slate-800/60 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!(isLive && (isTasksLoading || isMembersLoading || isLogsLoading)) && notifications.length === 0 && (
+        <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-12 text-center space-y-3">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-400">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">All Systems Operational</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            No capacity overloads, pending task bottlenecks, or unassigned deliverables detected for your organization.
+          </p>
+        </div>
+      )}
 
       {/* Notifications List */}
       <div className="space-y-3">

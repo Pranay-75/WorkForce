@@ -71,16 +71,21 @@ export default function TasksPage() {
 
   const employees = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.map((m) => ({
-        id: m.userId,
-        fullName: m.fullName,
-        department: m.department || 'Engineering',
-        weeklyCapacityHours: m.weeklyCapacityHours || 40,
-        currentLoadHours: 0,
-      }));
+      return orgMembers.map((m) => {
+        const load = tasks
+          .filter((t) => t.assignedTo === m.userId && t.status !== 'completed')
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: load,
+        };
+      });
     }
     return mockEmployees;
-  }, [isLive, orgMembers, mockEmployees]);
+  }, [isLive, orgMembers, mockEmployees, tasks]);
 
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = React.useState('');
