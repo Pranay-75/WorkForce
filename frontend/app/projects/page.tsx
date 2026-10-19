@@ -119,7 +119,21 @@ export default function ProjectsPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectName.trim()) return;
+    if (!projectName.trim()) {
+      setFormError('Project name is required.');
+      return;
+    }
+
+    const parsedHours = parseFloat(totalHours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setFormError('Total allocated hours must be a positive number.');
+      return;
+    }
+
+    if (startDate && targetEndDate && new Date(targetEndDate) < new Date(startDate)) {
+      setFormError('Target end date cannot be earlier than start date.');
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);
