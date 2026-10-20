@@ -2,6 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/authContext';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -14,12 +18,132 @@ import {
   Calendar,
   ArrowRight,
   CheckCheck,
+  Info,
+  RefreshCw,
 } from 'lucide-react';
 
+interface DisplayNotification {
+  id: string;
+  type: 'capacity_alert' | 'recommendation_ready' | 'deadline_warning' | 'task_assigned';
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  linkUrl?: string;
+}
+
 export default function NotificationsPage() {
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useMockStore();
+  const { isAuthenticated, organization } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
+  const { tasks: liveTasks, isLoading: isTasksLoading } = useTasks();
+  const { projects: liveProjects, isLoading: isProjectsLoading } = useProjects();
+
+  const { notifications: mockNotifications, markNotificationAsRead, markAllNotificationsAsRead } = useMockStore();
+
+  const [dismissedLiveIds, setDismissedLiveIds] = React.useState<Set<string>>(new Set());
+
+  // Derive live alerts from actual task and workload status
+  const liveNotifications: DisplayNotification[] = React.useMemo(() => {
+    if (!isLive) return [];
+    const alerts: DisplayNotification[] = [];
+
+    // 1. Capacity overload alerts
+    liveMembers.forEach((m) => {
+      const memberTasks = liveTasks.filter(
+        (t) => t.assignedTo === m.userId && t.status !== 'completed'
+      );
+      const load = memberTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0);
+      const cap = m.weeklyCapacityHours || 40;
+      if (cap > 0 && load > cap) {
+        alerts.push({
+          id: `live-overload-${m.userId}`,
+          type: 'capacity_alert',
+          title: `Capacity Congestion: ${m.fullName}`,
+          message: `${m.fullName} is allocated ${load}h against ${cap}h weekly capacity (${Math.round((load / cap) * 100)}%). Rebalance tasks in Workload sandbox.`,
+          timestamp: 'Live Monitor',
+          isRead: dismissedLiveIds.has(`live-overload-${m.userId}`),
+          linkUrl: '/workload',
+        });
+      }
+    });
+
+    // 2. Urgent / critical tasks
+    liveTasks
+      .filter((t) => t.status !== 'completed')
+      .forEach((t) => {
+        if (t.priority === 'critical') {
+          alerts.push({
+            id: `live-critical-${t.id}`,
+            type: 'deadline_warning',
+            title: `Critical Priority Task: ${t.title}`,
+            message: `Task "${t.title}" requires immediate attention. Due: ${t.dueDate || 'Sprint End'}.`,
+            timestamp: 'Live Monitor',
+            isRead: dismissedLiveIds.has(`live-critical-${t.id}`),
+            linkUrl: `/tasks/${t.id}`,
+          });
+        }
+      });
+
+    // 3. Unassigned tasks in active projects
+    const unassignedTasks = liveTasks.filter((t) => !t.assignedTo && t.status !== 'completed');
+    if (unassignedTasks.length > 0) {
+      alerts.push({
+        id: 'live-unassigned-pool',
+        type: 'recommendation_ready',
+        title: `${unassignedTasks.length} Unassigned Sprint Task${unassignedTasks.length !== 1 ? 's' : ''}`,
+        message: `There are ${unassignedTasks.length} pending task(s) in the organization without an assigned team member.`,
+        timestamp: 'Live Monitor',
+        isRead: dismissedLiveIds.has('live-unassigned-pool'),
+        linkUrl: '/tasks',
+      });
+    }
+
+    return alerts;
+  }, [isLive, liveMembers, liveTasks, dismissedLiveIds]);
+
+  const notifications: DisplayNotification[] = isLive
+    ? liveNotifications
+    : mockNotifications.map((m) => ({
+        id: m.id,
+        type: m.type as any,
+        title: m.title,
+        message: m.message,
+        timestamp: m.timestamp,
+        isRead: m.isRead,
+        linkUrl: m.linkUrl,
+      }));
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleDismiss = (id: string) => {
+    if (isLive) {
+      setDismissedLiveIds((prev) => new Set(prev).add(id));
+    } else {
+      markNotificationAsRead(id);
+    }
+  };
+
+  const handleDismissAll = () => {
+    if (isLive) {
+      const allIds = new Set(liveNotifications.map((n) => n.id));
+      setDismissedLiveIds(allIds);
+    } else {
+      markAllNotificationsAsRead();
+    }
+  };
+
+  const isLoading = isLive && (isMembersLoading || isTasksLoading || isProjectsLoading);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live operational alerts...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -28,14 +152,14 @@ export default function NotificationsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Notification & Alert Center
+              Notification &amp; Alert Center
             </h2>
             <Badge variant={unreadCount > 0 ? 'amber' : 'emerald'} size="sm">
               {unreadCount} Unread
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Real-time capacity overload warnings, AI recommendation notices, and sprint updates
+            Real-time capacity overload warnings, deadline updates, and operational alerts
           </p>
         </div>
 
@@ -43,13 +167,25 @@ export default function NotificationsPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={markAllNotificationsAsRead}
+            onClick={handleDismissAll}
           >
             <CheckCheck className="h-4 w-4 mr-1.5" />
             <span>Mark All as Read</span>
           </Button>
         )}
       </div>
+
+      {isLive && (
+        <div className="rounded-xl border border-violet-500/30 bg-navy-900/60 p-4 text-xs text-slate-300 flex items-start gap-3">
+          <Info className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-white">Live Telemetry Alert Inbox</span>
+            <p className="text-slate-400 leading-relaxed">
+              Operational notifications are derived dynamically from verified organization task due dates and capacity bottlenecks. Persistent notification storage with push delivery requires a future database migration.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Notifications List */}
       <div className="space-y-3">
@@ -104,9 +240,9 @@ export default function NotificationsPage() {
                       variant="ghost"
                       size="sm"
                       className="text-xs"
-                      onClick={() => markNotificationAsRead(n.id)}
+                      onClick={() => handleDismiss(n.id)}
                     >
-                      Mark Read
+                      Dismiss
                     </Button>
                   )}
                   {n.linkUrl && (
@@ -122,6 +258,16 @@ export default function NotificationsPage() {
             </Card>
           );
         })}
+
+        {notifications.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-400 space-y-2">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
+            <h4 className="text-base font-bold text-white">All Clear</h4>
+            <p className="text-xs text-slate-400">
+              No operational alerts, capacity bottlenecks, or critical deadlines pending.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

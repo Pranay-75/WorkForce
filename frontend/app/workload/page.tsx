@@ -2,8 +2,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/authContext';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
-import { TaskStatus } from '@/lib/types';
+import { Employee, TaskStatus } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -33,25 +36,67 @@ import {
 } from 'lucide-react';
 
 export default function WorkloadCapacityPage() {
+  const { role: authRole, isAuthenticated, organization } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
   const {
-    employees,
-    tasks,
+    tasks: dbTasks,
+    isLoading: isTasksLoading,
+    updateTaskDetails: dbUpdateTaskDetails,
+    updateTaskStatus: dbUpdateTaskStatus,
+    assignTask: dbAssignTask,
+  } = useTasks();
+
+  const {
+    employees: mockEmployees,
+    tasks: mockTasks,
     redistributionProposals,
     applyRedistribution,
-    updateTaskDetails,
-    updateTaskStatus,
+    updateTaskDetails: mockUpdateTaskDetails,
+    updateTaskStatus: mockUpdateTaskStatus,
     updateEmployeeWeeklyCapacity,
-    activeRole,
+    activeRole: mockRole,
     currentUserId,
   } = useMockStore();
+
+  const effectiveRole = isLive && authRole ? authRole : mockRole;
+  const isManagerOrAdmin =
+    effectiveRole === 'manager' || effectiveRole === 'admin' || effectiveRole === 'organizer';
+
+  // Compute live employees with real capacity and assigned task loads
+  const employees: Employee[] = React.useMemo(() => {
+    if (!isLive) return mockEmployees;
+    return liveMembers.map((m) => {
+      const memberTasks = dbTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
+      const loadHours = memberTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+      const cap = m.weeklyCapacityHours || 40;
+      const util = cap > 0 ? loadHours / cap : 0;
+      return {
+        id: m.userId,
+        email: m.email,
+        fullName: m.fullName,
+        role: m.role,
+        department: (m.department as any) || 'Engineering',
+        jobTitle: m.jobTitle || 'Team Member',
+        weeklyCapacityHours: cap,
+        currentLoadHours: loadHours,
+        burnoutRiskScore: Math.min(1.0, util * 0.9),
+        skills: [],
+        activeTaskCount: memberTasks.length,
+        onTimeCompletionRate: 100,
+        location: 'Remote',
+      };
+    });
+  }, [isLive, mockEmployees, liveMembers, dbTasks]);
+
+  const tasks = isLive ? dbTasks : mockTasks;
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'overloaded' | 'near_limit' | 'optimal'>('all');
   const [departmentFilter, setDepartmentFilter] = React.useState<string>('all');
   const [sortBy, setSortBy] = React.useState<'util_desc' | 'util_asc' | 'hours_desc' | 'name_asc'>('util_desc');
   const [expandedEmpId, setExpandedEmpId] = React.useState<string | null>(null);
-
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
 
   // Live Capacity Bands
   const overloadedStaff = employees.filter(
@@ -114,16 +159,41 @@ export default function WorkloadCapacityPage() {
     setExpandedEmpId((prev) => (prev === empId ? null : empId));
   };
 
-  const handleAdjustTaskHours = (taskId: string, currentHours: number, delta: number) => {
+  const handleAdjustTaskHours = async (taskId: string, currentHours: number, delta: number) => {
     const newHours = Math.max(1, currentHours + delta);
-    updateTaskDetails(taskId, { estimatedHours: newHours });
+    if (isLive) {
+      await dbUpdateTaskDetails(taskId, { estimatedHours: newHours });
+    } else {
+      mockUpdateTaskDetails(taskId, { estimatedHours: newHours });
+    }
   };
 
-  const handleReassignTask = (taskId: string, targetEmpId: string) => {
-    updateTaskDetails(taskId, {
-      assignedTo: targetEmpId === 'unassigned' ? undefined : targetEmpId,
-    });
+  const handleReassignTask = async (taskId: string, targetEmpId: string) => {
+    if (isLive) {
+      await dbAssignTask(taskId, targetEmpId === 'unassigned' ? null : targetEmpId);
+    } else {
+      mockUpdateTaskDetails(taskId, {
+        assignedTo: targetEmpId === 'unassigned' ? undefined : targetEmpId,
+      });
+    }
   };
+
+  const handleCompleteTask = async (taskId: string) => {
+    if (isLive) {
+      await dbUpdateTaskStatus(taskId, 'completed');
+    } else {
+      mockUpdateTaskStatus(taskId, 'completed');
+    }
+  };
+
+  if (isLive && (isMembersLoading || isTasksLoading)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live organization telemetry &amp; workload allocations...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -236,12 +306,14 @@ export default function WorkloadCapacityPage() {
           </div>
 
           <Badge variant="violet" size="sm">
-            {redistributionProposals.length} Proposed Transfers
+            {isLive
+              ? (overloadedStaff.length > 0 ? `${overloadedStaff.length} Overload Alerts` : 'Optimal')
+              : `${redistributionProposals.length} Proposed Transfers`}
           </Badge>
         </div>
 
         <div className="grid grid-cols-1 gap-5">
-          {redistributionProposals.map((prop) => {
+          {!isLive && redistributionProposals.map((prop) => {
             const sourceEmp = employees.find((e) => e.id === prop.sourceEmployeeId);
             const targetEmp = employees.find((e) => e.id === prop.targetEmployeeId);
 
@@ -342,7 +414,21 @@ export default function WorkloadCapacityPage() {
             );
           })}
 
-          {redistributionProposals.length === 0 && (
+          {isLive && overloadedStaff.length > 0 && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-6 text-slate-300 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <h4 className="text-sm font-bold text-white">
+                  Capacity Overload Detected ({overloadedStaff.length} member{overloadedStaff.length !== 1 ? 's' : ''})
+                </h4>
+              </div>
+              <p className="text-xs text-slate-400">
+                Deterministic capacity tracking identified team members exceeding 100% sprint capacity. Expand the member cards in the roster below to reassign active tasks or adjust estimated hours with live database persistence.
+              </p>
+            </div>
+          )}
+
+          {((isLive && overloadedStaff.length === 0) || (!isLive && redistributionProposals.length === 0)) && (
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-8 text-center text-slate-300 space-y-2">
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-1" />
               <h4 className="text-sm font-bold text-white">
@@ -701,7 +787,7 @@ export default function WorkloadCapacityPage() {
                                 <Button
                                   variant="secondary"
                                   size="sm"
-                                  onClick={() => updateTaskStatus(t.id, 'completed')}
+                                  onClick={() => handleCompleteTask(t.id)}
                                   className="text-xs whitespace-nowrap"
                                   title="Mark completed to deduct hours from sprint"
                                 >

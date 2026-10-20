@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -8,11 +8,13 @@ import { useMockStore } from '@/lib/mockStore';
 import { useAuth } from '@/lib/authContext';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { cn } from '@/lib/utils';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const { feedbackMessage } = useMockStore();
   const { isAuthenticated, organization, isLoading } = useAuth();
 
@@ -21,6 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/auth');
 
@@ -63,10 +66,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 lg:pl-64">
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-w-0 transition-all duration-300',
+          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+        )}
+      >
         {/* Sticky Header */}
         <AppHeader onMobileMenuToggle={() => setIsMobileOpen(true)} />
 

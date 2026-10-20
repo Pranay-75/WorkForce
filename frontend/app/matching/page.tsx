@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/authContext';
+import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -20,17 +22,51 @@ import {
   Calendar,
   Layers,
   Award,
+  RefreshCw,
+  FolderKanban,
 } from 'lucide-react';
 
 export default function MatchingHubPage() {
-  const { recommendations, tasks, approveRecommendation, rejectRecommendation } = useMockStore();
+  const { isAuthenticated, organization } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+
+  const { tasks: dbTasks, isLoading: isTasksLoading } = useTasks();
+  const { recommendations, tasks: mockTasks, approveRecommendation, rejectRecommendation } = useMockStore();
 
   const [selectedTaskId, setSelectedTaskId] = React.useState<string>('task-104');
   const [rejectModalRecId, setRejectModalRecId] = React.useState<string | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
 
-  const targetTask = tasks.find((t) => t.id === selectedTaskId) || tasks[3];
-  const taskRecommendations = recommendations.filter((r) => r.taskId === selectedTaskId);
+  const tasks = React.useMemo(() => {
+    if (isLive) {
+      return dbTasks.map((t) => ({
+        id: t.id,
+        projectId: t.projectId,
+        projectName: t.projectName || 'Active Initiative',
+        title: t.title,
+        description: t.description || 'Sprint task objective',
+        status: t.status,
+        priority: t.priority,
+        estimatedHours: t.estimatedHours || 0,
+        requiredSkills: t.requiredSkills || [],
+        assignedTo: t.assignedTo,
+        dueDate: t.dueDate || 'Sprint End',
+      }));
+    }
+    return mockTasks;
+  }, [isLive, dbTasks, mockTasks]);
+
+  // Sync selected task ID
+  React.useEffect(() => {
+    if (isLive && tasks.length > 0) {
+      if (!tasks.some((t) => t.id === selectedTaskId)) {
+        setSelectedTaskId(tasks[0].id);
+      }
+    }
+  }, [isLive, tasks, selectedTaskId]);
+
+  const targetTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
+  const taskRecommendations = isLive ? [] : recommendations.filter((r) => r.taskId === selectedTaskId);
 
   const handleConfirmReject = () => {
     if (rejectModalRecId && rejectReason.trim()) {
@@ -39,6 +75,15 @@ export default function MatchingHubPage() {
       setRejectReason('');
     }
   };
+
+  if (isLive && isTasksLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live organization tasks &amp; matching parameters...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -49,9 +94,9 @@ export default function MatchingHubPage() {
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
               Explainable AI Task Matching Hub
             </h2>
-            <Badge variant="violet" size="sm">
+            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
               <Sparkles className="h-3 w-3 mr-1" />
-              Gemini Advisory Engine
+              {isLive ? 'Live Task Advisory' : 'Demo Advisory Engine'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -60,21 +105,38 @@ export default function MatchingHubPage() {
         </div>
 
         {/* Task Selection Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Target Task:</span>
-          <select
-            value={selectedTaskId}
-            onChange={(e) => setSelectedTaskId(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-violet-500 focus:outline-none"
-          >
-            {tasks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title} ({t.estimatedHours}h - {t.status})
-              </option>
-            ))}
-          </select>
-        </div>
+        {tasks.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Target Task:</span>
+            <select
+              value={selectedTaskId}
+              onChange={(e) => setSelectedTaskId(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-violet-500 focus:outline-none"
+            >
+              {tasks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} ({t.estimatedHours}h - {t.status})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {tasks.length === 0 && isLive && (
+        <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center text-slate-400 space-y-3">
+          <FolderKanban className="mx-auto h-10 w-10 text-slate-500" />
+          <h4 className="text-base font-bold text-white">No Sprint Tasks Found</h4>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            This organization has no active tasks yet. Create a project and add tasks to evaluate candidate matching.
+          </p>
+          <Link href="/projects">
+            <Button variant="primary" size="sm">
+              Go to Projects
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Selected Task Overview Banner */}
       {targetTask && (
@@ -131,21 +193,42 @@ export default function MatchingHubPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-white tracking-tight">
-            Ranked Candidate Suggestions ({taskRecommendations.length})
+            {isLive ? 'Candidate Advisory Status' : `Ranked Candidate Suggestions (${taskRecommendations.length})`}
           </h3>
           <span className="text-xs text-slate-400">
             Weighted on: Skill Overlap (40%), Capacity Delta (40%), Deadline Feasibility (20%)
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-5">
-          {taskRecommendations.map((rec, rankIdx) => {
-            const isAccepted = rec.status === 'accepted';
-            const isRejected = rec.status === 'rejected';
+        {isLive ? (
+          <div className="rounded-2xl border border-violet-500/40 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-8 text-center space-y-4">
+            <Sparkles className="mx-auto h-10 w-10 text-violet-400" />
+            <div className="space-y-1.5 max-w-lg mx-auto">
+              <h4 className="text-lg font-bold text-white">Gemini Advisory Service Pending Integration</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                The deterministic skill requirement pre-filters and capacity models are active for this organization. Generating live Gemini natural-language explainability rankings requires implementing the FastAPI backend endpoint (<code>/api/v1/matching</code>).
+              </p>
+            </div>
+            {targetTask && (
+              <div className="flex justify-center gap-3 pt-2">
+                <Link href={`/tasks/${targetTask.id}`}>
+                  <Button variant="primary" size="md">
+                    <span>Manage &amp; Assign Task</span>
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5">
+            {taskRecommendations.map((rec, rankIdx) => {
+              const isAccepted = rec.status === 'accepted';
+              const isRejected = rec.status === 'rejected';
 
-            return (
-              <Card
-                key={rec.id}
+              return (
+                <Card
+                  key={rec.id}
                 className={`border-slate-800 transition-all ${
                   isAccepted
                     ? 'border-emerald-500/60 bg-navy-900'
@@ -313,7 +396,8 @@ export default function MatchingHubPage() {
             );
           })}
         </div>
-      </div>
+      )}
+    </div>
 
       {/* Reject Reason Dialog */}
       <Dialog

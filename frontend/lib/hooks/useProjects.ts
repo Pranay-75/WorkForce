@@ -328,6 +328,9 @@ export function useProjects(): UseProjectsResult {
           });
 
         if (insertError) {
+          if (insertError.code === '23505' || insertError.message?.toLowerCase().includes('duplicate key')) {
+            return { error: 'This team member is already assigned to this project.' };
+          }
           return { error: insertError.message };
         }
 

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'employee' | 'hr';
+export type UserRole = 'organizer' | 'admin' | 'manager' | 'employee' | 'hr';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
 export type PriorityLevel = 'low' | 'medium' | 'high' | 'critical';

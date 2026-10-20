@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
@@ -45,25 +46,25 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Employees',
         href: '/employees',
         icon: Users,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Projects',
         href: '/projects',
         icon: FolderKanban,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Tasks',
         href: '/tasks',
         icon: CheckSquare,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
     ],
   },
@@ -75,19 +76,19 @@ const masterNavigationGroups: NavGroup[] = [
         href: '/matching',
         icon: Sparkles,
         badge: 'AI',
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Workload',
         href: '/workload',
         icon: BarChart3,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Employee Insights',
         href: '/insights',
         icon: Flame,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
     ],
   },
@@ -98,26 +99,26 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Reports',
         href: '/reports',
         icon: FileSpreadsheet,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Audit Logs',
         href: '/audit',
         icon: History,
-        allowedRoles: ['admin'],
+        allowedRoles: ['organizer', 'admin'],
       },
       {
         name: 'Notifications',
         href: '/notifications',
         icon: Bell,
         badge: '3',
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Settings',
         href: '/settings',
         icon: Settings,
-        allowedRoles: ['admin', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'hr'],
       },
     ],
   },
@@ -126,21 +127,55 @@ const masterNavigationGroups: NavGroup[] = [
 export function AppSidebar({
   isMobileOpen,
   setIsMobileOpen,
+  isCollapsed: controlledIsCollapsed,
+  setIsCollapsed: controlledSetIsCollapsed,
 }: {
   isMobileOpen?: boolean;
   setIsMobileOpen?: (open: boolean) => void;
+  isCollapsed?: boolean;
+  setIsCollapsed?: (collapsed: boolean) => void;
 }) {
   const pathname = usePathname();
-  const { activeRole, currentUser } = useMockStore();
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const { activeRole: mockRole, currentUser: mockUser } = useMockStore();
+  const { role: authRole, profile, user, isAuthenticated, organization } = useAuth();
+  const [internalCollapsed, setInternalCollapsed] = React.useState(false);
+  const isCollapsed = controlledIsCollapsed !== undefined ? controlledIsCollapsed : internalCollapsed;
+  const setIsCollapsed = controlledSetIsCollapsed || setInternalCollapsed;
 
-  // Filter groups based on active role
+  // Derive role authoritatively: live authenticated role takes precedence over mock role
+  const activeRole: UserRole = isAuthenticated && authRole ? authRole : mockRole;
+
+  // Derive display profile: live user session takes precedence over mock user
+  const displayUser = React.useMemo(() => {
+    if (isAuthenticated && user) {
+      const fullName =
+        profile?.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Workspace Lead';
+      const initials =
+        fullName
+          .split(' ')
+          .filter(Boolean)
+          .map((part: string) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase() || 'WL';
+      return {
+        name: fullName,
+        role: authRole,
+        department: profile?.department || organization?.name || 'Workspace',
+        avatar: initials,
+      };
+    }
+    return mockUser;
+  }, [isAuthenticated, user, profile, authRole, organization, mockUser]);
+
+  // Filter groups based on active role (including 'organizer')
   const visibleGroups = masterNavigationGroups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => item.allowedRoles.includes(activeRole)),
     }))
     .filter((group) => group.items.length > 0);
+
 
   return (
     <>
@@ -269,10 +304,11 @@ export function AppSidebar({
               'flex items-center gap-3 rounded-xl p-2 bg-navy-850/60 border border-slate-800/60',
               isCollapsed && 'justify-center p-1.5'
             )}
+            title={isCollapsed ? `${displayUser.name} (${displayUser.role.toUpperCase()})` : undefined}
           >
             <div className="relative">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 font-semibold text-white text-xs border border-violet-400/40 shadow-sm">
-                {currentUser.avatar}
+                {displayUser.avatar}
               </div>
               <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-navy-900" />
             </div>
@@ -281,21 +317,22 @@ export function AppSidebar({
               <div className="flex flex-col min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-200 truncate">
-                    {currentUser.name}
+                    {displayUser.name}
                   </span>
                   <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  <span className="truncate">{currentUser.department}</span>
+                  <span className="truncate">{displayUser.department}</span>
                   <span>•</span>
                   <span className="text-violet-400 font-mono text-[10px] uppercase">
-                    {currentUser.role}
+                    {displayUser.role}
                   </span>
                 </div>
               </div>
             )}
           </div>
         </div>
+
       </aside>
     </>
   );

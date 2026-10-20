@@ -39,6 +39,8 @@ export default function RegisterPage() {
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
+  const isDev = process.env.NODE_ENV === 'development';
+
   // Auto-generate slug from organization name unless customized
   const effectiveSlug = React.useMemo(() => {
     if (isCustomizingSlug && customSlug) {
@@ -137,17 +139,32 @@ export default function RegisterPage() {
                 We sent a confirmation link to{' '}
                 <span className="font-semibold text-cyan-300">{pendingConfirmationEmail}</span>.
               </p>
-              <div className="rounded-xl border border-slate-700/60 bg-navy-950/60 p-3 text-xs text-slate-400 text-left space-y-1.5">
+              <div className="rounded-xl border border-slate-700/60 bg-navy-950/60 p-3.5 text-xs text-slate-400 text-left space-y-2">
                 <div className="font-semibold text-slate-300">Next Steps:</div>
-                <ul className="list-disc pl-4 space-y-1 text-[11px]">
-                  <li>Click the link in your email to verify your address.</li>
-                  <li>Your organization workspace will be initialized automatically on first sign-in.</li>
+                <ul className="list-disc pl-4 space-y-1.5 text-[11px]">
+                  <li>Click the link in your email to verify your email address.</li>
+                  {isDev && (
+                    <li>In local development, all outgoing emails are captured in the Mailpit inbox.</li>
+                  )}
+                  <li>Once verified, your account and workspace authority will be active.</li>
                 </ul>
               </div>
-              <div className="pt-2">
-                <Link href="/login">
-                  <Button variant="primary" className="w-full justify-center">
-                    Proceed to Sign In <ArrowRight className="ml-1.5 h-4 w-4" />
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                {isDev && (
+                  <a
+                    href="http://127.0.0.1:54324"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1"
+                  >
+                    <Button variant="secondary" className="w-full justify-center text-xs">
+                      Open Local Mailpit <Globe className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                  </a>
+                )}
+                <Link href="/login" className="flex-1">
+                  <Button variant="primary" className="w-full justify-center text-xs">
+                    Proceed to Sign In <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                   </Button>
                 </Link>
               </div>

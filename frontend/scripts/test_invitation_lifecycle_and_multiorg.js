@@ -207,6 +207,13 @@ async function runHardeningTests() {
     } else {
       const claimingUserId = claimingUserAuth.user.id;
 
+      // When email confirmations are enabled, simulate user verifying email to trigger claiming
+      runPsql(`
+        UPDATE auth.users
+        SET email_confirmed_at = timezone('utc'::text, now())
+        WHERE id = '${claimingUserId}';
+      `);
+
       // Check assigned role in membership
       const assignedRole = runPsql(`
         SELECT role FROM public.organization_memberships
@@ -313,6 +320,19 @@ async function runHardeningTests() {
     });
     const multiUserId = multiUserAuth.user.id;
 
+    // Confirm email and sign in to acquire session when confirmations are enabled
+    runPsql(`
+      UPDATE auth.users
+      SET email_confirmed_at = timezone('utc'::text, now())
+      WHERE id = '${multiUserId}';
+    `);
+    const { data: multiLogin, error: mLoginErr } = await anon.auth.signInWithPassword({
+      email: multiUserEmail,
+      password: 'TestPassword123!',
+    });
+    if (mLoginErr) throw new Error(`Multi-user sign in failed: ${mLoginErr.message}`);
+    const multiToken = multiLogin.session.access_token;
+
     // Add membership in Org A as employee
     runPsql(`
       INSERT INTO public.organization_memberships (organization_id, user_id, role, status)
@@ -328,7 +348,7 @@ async function runHardeningTests() {
     // Client queries memberships
     const multiUserClient = createClient(SUPABASE_URL, ANON_KEY, {
       auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${multiUserAuth.session.access_token}` } }
+      global: { headers: { Authorization: `Bearer ${multiToken}` } }
     });
 
     const { data: userMemberships, error: multiMemErr } = await multiUserClient

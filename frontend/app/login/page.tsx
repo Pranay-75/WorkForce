@@ -101,6 +101,8 @@ function LoginFormContent() {
   const { signInWithPassword, isAuthenticated, organization, isLoading: isAuthLoading } = useAuth();
   const { switchDemoRole } = useMockStore();
 
+  const isDev = process.env.NODE_ENV === 'development';
+
   const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -147,15 +149,16 @@ function LoginFormContent() {
   }, [urlError, urlReason]);
 
   // If already authenticated and session load finished, redirect to dashboard or onboarding
+  // Guard: do NOT auto-redirect if an error parameter is present in the URL (e.g. failed/expired confirmation callback)
   React.useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
+    if (!isAuthLoading && isAuthenticated && !urlError) {
       if (organization) {
         router.push('/dashboard');
       } else {
         router.push('/onboarding');
       }
     }
-  }, [isAuthenticated, organization, isAuthLoading, router]);
+  }, [isAuthenticated, organization, isAuthLoading, router, urlError]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,12 +173,14 @@ function LoginFormContent() {
     }
   };
 
-  // Quick-fill credentials for demo testing and active role selection
+  // Quick-fill credentials for demo testing and active role selection (development only)
   const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
     setSelectedRole(opt.id);
-    setEmail(opt.demoEmail);
-    setPassword('WorkForceDemo2026!');
-    switchDemoRole(opt.demoId);
+    if (isDev) {
+      setEmail(opt.demoEmail);
+      setPassword('WorkForceDemo2026!');
+      switchDemoRole(opt.demoId);
+    }
   };
 
   return (
@@ -217,80 +222,104 @@ function LoginFormContent() {
 
           <form onSubmit={handleSignIn} className="space-y-4">
             {errorMessage && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-                <span>{errorMessage}</span>
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span className="font-semibold">{errorMessage}</span>
+                </div>
+                {errorMessage.toLowerCase().includes('not confirmed') && (
+                  <p className="text-[11px] text-slate-300 pl-6 leading-relaxed">
+                    Your email address has not been confirmed yet. Please click the verification link in your email
+                    {isDev ? (
+                      <>
+                        , or check your local Mailpit inbox at{' '}
+                        <a
+                          href="http://127.0.0.1:54324"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 underline hover:text-cyan-300 font-medium"
+                        >
+                          http://127.0.0.1:54324
+                        </a>.
+                      </>
+                    ) : (
+                      '.'
+                    )}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Select Role Option */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Select Your Role
-                </label>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  Admin • Manager • HR • Employee
-                </span>
-              </div>
+            {/* Select Role Option (Development only) */}
+            {isDev && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Select Your Role
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Admin • Manager • HR • Employee
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                {LOGIN_ROLES.map((opt) => {
-                  const isSelected = selectedRole === opt.id;
-                  const Icon = opt.icon;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => fillRoleAccount(opt)}
-                      className={cn(
-                        'flex flex-col text-left p-3 rounded-xl border transition-all relative overflow-hidden group focus:outline-none',
-                        isSelected
-                          ? `${opt.activeBorder} ${opt.activeBg}`
-                          : 'border-slate-800 bg-navy-950/70 hover:border-slate-700 hover:bg-navy-900/60'
-                      )}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1.5">
-                        <div
-                          className={cn(
-                            'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
-                            isSelected
-                              ? opt.iconBg
-                              : 'border-slate-800 bg-slate-900/80 text-slate-400 group-hover:text-slate-300'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
+                <div className="grid grid-cols-2 gap-2.5">
+                  {LOGIN_ROLES.map((opt) => {
+                    const isSelected = selectedRole === opt.id;
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => fillRoleAccount(opt)}
+                        className={cn(
+                          'flex flex-col text-left p-3 rounded-xl border transition-all relative overflow-hidden group focus:outline-none',
+                          isSelected
+                            ? `${opt.activeBorder} ${opt.activeBg}`
+                            : 'border-slate-800 bg-navy-950/70 hover:border-slate-700 hover:bg-navy-900/60'
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1.5">
+                          <div
+                            className={cn(
+                              'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
+                              isSelected
+                                ? opt.iconBg
+                                : 'border-slate-800 bg-slate-900/80 text-slate-400 group-hover:text-slate-300'
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+
+                          <div
+                            className={cn(
+                              'h-4 w-4 rounded-full border flex items-center justify-center transition-colors',
+                              isSelected
+                                ? 'border-violet-500 bg-violet-600'
+                                : 'border-slate-700 bg-navy-950 group-hover:border-slate-600'
+                            )}
+                          >
+                            {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </div>
                         </div>
 
-                        <div
-                          className={cn(
-                            'h-4 w-4 rounded-full border flex items-center justify-center transition-colors',
-                            isSelected
-                              ? 'border-violet-500 bg-violet-600'
-                              : 'border-slate-700 bg-navy-950 group-hover:border-slate-600'
-                          )}
-                        >
-                          {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xs font-bold text-white">
+                            {opt.title}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            ({opt.badge})
+                          </span>
                         </div>
-                      </div>
 
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-xs font-bold text-white">
-                          {opt.title}
-                        </span>
-                        <span className="text-[9px] font-mono text-slate-400">
-                          ({opt.badge})
-                        </span>
-                      </div>
-
-                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
-                        {opt.description}
-                      </p>
-                    </button>
-                  );
-                })}
+                        <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
+                          {opt.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-1.5 pt-1">
               <label className="block text-xs font-semibold text-slate-300">
@@ -345,38 +374,40 @@ function LoginFormContent() {
             </Button>
           </form>
 
-          {/* Quick Demo Credentials Assistant */}
-          <div className="mt-6 pt-5 border-t border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-slate-400">
-                Quick Demo Sign-In
-              </span>
-              <Badge variant="cyan" size="sm">
-                Instant Fill
-              </Badge>
-            </div>
+          {/* Quick Demo Credentials Assistant (Development only) */}
+          {isDev && (
+            <div className="mt-6 pt-5 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase font-bold text-slate-400">
+                  Quick Demo Sign-In
+                </span>
+                <Badge variant="cyan" size="sm">
+                  Instant Fill
+                </Badge>
+              </div>
 
-            <div className="grid grid-cols-4 gap-2">
-              {LOGIN_ROLES.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => fillRoleAccount(opt)}
-                  className={cn(
-                    'rounded-lg border bg-navy-950 p-2 text-center transition-all group',
-                    selectedRole === opt.id
-                      ? 'border-violet-500 bg-violet-950/30'
-                      : 'border-slate-800 hover:border-slate-700'
-                  )}
-                >
-                  <span className={cn('text-[10px] font-bold block', opt.accentColor)}>
-                    {opt.title.toUpperCase()}
-                  </span>
-                  <span className="text-[9px] text-slate-400 block truncate">{opt.personName}</span>
-                </button>
-              ))}
+              <div className="grid grid-cols-4 gap-2">
+                {LOGIN_ROLES.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => fillRoleAccount(opt)}
+                    className={cn(
+                      'rounded-lg border bg-navy-950 p-2 text-center transition-all group',
+                      selectedRole === opt.id
+                        ? 'border-violet-500 bg-violet-950/30'
+                        : 'border-slate-800 hover:border-slate-700'
+                    )}
+                  >
+                    <span className={cn('text-[10px] font-bold block', opt.accentColor)}>
+                      {opt.title.toUpperCase()}
+                    </span>
+                    <span className="text-[9px] text-slate-400 block truncate">{opt.personName}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-6 text-center text-xs text-slate-400">
             Don&apos;t have an account yet?{' '}
