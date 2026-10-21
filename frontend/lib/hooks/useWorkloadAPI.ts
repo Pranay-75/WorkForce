@@ -100,7 +100,8 @@ export function useWorkloadOverview(department?: string) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const fetch = React.useCallback(async () => {
+  // Named fetchWorkload to avoid shadowing window.fetch
+  const fetchWorkload = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -113,16 +114,17 @@ export function useWorkloadOverview(department?: string) {
       }
       const json: OrganizationWorkloadOverview = await res.json();
       setData(json);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load workload data');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load workload data';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }, [department]);
 
-  React.useEffect(() => { fetch(); }, [fetch]);
+  React.useEffect(() => { fetchWorkload(); }, [fetchWorkload]);
 
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch: fetchWorkload };
 }
 
 // ─── Hook: useRedistributionProposals ─────────────────────────────────────────
@@ -132,7 +134,8 @@ export function useRedistributionProposals() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const fetch = React.useCallback(async (department?: string, targetMaxUtilization = 90) => {
+  // Named fetchRedist to avoid shadowing window.fetch
+  const fetchRedist = React.useCallback(async (department?: string, targetMaxUtilization = 90) => {
     setLoading(true);
     setError(null);
     try {
@@ -151,14 +154,15 @@ export function useRedistributionProposals() {
       }
       const json: WorkloadRedistributionResponse = await res.json();
       setData(json);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load redistribution proposals');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load redistribution proposals';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  React.useEffect(() => { fetch(); }, [fetch]);
+  React.useEffect(() => { fetchRedist(); }, [fetchRedist]);
 
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch: fetchRedist };
 }

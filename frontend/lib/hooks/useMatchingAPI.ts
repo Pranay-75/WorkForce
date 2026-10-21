@@ -104,6 +104,7 @@ export function useTaskMatching() {
     setLoading(true);
     setError(null);
     setDecisions({});
+    setResult(null);
     try {
       const headers = await getAuthHeaders();
       const res = await window.fetch(`${API_URL}/api/v1/ai/match-task`, {
@@ -116,10 +117,10 @@ export function useTaskMatching() {
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
       const json: TaskMatchResponse = await res.json();
-      // Initialize all as pending
       setResult(json);
-    } catch (e: any) {
-      setError(e.message || 'Failed to match task candidates');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to match task candidates';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -194,15 +195,16 @@ export function useTaskMatching() {
     []
   );
 
-  // Merge local decisions into recommendations so UI reflects immediately
-  const recommendations: CandidateRecommendation[] =
+  // Memoized: merge local decisions into recommendations so UI reflects immediately
+  const recommendations: CandidateRecommendation[] = React.useMemo(() =>
     result?.recommendations.map((rec) => {
       const recId = `rec-${result.task_id}-${rec.candidate_id}`;
       const decision = decisions[recId];
       return decision
         ? { ...rec, status: decision.status, decision_reason: decision.reason }
         : { ...rec, status: rec.status ?? 'pending' };
-    }) ?? [];
+    }) ?? [],
+  [result, decisions]);
 
   return {
     result,

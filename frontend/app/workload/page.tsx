@@ -13,22 +13,13 @@ import {
   ArrowRight,
   Sparkles,
   AlertTriangle,
-  CheckCircle2,
-  TrendingDown,
   RefreshCw,
   Users,
   Search,
-  Filter,
   ChevronDown,
   ChevronUp,
-  Clock,
   CheckSquare,
-  Plus,
-  Minus,
-  Sliders,
-  FolderKanban,
-  ArrowUpRight,
-  ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function WorkloadCapacityPage() {
@@ -233,9 +224,17 @@ export default function WorkloadCapacityPage() {
 
         <div className="grid grid-cols-1 gap-5">
           {redistributionProposals.map((prop) => {
-            const sourceBeforePct = Math.round(prop.source_employee.projected_utilization_pct + (prop.task_hours / prop.source_employee.weekly_capacity) * 100);
+            // sourceBeforePct = utilisation BEFORE transfer = current_load / capacity
+            const sourceBeforePct = prop.source_employee.weekly_capacity > 0
+              ? Math.round((prop.source_employee.current_load / prop.source_employee.weekly_capacity) * 100)
+              : 0;
+            // sourceAfterPct = utilisation AFTER transfer = projected_load / capacity
             const sourceAfterPct = Math.round(prop.source_employee.projected_utilization_pct);
-            const targetBeforePct = Math.round((prop.target_employee.current_load / prop.target_employee.weekly_capacity) * 100);
+            // targetBeforePct = utilisation BEFORE absorbing = current_load / capacity
+            const targetBeforePct = prop.target_employee.weekly_capacity > 0
+              ? Math.round((prop.target_employee.current_load / prop.target_employee.weekly_capacity) * 100)
+              : 0;
+            // targetAfterPct = utilisation AFTER absorbing = projected_load / capacity
             const targetAfterPct = Math.round(prop.target_employee.projected_utilization_pct);
 
             return (

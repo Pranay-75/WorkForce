@@ -8,17 +8,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Dialog } from '@/components/ui/Dialog';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   Sparkles,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  ArrowRight,
-  TrendingUp,
   ShieldCheck,
-  Calendar,
-  Layers,
   Award,
 } from 'lucide-react';
 
@@ -242,9 +237,11 @@ export default function MatchingHubPage() {
                             </Badge>
                           ))}
                         </div>
-                        <span className="text-[10px] font-mono text-slate-400">
-                          Skill score: {rec.skill_match_breakdown.skill_score.toFixed(1)}%
-                        </span>
+                        {rec.skill_match_breakdown.missing_skills.length > 0 && (
+                          <p className="text-[10px] font-mono text-amber-400/80 pt-0.5">
+                            {rec.skill_match_breakdown.missing_skills.length} missing prerequisite(s)
+                          </p>
+                        )}
                       </div>
 
                       {/* 2. Capacity Impact */}
