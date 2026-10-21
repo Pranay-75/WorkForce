@@ -677,14 +677,14 @@ function PresentationContent() {
             onClick={() => setView('dashboard')}
             className="flex items-center gap-3 overflow-hidden group text-left focus:outline-none"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-glow group-hover:scale-105 transition-transform">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm group-hover:bg-blue-500 transition-colors">
               <Zap className="h-5 w-5 fill-current" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
                   WorkForce
-                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-violet-950/80 text-violet-400 border border-violet-800/50">
+                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                     SaaS
                   </span>
                 </span>
@@ -707,9 +707,9 @@ function PresentationContent() {
 
         {/* Demo Tag Indicator */}
         {!isCollapsed && (
-          <div className="px-4 py-2.5 bg-violet-950/30 border-b border-violet-500/20">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-violet-300 uppercase">
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+          <div className="px-4 py-2.5 bg-slate-900/60 border-b border-slate-800">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
               Presentation Demo · Connected Workflow
             </div>
           </div>
@@ -736,23 +736,23 @@ function PresentationContent() {
                       className={cn(
                         'w-full group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 select-none text-left',
                         isActive
-                          ? 'bg-violet-600/15 text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] border border-violet-500/30'
-                          : 'text-slate-400 hover:bg-navy-800/80 hover:text-slate-200'
+                          ? 'bg-blue-950/40 text-blue-300 border border-blue-800/40'
+                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                       )}
                       title={isCollapsed ? item.name : undefined}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-blue-500" />
                       )}
                       <Icon
                         className={cn(
                           'h-4 w-4 shrink-0 transition-colors',
-                          isActive ? 'text-violet-400' : 'text-slate-400 group-hover:text-slate-200'
+                          isActive ? 'text-blue-400' : 'text-slate-400 group-hover:text-slate-200'
                         )}
                       />
                       {!isCollapsed && <span className="truncate flex-1">{item.name}</span>}
                       {!isCollapsed && item.badge && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-mono">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-mono">
                           {item.badge}
                         </span>
                       )}
@@ -767,7 +767,7 @@ function PresentationContent() {
         {/* Sidebar Footer User Info */}
         <div className="border-t border-slate-800/80 p-3">
           <div className="flex items-center gap-3 rounded-xl bg-navy-950/60 p-2.5 border border-slate-800/60">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600/30 text-xs font-bold text-violet-300 border border-violet-500/40">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-slate-200 border border-slate-700">
               AC
             </div>
             {!isCollapsed && (
@@ -808,7 +808,7 @@ function PresentationContent() {
 
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                <span className="text-violet-400 font-semibold">WorkForce AI</span>
+                <span className="text-blue-400 font-semibold">WorkForce AI</span>
                 <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
                 <span className="capitalize text-slate-200 truncate">{currentView}</span>
               </div>
@@ -1079,7 +1079,7 @@ function DemoDashboardView({
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500"
+                          className="h-full rounded-full bg-blue-500"
                           style={{ width: `${Math.min(pct, 100)}%` }}
                         />
                       </div>
@@ -1260,10 +1260,10 @@ function DemoEmployeesView({
         </div>
 
         {/* Hero Profile Header Card */}
-        <Card className="relative overflow-hidden border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
+        <Card className="relative overflow-hidden border-slate-700 bg-slate-900/90 p-6 shadow-sm">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="flex items-start sm:items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-xl font-bold text-white shadow-glow border border-violet-400/40">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-xl font-bold text-slate-100 border border-slate-700 shadow-sm">
                 {initials}
               </div>
               <div className="space-y-1">
@@ -2246,7 +2246,7 @@ function DemoProjectsView({
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500"
+                        className="h-full rounded-full bg-blue-500"
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
@@ -2746,11 +2746,11 @@ function DemoWorkloadView({
       {/* ===================================================================== */}
       {/* INTELLIGENT WORKLOAD REDISTRIBUTION SANDBOX                           */}
       {/* ===================================================================== */}
-      <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-900 to-navy-950 shadow-glow">
+      <Card className="border-slate-700 bg-slate-900/90 shadow-sm">
         <CardHeader className="border-b border-slate-800/80 pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600/20 text-violet-300 border border-violet-500/30">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-950/40 text-blue-300 border border-blue-800/40">
                 <Scale className="h-5 w-5" />
               </div>
               <div>
