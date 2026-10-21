@@ -35,13 +35,13 @@ export function DataTable<T extends { id?: string | number }>({
   return (
     <div
       className={cn(
-        'w-full overflow-hidden rounded-xl border border-slate-800/90 bg-navy-850/90 shadow-card backdrop-blur-sm',
+        'w-full overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-900/90 shadow-card backdrop-blur-sm',
         className
       )}
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-slate-200">
-          <thead className="border-b border-slate-800 bg-navy-900/90 text-xs uppercase tracking-wider text-slate-400">
+        <table className="w-full text-left text-sm text-zinc-200">
+          <thead className="border-b border-zinc-800 bg-zinc-950/80 text-xs uppercase tracking-wider text-zinc-400">
             <tr>
               {columns.map((col, idx) => (
                 <th
@@ -57,7 +57,7 @@ export function DataTable<T extends { id?: string | number }>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60">
+          <tbody className="divide-y divide-zinc-800/60">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, idx) => (
                 <SkeletonTableRow key={idx} columns={columns.length} />
@@ -78,7 +78,7 @@ export function DataTable<T extends { id?: string | number }>({
                   key={item.id ?? rowIdx}
                   onClick={() => onRowClick?.(item)}
                   className={cn(
-                    'transition-colors duration-150 hover:bg-navy-800/60',
+                    'transition-colors duration-150 hover:bg-zinc-800/50',
                     onRowClick && 'cursor-pointer'
                   )}
                 >

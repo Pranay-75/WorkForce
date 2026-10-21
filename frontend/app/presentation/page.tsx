@@ -22,6 +22,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { MetricCard } from '@/components/ui/MetricCard';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -672,23 +673,23 @@ function PresentationContent() {
         )}
       >
         {/* Branding Header */}
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-4">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 px-4">
           <button
             onClick={() => setView('dashboard')}
             className="flex items-center gap-3 overflow-hidden group text-left focus:outline-none"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-glow group-hover:scale-105 transition-transform">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-950 shadow-sm group-hover:bg-white transition-colors">
               <Zap className="h-5 w-5 fill-current" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
                   WorkForce
-                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-violet-950/80 text-violet-400 border border-violet-800/50">
+                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                     SaaS
                   </span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium tracking-wide">
+                <span className="text-[10px] text-zinc-400 font-medium tracking-wide">
                   AI Capacity Platform
                 </span>
               </div>
@@ -698,7 +699,7 @@ function PresentationContent() {
           {/* Desktop Collapse Toggle */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden rounded-lg p-1.5 text-slate-400 hover:bg-navy-800 hover:text-slate-200 lg:flex focus:outline-none"
+            className="hidden rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 lg:flex focus:outline-none"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -707,9 +708,9 @@ function PresentationContent() {
 
         {/* Demo Tag Indicator */}
         {!isCollapsed && (
-          <div className="px-4 py-2.5 bg-violet-950/30 border-b border-violet-500/20">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-violet-300 uppercase">
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+          <div className="px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-zinc-400 uppercase">
+              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
               Presentation Demo · Connected Workflow
             </div>
           </div>
@@ -720,7 +721,7 @@ function PresentationContent() {
           {demoNavigationGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-1">
               {!isCollapsed && (
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                   {group.label}
                 </p>
               )}
@@ -736,23 +737,23 @@ function PresentationContent() {
                       className={cn(
                         'w-full group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 select-none text-left',
                         isActive
-                          ? 'bg-violet-600/15 text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] border border-violet-500/30'
-                          : 'text-slate-400 hover:bg-navy-800/80 hover:text-slate-200'
+                          ? 'bg-zinc-800/80 text-white border border-zinc-700/60'
+                          : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                       )}
                       title={isCollapsed ? item.name : undefined}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white" />
                       )}
                       <Icon
                         className={cn(
                           'h-4 w-4 shrink-0 transition-colors',
-                          isActive ? 'text-violet-400' : 'text-slate-400 group-hover:text-slate-200'
+                          isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'
                         )}
                       />
                       {!isCollapsed && <span className="truncate flex-1">{item.name}</span>}
                       {!isCollapsed && item.badge && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-mono">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-950 font-mono">
                           {item.badge}
                         </span>
                       )}
@@ -767,7 +768,7 @@ function PresentationContent() {
         {/* Sidebar Footer User Info */}
         <div className="border-t border-slate-800/80 p-3">
           <div className="flex items-center gap-3 rounded-xl bg-navy-950/60 p-2.5 border border-slate-800/60">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600/30 text-xs font-bold text-violet-300 border border-violet-500/40">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-slate-200 border border-slate-700">
               AC
             </div>
             {!isCollapsed && (
@@ -808,7 +809,7 @@ function PresentationContent() {
 
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                <span className="text-violet-400 font-semibold">WorkForce AI</span>
+                <span className="text-blue-400 font-semibold">WorkForce AI</span>
                 <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
                 <span className="capitalize text-slate-200 truncate">{currentView}</span>
               </div>
@@ -976,70 +977,49 @@ function DemoDashboardView({
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-slate-800 bg-navy-900/90">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Total Headcount</p>
-              <Users className="h-5 w-5 text-violet-400" />
-            </div>
-            <p className="mt-3 text-3xl font-bold text-white tracking-tight">{capacitySummary.totalEmployees}</p>
-            <p className="mt-1 text-xs text-slate-400">
-              Across {capacitySummary.departmentBreakdowns.length} functional departments
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Total Headcount"
+          value={capacitySummary.totalEmployees}
+          subtitle={`Across ${capacitySummary.departmentBreakdowns.length} functional departments`}
+          icon={<Users className="h-5 w-5 text-zinc-300" />}
+          sparkline={[6, 7, 7, 8, 8, 8, 8]}
+        />
 
-        <Card className="border-slate-800 bg-navy-900/90">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Active Projects</p>
-              <FolderKanban className="h-5 w-5 text-cyan-400" />
-            </div>
-            <p className="mt-3 text-3xl font-bold text-white tracking-tight">{projects.length}</p>
-            <p className="mt-1 text-xs text-slate-400">
-              {projects.filter((p) => p.status === 'in_progress').length} In Progress ·{' '}
-              {projects.filter((p) => p.status === 'planning').length} Planning
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Active Projects"
+          value={projects.length}
+          subtitle={`${projects.filter((p) => p.status === 'in_progress').length} In Progress · ${projects.filter((p) => p.status === 'planning').length} Planning`}
+          icon={<FolderKanban className="h-5 w-5 text-zinc-300" />}
+          sparkline={[2, 3, 3, 4, 4, 4, 4]}
+        />
 
-        <Card className="border-slate-800 bg-navy-900/90">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Active Tasks</p>
-              <CheckSquare className="h-5 w-5 text-emerald-400" />
-            </div>
-            <p className="mt-3 text-3xl font-bold text-white tracking-tight">{activeTasks.length}</p>
-            <p className="mt-1 text-xs text-slate-400">
-              {tasks.filter((t) => t.status === 'in_progress').length} In Progress ·{' '}
-              {tasks.filter((t) => t.status === 'completed').length} Completed
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Active Tasks"
+          value={activeTasks.length}
+          subtitle={`${tasks.filter((t) => t.status === 'in_progress').length} In Progress · ${tasks.filter((t) => t.status === 'completed').length} Completed`}
+          icon={<CheckSquare className="h-5 w-5 text-zinc-300" />}
+          sparkline={[11, 13, 14, 16, 15, 17, 18]}
+        />
 
-        <Card className="border-slate-800 bg-navy-900/90">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Team Capacity</p>
-              <Activity className="h-5 w-5 text-violet-400" />
-            </div>
-            <p className="mt-3 text-3xl font-bold text-violet-300 tracking-tight">{capacitySummary.averageUtilizationPct}%</p>
-            <p className="mt-1 text-xs text-slate-400">
-              {capacitySummary.totalAllocatedHours}h allocated / {capacitySummary.totalCapacityHours}h capacity
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          title="Team Capacity"
+          value={`${capacitySummary.averageUtilizationPct}%`}
+          subtitle={`${capacitySummary.totalAllocatedHours}h allocated / ${capacitySummary.totalCapacityHours}h capacity`}
+          icon={<Activity className="h-5 w-5 text-zinc-300" />}
+          sparkline={[50, 55, 62, 60, 68, 70, 71]}
+          progress={{ value: capacitySummary.averageUtilizationPct, max: 100 }}
+        />
       </div>
 
       {/* Main Grid: Projects & Workload Highlights */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column: Projects Spotlight */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-slate-800 bg-navy-900/90">
+          <Card className="border-zinc-800 bg-zinc-900/90">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
-                <CardTitle className="text-base text-white">Active Project Initiatives</CardTitle>
-                <CardDescription className="text-xs text-slate-400">
+                <CardTitle className="text-base text-zinc-100">Active Project Initiatives</CardTitle>
+                <CardDescription className="text-xs text-zinc-400">
                   Real-time milestone tracking and resource distribution
                 </CardDescription>
               </div>
@@ -1047,7 +1027,7 @@ function DemoDashboardView({
                 variant="ghost"
                 size="sm"
                 onClick={() => onNavigate('projects')}
-                className="text-xs text-violet-400 hover:text-violet-300"
+                className="text-xs text-zinc-300 hover:text-white"
               >
                 View all ({projects.length})
                 <ArrowRight className="h-3 w-3 ml-1" />
@@ -1057,11 +1037,11 @@ function DemoDashboardView({
               {projects.map((proj) => {
                 const pct = proj.totalHours > 0 ? Math.round((proj.completedHours / proj.totalHours) * 100) : 0;
                 return (
-                  <div key={proj.id} className="rounded-xl border border-slate-800/80 bg-navy-950/60 p-4 space-y-2.5">
+                  <div key={proj.id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">{proj.name}</h4>
-                        <p className="text-xs text-slate-400 line-clamp-1">{proj.description}</p>
+                        <p className="text-xs text-zinc-400 line-clamp-1">{proj.description}</p>
                       </div>
                       <Badge
                         variant={
@@ -1073,13 +1053,13 @@ function DemoDashboardView({
                       </Badge>
                     </div>
                     <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-slate-400">
+                      <div className="flex justify-between text-xs text-zinc-400">
                         <span>Milestone Progress</span>
                         <span>{proj.completedHours}h / {proj.totalHours}h ({pct}%)</span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500"
+                          className="h-full rounded-full bg-zinc-100"
                           style={{ width: `${Math.min(pct, 100)}%` }}
                         />
                       </div>
@@ -1094,13 +1074,13 @@ function DemoDashboardView({
         {/* Right Column: Overload Alerts & AI Recs */}
         <div className="space-y-6">
           {/* Overload Alert Card */}
-          <Card className="border-rose-900/40 bg-navy-900/90">
+          <Card className="border-zinc-800 bg-zinc-900/90">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Flame className="h-4 w-4 text-rose-400" />
                 <CardTitle className="text-sm font-semibold text-white">Capacity Warnings</CardTitle>
               </div>
-              <CardDescription className="text-xs text-slate-400">
+              <CardDescription className="text-xs text-zinc-400">
                 {capacitySummary.overloadedCount} employee{capacitySummary.overloadedCount === 1 ? '' : 's'} exceeding weekly allocation
               </CardDescription>
             </CardHeader>
@@ -1109,8 +1089,8 @@ function DemoDashboardView({
                 <div key={emp.id} className="rounded-lg border border-rose-500/20 bg-rose-950/20 p-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-xs font-semibold text-slate-200">{emp.fullName}</p>
-                      <p className="text-[11px] text-slate-400">{emp.jobTitle}</p>
+                      <p className="text-xs font-semibold text-zinc-200">{emp.fullName}</p>
+                      <p className="text-[11px] text-zinc-400">{emp.jobTitle}</p>
                     </div>
                     <Badge variant="rose" size="sm">
                       {Math.round((emp.currentLoadHours / emp.weeklyCapacityHours) * 100)}% Load
@@ -1125,7 +1105,7 @@ function DemoDashboardView({
                 variant="secondary"
                 size="sm"
                 onClick={() => onNavigate('workload')}
-                className="w-full text-xs text-violet-300 hover:text-white"
+                className="w-full text-xs text-zinc-200 hover:text-white"
               >
                 Inspect Workload Balance
                 <ArrowRight className="h-3 w-3 ml-1" />
@@ -1134,13 +1114,13 @@ function DemoDashboardView({
           </Card>
 
           {/* AI Matching Teaser */}
-          <Card className="border-violet-500/30 bg-violet-950/20">
+          <Card className="border-zinc-800 bg-zinc-900/90">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-violet-400" />
+                <Sparkles className="h-4 w-4 text-zinc-300" />
                 <h4 className="text-sm font-semibold text-white">Explainable AI Matching</h4>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-zinc-400 leading-relaxed">
                 Review candidate recommendations calculated deterministically from skill matrices and available capacity with operational constraint enforcement.
               </p>
               <Button
@@ -1260,10 +1240,10 @@ function DemoEmployeesView({
         </div>
 
         {/* Hero Profile Header Card */}
-        <Card className="relative overflow-hidden border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
+        <Card className="relative overflow-hidden border-slate-700 bg-slate-900/90 p-6 shadow-sm">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="flex items-start sm:items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-xl font-bold text-white shadow-glow border border-violet-400/40">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-xl font-bold text-slate-100 border border-slate-700 shadow-sm">
                 {initials}
               </div>
               <div className="space-y-1">
@@ -2246,7 +2226,7 @@ function DemoProjectsView({
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500"
+                        className="h-full rounded-full bg-blue-500"
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
@@ -2746,11 +2726,11 @@ function DemoWorkloadView({
       {/* ===================================================================== */}
       {/* INTELLIGENT WORKLOAD REDISTRIBUTION SANDBOX                           */}
       {/* ===================================================================== */}
-      <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-900 to-navy-950 shadow-glow">
-        <CardHeader className="border-b border-slate-800/80 pb-4">
+      <Card className="border-zinc-800 bg-zinc-900/90 shadow-sm">
+        <CardHeader className="border-b border-zinc-800 pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-600/20 text-violet-300 border border-violet-500/30">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700">
                 <Scale className="h-5 w-5" />
               </div>
               <div>

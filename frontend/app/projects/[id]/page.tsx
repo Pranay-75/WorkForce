@@ -110,14 +110,23 @@ export default function ProjectDetailPage() {
   const projectMembers = isLive
     ? orgMembers
         .filter((m) => project.memberIds.includes(m.userId))
-        .map((m) => ({
-          id: m.userId,
-          fullName: m.fullName,
-          jobTitle: m.jobTitle || 'Team Member',
-          department: m.department || 'Engineering',
-          weeklyCapacityHours: m.weeklyCapacityHours || 40,
-          currentLoadHours: 0,
-        }))
+        .map((m) => {
+          const memberActiveTasks = tasks.filter(
+            (t) => t.assignedTo === m.userId && t.status !== 'completed'
+          );
+          const currentLoad = memberActiveTasks.reduce(
+            (acc, t) => acc + (t.estimatedHours || 0),
+            0
+          );
+          return {
+            id: m.userId,
+            fullName: m.fullName,
+            jobTitle: m.jobTitle || 'Team Member',
+            department: m.department || 'Engineering',
+            weeklyCapacityHours: m.weeklyCapacityHours || 40,
+            currentLoadHours: currentLoad,
+          };
+        })
     : mockEmployees.filter((e) => project.memberIds.includes(e.id));
 
   const progressPct =

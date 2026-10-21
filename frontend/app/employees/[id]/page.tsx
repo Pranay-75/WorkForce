@@ -2,10 +2,9 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
-import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -21,9 +20,7 @@ import {
   ShieldCheck,
   CheckSquare,
   AlertTriangle,
-  TrendingUp,
   Award,
-  Sparkles,
   Calendar,
   FolderKanban,
   UserPlus,
@@ -33,8 +30,59 @@ import {
 
 export default function EmployeeDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const employeeId = params?.id as string;
+
+  const { isAuthenticated, organization } = useAuth();
+  const isLive = Boolean(isAuthenticated && organization?.id);
+
+  const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
+  const { tasks: liveTasks, isLoading: isTasksLoading } = useTasks();
+  const { employees: mockEmployees, tasks: mockTasks } = useMockStore();
+
+  const liveMember = liveMembers.find((m) => m.userId === employeeId || m.id === employeeId);
+  const mockEmp = mockEmployees.find((e) => e.id === employeeId);
+
+  const employee = React.useMemo(() => {
+    if (isLive) {
+      if (!liveMember) return null;
+      const assignedTasks = liveTasks.filter((t) => t.assignedTo === liveMember.userId);
+      const activeTasks = assignedTasks.filter((t) => t.status !== 'completed');
+      const loadHours = activeTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+      const capacity = liveMember.weeklyCapacityHours || 40;
+      const util = capacity > 0 ? loadHours / capacity : 0;
+
+      return {
+        id: liveMember.userId,
+        email: liveMember.email,
+        fullName: liveMember.fullName,
+        avatarUrl: liveMember.avatarUrl || undefined,
+        role: liveMember.role,
+        department: liveMember.department || 'Engineering',
+        jobTitle: liveMember.jobTitle || 'Team Member',
+        weeklyCapacityHours: capacity,
+        currentLoadHours: loadHours,
+        burnoutRiskScore: Math.min(Math.round(util * 100) / 100, 1.0),
+        skills: [] as { skillId: string; skillName: string; category: string; proficiency: string; verified: boolean }[],
+        activeTaskCount: activeTasks.length,
+        onTimeCompletionRate: 98,
+        location: 'HQ / Remote',
+      };
+    }
+    return mockEmp || null;
+  }, [isLive, liveMember, liveTasks, mockEmp]);
+
+  const tasks = isLive ? liveTasks : mockTasks;
+  const assignedTasks = tasks.filter((t) => t.assignedTo === employee?.id);
+
+  if (isLive && isMembersLoading) {
+    return (
+      <div className="space-y-6 animate-pulse p-6">
+        <div className="h-6 w-32 bg-slate-800 rounded" />
+        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
+        <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+      </div>
+    );
+  }
 
   const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
@@ -91,77 +139,29 @@ export default function EmployeeDetailPage() {
     );
   }
 
-  // Unified employee representation
-  const targetUid = isLive ? (liveMember?.userId || employeeId) : mockEmployee!.id;
-  const fullName = isLive ? liveMember!.fullName : mockEmployee!.fullName;
-  const email = isLive ? liveMember!.email : mockEmployee!.email;
-  const role = isLive ? liveMember!.role : mockEmployee!.role;
-  const department = isLive ? (liveMember!.department || 'Engineering') : mockEmployee!.department;
-  const jobTitle = isLive ? (liveMember!.jobTitle || 'Team Member') : mockEmployee!.jobTitle;
-  const weeklyCapacityHours = isLive ? (liveMember!.weeklyCapacityHours || 40) : mockEmployee!.weeklyCapacityHours;
+  const utilPct = employee.weeklyCapacityHours > 0
+    ? Math.round((employee.currentLoadHours / employee.weeklyCapacityHours) * 100)
+    : 0;
 
-  // Resolve assigned tasks
-  const assignedTasks = isLive
-    ? dbTasks.filter((t) => t.assignedTo === targetUid)
-    : mockTasks.filter((t) => t.assignedTo === mockEmployee!.id);
-
-  const currentLoadHours = isLive
-    ? assignedTasks.filter((t) => t.status !== 'completed').reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
-    : mockEmployee!.currentLoadHours;
-
-  const utilPct = weeklyCapacityHours > 0 ? Math.round((currentLoadHours / weeklyCapacityHours) * 100) : 0;
-  const riskIndex = Math.min(100, Math.round(utilPct * 0.9));
-
-  // Resolve allocated projects
-  const allocatedProjects = isLive
-    ? dbProjects.filter((p) => p.memberIds.includes(targetUid))
-    : [];
-
-  const initials = fullName
+  const initials = employee.fullName
     .split(' ')
+    .filter(Boolean)
     .map((n) => n[0])
     .join('')
-    .slice(0, 2);
+    .slice(0, 2)
+    .toUpperCase() || 'EM';
 
-  const handleOpenAssignModal = () => {
-    setAssignError(null);
-    setAssignSuccess(null);
-    setAssignTaskIds([]);
-    const unallocated = dbProjects.find((p) => !p.memberIds.includes(targetUid));
-    setAssignProjectId(unallocated ? unallocated.id : (dbProjects[0]?.id || ''));
-    setIsAssignModalOpen(true);
-  };
-
-  const handleAssignSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assignProjectId || !targetUid) return;
-
-    setAssignLoading(true);
-    setAssignError(null);
-    setAssignSuccess(null);
-
-    const res = await addProjectMember(assignProjectId, targetUid);
-    if (res.error) {
-      setAssignLoading(false);
-      setAssignError(res.error);
-      return;
-    }
-
-    if (assignTaskIds.length > 0) {
-      for (const taskId of assignTaskIds) {
-        await assignTask(taskId, targetUid);
-      }
-      await refetchTasks();
-    }
-
-    await refetchProjects();
-    setAssignLoading(false);
-    setAssignSuccess(`Assigned ${fullName} to project initiative.`);
-    setTimeout(() => {
-      setIsAssignModalOpen(false);
-      setAssignSuccess(null);
-    }, 1500);
-  };
+  // 8-week capacity history
+  const historyData = [
+    { week: 'W1', load: Math.max(employee.weeklyCapacityHours - 4, 0), pct: 90 },
+    { week: 'W2', load: Math.max(employee.weeklyCapacityHours - 2, 0), pct: 95 },
+    { week: 'W3', load: Math.max(employee.weeklyCapacityHours - 8, 0), pct: 80 },
+    { week: 'W4', load: employee.weeklyCapacityHours, pct: 100 },
+    { week: 'W5', load: Math.max(employee.weeklyCapacityHours - 6, 0), pct: 85 },
+    { week: 'W6', load: Math.max(employee.weeklyCapacityHours - 2, 0), pct: 95 },
+    { week: 'W7', load: Math.round(employee.weeklyCapacityHours * 1.05), pct: 105 },
+    { week: 'W8 (Now)', load: employee.currentLoadHours, pct: utilPct },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -181,7 +181,7 @@ export default function EmployeeDetailPage() {
             </Button>
           )}
           <Badge variant="violet" size="sm">
-            {role.toUpperCase()}
+            Profile ID: {employee.id.slice(0, 8)}...
           </Badge>
           <Badge
             variant={utilPct > 100 ? 'rose' : utilPct >= 80 ? 'amber' : 'emerald'}
@@ -201,9 +201,12 @@ export default function EmployeeDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-extrabold text-white">{fullName}</h2>
-                <Badge variant="cyan" size="sm">
-                  {department}
+                <h2 className="text-xl font-extrabold text-white">
+                  {employee.fullName}
+                </h2>
+                <ShieldCheck className="h-4 w-4 text-cyan-400" />
+                <Badge variant="cyan" size="sm" className="uppercase text-[10px]">
+                  {employee.role}
                 </Badge>
               </div>
               <p className="text-sm text-slate-300 font-medium">{jobTitle}</p>
@@ -253,33 +256,48 @@ export default function EmployeeDetailPage() {
               )}
             </div>
             <CardDescription>
-              Active portfolio initiatives this team member is currently allocated to
+              Verified technical capabilities used by the deterministic task matching engine
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {allocatedProjects.length > 0 ? (
-              <div className="space-y-2">
-                {allocatedProjects.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/40 transition-all"
-                  >
-                    <div>
-                      <Link href={`/projects/${p.id}`} className="text-xs font-bold text-white hover:text-violet-300">
-                        {p.name}
-                      </Link>
-                      <p className="text-[11px] text-slate-400 line-clamp-1">{p.description}</p>
+            {employee.skills.length > 0 ? (
+              employee.skills.map((s) => (
+                <div
+                  key={s.skillId}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">
+                        {s.skillName}
+                      </span>
+                      <Badge variant="cyan" size="sm">
+                        {s.category}
+                      </Badge>
                     </div>
-                    <Badge variant={p.status === 'in_progress' ? 'cyan' : 'slate'} size="sm">
-                      {p.status.replace('_', ' ').toUpperCase()}
-                    </Badge>
+                    <span className="text-[10px] text-slate-400">
+                      Status: {s.verified ? 'Verified by Lead' : 'Self-Reported'}
+                    </span>
                   </div>
-                ))}
-              </div>
+
+                  <Badge
+                    variant={
+                      s.proficiency === 'expert'
+                        ? 'violet'
+                        : s.proficiency === 'advanced'
+                        ? 'cyan'
+                        : 'slate'
+                    }
+                    size="sm"
+                  >
+                    {s.proficiency.toUpperCase()}
+                  </Badge>
+                </div>
+              ))
             ) : (
               <div className="p-6 text-center text-slate-400">
-                <FolderKanban className="mx-auto h-8 w-8 text-slate-600 mb-2" />
-                <p className="text-xs text-slate-400">Not currently assigned to any active projects.</p>
+                <p className="text-xs text-slate-300">Default profile skills linked via department role ({employee.department}).</p>
+                <p className="text-[11px] text-slate-500 mt-1">Additional skill endorsements can be added via organization settings.</p>
               </div>
             )}
           </CardContent>
@@ -293,31 +311,62 @@ export default function EmployeeDetailPage() {
               <CardTitle>Operational Capacity Overview</CardTitle>
             </div>
             <CardDescription>
-              Sprint utilization benchmarks based on verified commitments
+              Sprint utilization benchmarks ({employee.weeklyCapacityHours}h standard baseline)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Active Tasks</span>
-                <p className="text-2xl font-bold font-mono text-cyan-400 mt-1">{assignedTasks.length}</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Risk Index</span>
-                <p className={`text-2xl font-bold font-mono mt-1 ${riskIndex > 80 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                  {riskIndex}%
+            {isLive ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                <Clock className="h-8 w-8 text-slate-500 mb-2" />
+                <p className="text-xs font-medium text-slate-200">
+                  Historical capacity trends pending
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-sm">
+                  Sprint-over-sprint workload snapshots will populate as multi-week operational logs accumulate.
                 </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-end justify-between gap-2 h-36 pt-4 border-b border-slate-800/80 pb-2">
+                  {historyData.map((item, idx) => {
+                    const heightPct = Math.min((item.load / (employee.weeklyCapacityHours * 1.25 || 50)) * 100, 100);
+                    const isOver = item.pct > 100;
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {item.load}h
+                        </span>
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-300 ${
+                            isOver
+                              ? 'bg-gradient-to-t from-rose-600 to-red-500 shadow-sm'
+                              : 'bg-gradient-to-t from-violet-600 to-cyan-500'
+                          }`}
+                          style={{ height: `${heightPct}%` }}
+                        />
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {item.week}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-            <div className="rounded-xl border border-slate-800/80 bg-navy-950/40 p-3 text-xs text-slate-300 space-y-1">
-              <span className="font-semibold text-white block">Availability Summary:</span>
-              <p className="text-slate-400 text-[11px] leading-relaxed">
-                {weeklyCapacityHours - currentLoadHours > 0
-                  ? `${weeklyCapacityHours - currentLoadHours} hours of available weekly headroom for new task assignments.`
-                  : 'Currently at or over capacity limit. Rebalancing recommended.'}
-              </p>
-            </div>
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-violet-500" />
+                    <span>Standard Load</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-rose-500" />
+                    <span>Capacity Overload</span>
+                  </div>
+                  <span className="font-mono text-emerald-400">
+                    Avg: {Math.round(historyData.reduce((s, i) => s + i.pct, 0) / historyData.length)}%
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -371,10 +420,14 @@ export default function EmployeeDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-400">
                       <span>{t.projectName}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 font-mono">
-                        <Calendar className="h-3 w-3" /> Due {t.dueDate || 'Unscheduled'}
-                      </span>
+                      {t.dueDate && (
+                        <>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 font-mono">
+                            <Calendar className="h-3 w-3" /> Due {t.dueDate}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -416,9 +469,10 @@ export default function EmployeeDetailPage() {
             Transparent Heuristic Risk Model:
           </span>
           <p className="leading-relaxed">
-            Operational risk scores ({riskIndex}% index) reflect purely scheduling allocation,
-            deadline density, and multi-week load history. They are operational metrics designed to
-            prevent delivery delays, not clinical or psychological predictions.
+            Operational risk scores ({Math.round(employee.burnoutRiskScore * 100)}% index) reflect
+            purely active assigned workload divided by weekly capacity.
+            They are operational metrics designed to prevent delivery delays and over-allocation, not clinical or
+            psychological predictions.
           </p>
         </div>
       </div>

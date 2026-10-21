@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -34,23 +35,22 @@ import {
 
 function DemoModeBanner() {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 via-navy-900 to-navy-950 p-5 sm:p-6 shadow-lg shadow-violet-950/20">
-      <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-violet-600/10 blur-2xl pointer-events-none" />
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 sm:p-6 shadow-sm">
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
+            <span className="flex h-2 w-2 rounded-full bg-zinc-400" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
               Interactive Guided Preview
             </span>
-            <Badge variant="violet" size="sm" className="hidden sm:inline-flex">
+            <Badge variant="slate" size="sm" className="hidden sm:inline-flex">
               Simulated Environment
             </Badge>
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
             Explore WorkForce AI in Demo Mode
           </h3>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
             Demo Mode lets users explore sample employees, projects, tasks, workload analytics, reports, and simulated AI recommendations in a fully interactive, risk-free preview.
           </p>
         </div>
@@ -60,9 +60,9 @@ function DemoModeBanner() {
             <Button
               variant="primary"
               size="md"
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md shadow-violet-900/30 font-semibold px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2"
+              className="px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2"
             >
-              <Sparkles className="h-4 w-4 text-violet-200" />
+              <Sparkles className="h-4 w-4 text-zinc-700" />
               <span>Explore Demo Mode</span>
               <ArrowRight className="h-4 w-4 ml-0.5" />
             </Button>
@@ -74,8 +74,7 @@ function DemoModeBanner() {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { role, organization, profile, user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { organization, profile, user, role: authRole, isAuthenticated } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
 
   const {
@@ -91,69 +90,85 @@ export default function DashboardPage() {
   const {
     projects: dbProjects,
     isLoading: isProjectsLoading,
-    error: projectsError,
     refetch: refetchProjects,
   } = useProjects();
 
   const {
     tasks: dbTasks,
     isLoading: isTasksLoading,
-    error: tasksError,
     refetch: refetchTasks,
+    updateTaskStatus: dbUpdateTaskStatus,
   } = useTasks();
+
+  const {
+    auditLogs: liveAuditLogs,
+    isLoading: isAuditLoading,
+    refetch: refetchAudit,
+  } = useAuditLogs();
 
   const {
     employees: mockEmployees,
     projects: mockProjects,
     tasks: mockTasks,
-    recommendations,
-    auditEvents,
+    recommendations: mockRecommendations,
+    auditEvents: mockAuditEvents,
     activeRole: mockRole,
     currentUser: mockUser,
     currentUserId: mockUserId,
     approveRecommendation,
-    updateTaskStatus,
+    updateTaskStatus: mockUpdateTaskStatus,
   } = useMockStore();
 
-  const effectiveRole = (isAuthenticated && organization && role) ? role : mockRole;
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;
+  const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const recommendations = isLive ? [] : mockRecommendations;
+  const activeRole = isLive ? authRole : mockRole;
+  const updateTaskStatus = isLive ? dbUpdateTaskStatus : mockUpdateTaskStatus;
 
-  const displayUserName =
-    profile?.fullName ||
-    user?.user_metadata?.full_name ||
-    user?.email?.split('@')[0] ||
-    mockUser.name;
+  // Member loads map for overload calculation
+  const memberLoads = React.useMemo(() => {
+    const map = new Map<string, number>();
+    tasks.forEach((t) => {
+      if (t.assignedTo && t.status !== 'completed') {
+        map.set(t.assignedTo, (map.get(t.assignedTo) || 0) + (Number(t.estimatedHours) || 0));
+      }
+    });
+    return map;
+  }, [tasks]);
 
-  React.useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [authLoading, isAuthenticated, router]);
+  const overloadedCount = React.useMemo(() => {
+    return members.filter((m) => {
+      const load = memberLoads.get(m.userId) || 0;
+      return m.weeklyCapacityHours > 0 && load > m.weeklyCapacityHours;
+    }).length;
+  }, [members, memberLoads]);
 
   // Find employee entity matching current user or construct from authenticated session
   const currentEmp = React.useMemo(() => {
     const userCapacity = profile?.weeklyCapacityHours ?? 40;
     const foundMember = members.find((m) => m.userId === user?.id);
-    const foundEmp = mockEmployees.find((e) => e.id === (user?.id || mockUserId));
+    const foundEmp = mockEmployees.find((e) => e.id === mockUserId);
 
-    const myActive = tasks.filter((t) => t.assignedTo === (user?.id || mockUserId) && t.status !== 'completed');
-    const loadHours = myActive.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+    const myActive = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status !== 'completed');
+    const myCompleted = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status === 'completed');
+    const myTotal = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId));
+    const loadHours = myActive.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
 
     return {
-      id: user?.id || mockUserId,
-      fullName: displayUserName,
-      role: effectiveRole,
-      jobTitle: profile?.jobTitle || foundMember?.jobTitle || (isLive ? 'Workspace Lead' : mockUser.jobTitle),
-      department: profile?.department || foundMember?.department || (isLive ? 'Operations' : mockUser.department),
+      id: isLive ? (user?.id || '') : mockUserId,
+      fullName: isLive ? (profile?.fullName || user?.email || 'User') : mockUser.name,
+      role: activeRole,
+      jobTitle: isLive ? (profile?.jobTitle || foundMember?.jobTitle || 'Team Member') : mockUser.jobTitle,
+      department: isLive ? (profile?.department || foundMember?.department || 'Engineering') : mockUser.department,
       skills: foundEmp?.skills || [],
       weeklyCapacityHours: userCapacity,
       currentLoadHours: loadHours,
-      burnoutRiskScore: userCapacity > 0 ? Math.min(1, Math.round((loadHours / userCapacity) * 100) / 100) : 0.05,
+      burnoutRiskScore: Math.min(Math.round(((loadHours / (userCapacity || 40))) * 100) / 100, 1.0),
       activeTaskCount: myActive.length,
-      onTimeCompletionRate: 100,
+      onTimeCompletionRate: myTotal.length > 0 ? Math.round((myCompleted.length / myTotal.length) * 100) : 100,
     };
-  }, [profile, user, mockUserId, mockUser, displayUserName, effectiveRole, isLive, members, mockEmployees, tasks]);
+  }, [isLive, profile, user, mockUserId, mockUser, activeRole, members, mockEmployees, tasks]);
 
   const myTasks = tasks.filter((t) => t.assignedTo === currentEmp.id);
   const myCompletedTasks = myTasks.filter((t) => t.status === 'completed');
@@ -176,7 +191,7 @@ export default function DashboardPage() {
   const totalAllocated = React.useMemo(() => {
     return tasks
       .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
-      .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+      .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   }, [tasks, memberUserIds]);
 
   // Real departmental workload aggregation derived strictly from Supabase members
@@ -221,7 +236,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-extrabold tracking-tight text-white">
-                Welcome back, {displayUserName}
+                Welcome back, {currentEmp.fullName || profile?.fullName || 'Colleague'}
               </h2>
               <Badge variant="cyan" size="sm">
                 Employee Portal
@@ -1187,7 +1202,10 @@ export default function DashboardPage() {
           <Link href="/matching">
             <Button variant="primary" size="sm">
               <Sparkles className="h-4 w-4 mr-1.5" />
-              <span>Review AI Matches ({pendingRecommendations.length})</span>
+              <span>
+                Review AI Matches
+                {!isLive && pendingRecommendations.length > 0 ? ` (${pendingRecommendations.length})` : ''}
+              </span>
             </Button>
           </Link>
           <Link href="/workload">
@@ -1214,6 +1232,7 @@ export default function DashboardPage() {
           }
           trend={{ value: 3.8, isPositiveGood: true }}
           progress={{ value: orgUtilizationPct, max: 100 }}
+          sparkline={[45, 52, 50, 63, 60, 68, 71]}
         />
         <MetricCard
           title="Active Workforce"
@@ -1227,22 +1246,29 @@ export default function DashboardPage() {
           }
           badgeText={isMembersLoading ? 'Loading' : totalEmployees > 0 ? 'Active Roster' : 'Empty'}
           badgeVariant={totalEmployees > 0 ? 'emerald' : 'slate'}
-          icon={<Users className="h-5 w-5 text-cyan-400" />}
+          icon={<Users className="h-5 w-5 text-zinc-300" />}
+          sparkline={[7, 7, 8, 8, 8, 8, 8]}
         />
         <MetricCard
           title="Active Tasks"
           value={activeTasks.length}
           subtitle={`${completionRate}% overall completion rate`}
           trend={{ value: 12.5, isPositiveGood: true }}
-          icon={<CheckSquare className="h-5 w-5 text-violet-400" />}
+          icon={<CheckSquare className="h-5 w-5 text-zinc-300" />}
+          sparkline={[10, 12, 14, 13, 16, 17, 18]}
         />
         <MetricCard
           title="Overload Risk Flags"
-          value={0}
-          subtitle="Zero overloaded members"
-          badgeText="Optimal"
-          badgeVariant="emerald"
+          value={overloadedCount}
+          subtitle={
+            overloadedCount === 0
+              ? 'Zero overloaded members'
+              : `${overloadedCount} staff exceeding weekly limit`
+          }
+          badgeText={overloadedCount === 0 ? 'Optimal' : 'Overload Alert'}
+          badgeVariant={overloadedCount === 0 ? 'emerald' : 'rose'}
           icon={<Flame className="h-5 w-5 text-rose-400" />}
+          sparkline={[0, 1, 0, 0, 1, 1, 1]}
         />
       </div>
 
@@ -1409,74 +1435,94 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="flex-1 space-y-3.5">
-            {pendingRecommendations.slice(0, 2).map((rec) => (
-              <div
-                key={rec.id}
-                className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[11px] font-mono text-violet-400 font-semibold block">
-                      Task Match
-                    </span>
-                    <h4 className="text-xs font-bold text-white line-clamp-1">
-                      {rec.taskTitle}
-                    </h4>
-                  </div>
-                  <Badge variant="cyan" size="sm">
-                    {rec.matchScore}% Score
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
-                    {rec.candidateAvatar}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-slate-200 truncate">
-                      {rec.candidateName}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate">
-                      Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
-                      {rec.workloadImpact.projectedLoadHours}h (
-                      {rec.workloadImpact.projectedUtilizationPct}%)
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
-                  &ldquo;{rec.rationale}&rdquo;
-                </p>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => approveRecommendation(rec.id)}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Approve
-                  </Button>
-                  <Link href="/matching">
-                    <Button variant="outline" size="sm" className="text-xs">
-                      Inspect
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-
-            {pendingRecommendations.length === 0 && (
+            {isLive ? (
               <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
-                <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                <Sparkles className="h-8 w-8 text-violet-400 mb-2" />
                 <p className="text-xs font-medium text-slate-200">
-                  All recommendations reviewed!
+                  Live AI Matching Hub
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Create new unassigned tasks to generate candidate rankings.
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  Generate and inspect explainable, human-in-the-loop candidate rankings for your unassigned organization tasks.
                 </p>
+                <Link href="/matching" className="mt-4">
+                  <Button variant="primary" size="sm" className="text-xs">
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Open Matching Hub
+                  </Button>
+                </Link>
               </div>
+            ) : (
+              <>
+                {pendingRecommendations.slice(0, 2).map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[11px] font-mono text-violet-400 font-semibold block">
+                          Task Match
+                        </span>
+                        <h4 className="text-xs font-bold text-white line-clamp-1">
+                          {rec.taskTitle}
+                        </h4>
+                      </div>
+                      <Badge variant="cyan" size="sm">
+                        {rec.matchScore}% Score
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
+                        {rec.candidateAvatar}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold text-slate-200 truncate">
+                          {rec.candidateName}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
+                          {rec.workloadImpact.projectedLoadHours}h (
+                          {rec.workloadImpact.projectedUtilizationPct}%)
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
+                      &ldquo;{rec.rationale}&rdquo;
+                    </p>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => approveRecommendation(rec.id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Approve
+                      </Button>
+                      <Link href="/matching">
+                        <Button variant="outline" size="sm" className="text-xs">
+                          Inspect
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+
+                {pendingRecommendations.length === 0 && (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                    <p className="text-xs font-medium text-slate-200">
+                      All recommendations reviewed!
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Create new unassigned tasks to generate candidate rankings.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

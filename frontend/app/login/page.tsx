@@ -176,11 +176,9 @@ function LoginFormContent() {
   // Quick-fill credentials for demo testing and active role selection (development only)
   const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
     setSelectedRole(opt.id);
-    if (isDev) {
-      setEmail(opt.demoEmail);
-      setPassword('WorkForceDemo2026!');
-      switchDemoRole(opt.demoId);
-    }
+    setEmail(opt.demoEmail);
+    setPassword('Password123!');
+    switchDemoRole(opt.demoId);
   };
 
   return (

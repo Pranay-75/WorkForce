@@ -40,16 +40,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Auth and Onboarding pages render cleanly as standalone full-screen pages
   if (isAuthOrOnboardingRoute) {
-    return <div className="min-h-screen bg-navy-950 text-slate-100">{children}</div>;
+    return <div className="min-h-screen bg-zinc-950 text-zinc-100">{children}</div>;
   }
 
   // If loading session on protected routes, show clean loading placeholder
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-          <span className="text-xs text-slate-400 font-mono">Verifying workspace session...</span>
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
+          <span className="text-xs text-zinc-400 font-mono">Verifying workspace session...</span>
         </div>
       </div>
     );
@@ -57,11 +57,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // If unauthenticated or un-onboarded, prevent rendering protected layout while redirecting
   if (!isAuthenticated || !organization) {
-    return <div className="min-h-screen bg-navy-950 text-slate-100" />;
+    return <div className="min-h-screen bg-zinc-950 text-zinc-100" />;
   }
 
   return (
-    <div className="min-h-screen bg-background-base text-slate-100 flex">
+    <div className="min-h-screen bg-background-base text-zinc-100 flex">
       {/* Sidebar (Desktop fixed + Mobile drawer) */}
       <AppSidebar
         isMobileOpen={isMobileOpen}
@@ -82,17 +82,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Global Floating Feedback Toast */}
         {feedbackMessage && (
-          <div className="fixed top-20 right-6 z-50 flex items-center gap-3 rounded-xl border border-violet-500/50 bg-navy-900/95 px-4 py-3 text-sm text-slate-200 shadow-elevated backdrop-blur-md animate-in slide-in-from-top-4 duration-200">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/30 text-violet-400">
+          <div className="fixed top-20 right-6 z-50 flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-200 shadow-elevated backdrop-blur-md animate-in slide-in-from-top-4 duration-200">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-800 text-zinc-200">
               <CheckCircle2 className="h-4 w-4" />
             </div>
             <div className="flex flex-col">
               <span className="font-medium text-white">{feedbackMessage}</span>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-[10px] text-zinc-400 font-mono">
                 Live Workspace State
               </span>
             </div>
-            <Badge variant="violet" size="sm" className="ml-2">
+            <Badge variant="slate" size="sm" className="ml-2">
               <Sparkles className="h-2.5 w-2.5 mr-1" />
               Live
             </Badge>

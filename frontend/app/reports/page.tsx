@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { useMockStore } from '@/lib/mockStore';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -20,20 +21,39 @@ import {
   Calendar,
   CheckCircle2,
   RefreshCw,
-  FolderKanban,
-  Users,
 } from 'lucide-react';
 
 export default function ReportsPage() {
   const { isAuthenticated, organization } = useAuth();
-  const isLive = isAuthenticated && Boolean(organization?.id);
+  const isLive = Boolean(isAuthenticated && organization?.id);
 
-  const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
-  const { projects: liveProjects, isLoading: isProjectsLoading } = useProjects();
-  const { tasks: liveTasks, isLoading: isTasksLoading } = useTasks();
+  // Live hooks
+  const {
+    members: liveMembers,
+    departments: liveDepartments,
+    isLoading: isMembersLoading,
+    refetch: refetchMembers,
+  } = useOrganizationMembers();
 
-  const [liveAuditCount, setLiveAuditCount] = React.useState<number | null>(null);
+  const {
+    projects: liveProjects,
+    isLoading: isProjectsLoading,
+    refetch: refetchProjects,
+  } = useProjects();
 
+  const {
+    tasks: liveTasks,
+    isLoading: isTasksLoading,
+    refetch: refetchTasks,
+  } = useTasks();
+
+  const {
+    auditLogs: liveAuditLogs,
+    isLoading: isAuditLoading,
+    refetch: refetchAudit,
+  } = useAuditLogs();
+
+  // Mock store fallback
   const {
     employees: mockEmployees,
     projects: mockProjects,
@@ -42,144 +62,76 @@ export default function ReportsPage() {
     auditEvents: mockAuditEvents,
   } = useMockStore();
 
-  // Load audit log count for real organization
-  React.useEffect(() => {
-    if (!isLive || !organization?.id) return;
-    const fetchAuditCount = async () => {
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { count, error } = await supabase
-          .from('organization_audit_logs')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id);
-        if (!error && count !== null) {
-          setLiveAuditCount(count);
-        }
-      } catch {
-        setLiveAuditCount(0);
-      }
-    };
-    fetchAuditCount();
-  }, [isLive, organization?.id]);
+  const projects = isLive ? liveProjects : mockProjects;
+  const tasks = isLive ? liveTasks : mockTasks;
+  const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
 
-  const isLoading = isLive && (isMembersLoading || isProjectsLoading || isTasksLoading);
+  // Reconcile employee list with live assigned tasks
+  const employees = React.useMemo(() => {
+    if (isLive) {
+      return liveMembers.map((m) => {
+        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
+        const load = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          jobTitle: m.jobTitle || 'Team Member',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: load,
+        };
+      });
+    }
+    return mockEmployees.map((e) => ({
+      id: e.id,
+      fullName: e.fullName,
+      department: e.department,
+      jobTitle: e.jobTitle,
+      weeklyCapacityHours: e.weeklyCapacityHours,
+      currentLoadHours: e.currentLoadHours,
+    }));
+  }, [isLive, liveMembers, liveTasks, mockEmployees]);
 
-  const totalEffort = isLive
-    ? liveTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0)
-    : mockProjects.reduce((s, p) => s + p.totalHours, 0);
-
-  const activeInitiativesCount = isLive ? liveProjects.length : mockProjects.length;
+  // Distinct departments
+  const departmentList = React.useMemo(() => {
+    if (isLive && liveDepartments.length > 0) {
+      return liveDepartments.map((d) => d.department);
+    }
+    const set = new Set<string>();
+    employees.forEach((e) => {
+      if (e.department) set.add(e.department);
+    });
+    return set.size > 0 ? Array.from(set) : ['Engineering', 'Product', 'Design'];
+  }, [isLive, liveDepartments, employees]);
 
   const handleDownloadCSV = () => {
-    const headers = [
-      'Member ID',
-      'Full Name',
-      'Email',
-      'Role',
-      'Department',
-      'Capacity Hours',
-      'Allocated Hours',
-      'Utilization Pct',
-    ];
+    const headers = ['Employee ID', 'Full Name', 'Department', 'Job Title', 'Capacity Hours', 'Allocated Hours', 'Utilization Pct'];
+    const rows = employees.map((e) => [
+      e.id,
+      `"${e.fullName}"`,
+      `"${e.department}"`,
+      `"${e.jobTitle}"`,
+      e.weeklyCapacityHours,
+      e.currentLoadHours,
+      `${e.weeklyCapacityHours > 0 ? Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100) : 0}%`,
+    ]);
 
-    let rows: (string | number)[][];
-
-    if (isLive) {
-      rows = liveMembers.map((m) => {
-        const memberTasks = liveTasks.filter(
-          (t) => t.assignedTo === m.userId && t.status !== 'completed'
-        );
-        const load = memberTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0);
-        const cap = m.weeklyCapacityHours || 40;
-        const util = cap > 0 ? Math.round((load / cap) * 100) : 0;
-        return [
-          m.userId,
-          `"${m.fullName}"`,
-          m.email,
-          m.role,
-          m.department || 'General',
-          cap,
-          load,
-          `${util}%`,
-        ];
-      });
-    } else {
-      rows = mockEmployees.map((e) => [
-        e.id,
-        `"${e.fullName}"`,
-        e.email,
-        e.role,
-        e.department,
-        e.weeklyCapacityHours,
-        e.currentLoadHours,
-        `${Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100)}%`,
-      ]);
-    }
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute(
-      'download',
-      `workforce_capacity_report_${organization?.slug || 'export'}_${new Date().toISOString().split('T')[0]}.csv`
-    );
+    link.setAttribute('download', `workforce_capacity_report_${organization?.slug || 'workspace'}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Group departments dynamically
-  const departmentStats = React.useMemo(() => {
-    if (!isLive) {
-      const depts = ['Engineering', 'Design', 'DevOps', 'QA', 'Product'];
-      return depts.map((dept) => {
-        const deptEmps = mockEmployees.filter((e) => e.department === dept);
-        const count = deptEmps.length;
-        const capacity = deptEmps.reduce((s, e) => s + e.weeklyCapacityHours, 0);
-        const load = deptEmps.reduce((s, e) => s + e.currentLoadHours, 0);
-        const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
-        return { dept, count, capacity, load, util };
-      });
-    }
+  const totalEffortHours = React.useMemo(() => {
+    return tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+  }, [tasks]);
 
-    // Dynamic departments from live members
-    const deptMap = new Map<string, { count: number; capacity: number; load: number }>();
-    liveMembers.forEach((m) => {
-      const dept = m.department || 'General';
-      const current = deptMap.get(dept) || { count: 0, capacity: 0, load: 0 };
-      const memberTasks = liveTasks.filter(
-        (t) => t.assignedTo === m.userId && t.status !== 'completed'
-      );
-      const memberLoad = memberTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0);
-      const cap = m.weeklyCapacityHours || 40;
-
-      deptMap.set(dept, {
-        count: current.count + 1,
-        capacity: current.capacity + cap,
-        load: current.load + memberLoad,
-      });
-    });
-
-    return Array.from(deptMap.entries()).map(([dept, data]) => ({
-      dept,
-      count: data.count,
-      capacity: data.capacity,
-      load: data.load,
-      util: data.capacity > 0 ? Math.round((data.load / data.capacity) * 100) : 0,
-    }));
-  }, [isLive, mockEmployees, liveMembers, liveTasks]);
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
-        <p className="text-sm text-slate-400">Loading live operational analytics &amp; capacity records...</p>
-      </div>
-    );
-  }
+  const completedTasksCount = tasks.filter((t) => t.status === 'completed').length;
+  const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 100;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -190,19 +142,39 @@ export default function ReportsPage() {
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
               Reports &amp; Operational Analytics
             </h2>
-            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
-              {isLive ? 'Live Organization Data' : 'Demo Mode Suite'}
+            <Badge variant="violet" size="sm">
+              {isLive ? 'PostgreSQL Live Analytics' : 'Demo Analytics Suite'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Executive workforce capacity summaries, project workload totals, and compliance logs
+            Executive workforce capacity summaries, project velocity, and immutable compliance audit logs
           </p>
         </div>
 
-        <Button variant="primary" size="md" onClick={handleDownloadCSV}>
-          <Download className="h-4 w-4 mr-1.5" />
-          <span>Export CSV Report</span>
-        </Button>
+        <div className="flex items-center gap-2.5">
+          {isLive && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                refetchMembers();
+                refetchProjects();
+                refetchTasks();
+                refetchAudit();
+              }}
+              disabled={isMembersLoading || isProjectsLoading || isTasksLoading}
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </Button>
+          )}
+
+          <Button variant="primary" size="md" onClick={handleDownloadCSV} disabled={employees.length === 0}>
+            <Download className="h-4 w-4 mr-1.5" />
+            <span>Export CSV Report</span>
+          </Button>
+        </div>
       </div>
 
       {/* Analytics Summary Cards */}
@@ -215,10 +187,10 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-white">
-              {totalEffort} Hours
+              {totalEffortHours} Hours
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Across {activeInitiativesCount} active initiative{activeInitiativesCount !== 1 ? 's' : ''}
+              Across {projects.length} project initiative{projects.length !== 1 ? 's' : ''} ({tasks.length} total tasks)
             </p>
           </CardContent>
         </Card>
@@ -226,17 +198,15 @@ export default function ReportsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase text-slate-400">
-              AI Recommendation Telemetry
+              Task Velocity & Completion Rate
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-emerald-400">
-              {isLive ? 'Advisory Ready' : '87.5%'}
+              {taskCompletionRate}%
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              {isLive
-                ? 'Deterministic pre-filters active; FastAPI AI matching router ready'
-                : '7 of 8 suggestions approved by managers'}
+              {completedTasksCount} of {tasks.length} tasks marked completed
             </p>
           </CardContent>
         </Card>
@@ -244,7 +214,7 @@ export default function ReportsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase text-slate-400">
-              Audit Compliance Events
+              Compliance Audit Logs
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -269,26 +239,27 @@ export default function ReportsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {departmentStats.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
-              <Users className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-              <p className="text-xs">No department capacity data recorded yet for this organization.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-200">
-                <thead className="border-b border-slate-800 bg-navy-900/90 text-[11px] uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3">Department</th>
-                    <th className="px-4 py-3">Headcount</th>
-                    <th className="px-4 py-3">Total Capacity</th>
-                    <th className="px-4 py-3">Allocated Load</th>
-                    <th className="px-4 py-3">Utilization Rate</th>
-                    <th className="px-4 py-3">Health Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {departmentStats.map(({ dept, count, capacity, load, util }) => (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-200">
+              <thead className="border-b border-slate-800 bg-navy-900/90 text-[11px] uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Department</th>
+                  <th className="px-4 py-3">Headcount</th>
+                  <th className="px-4 py-3">Total Capacity</th>
+                  <th className="px-4 py-3">Allocated Load</th>
+                  <th className="px-4 py-3">Utilization Rate</th>
+                  <th className="px-4 py-3">Health Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {departmentList.map((dept) => {
+                  const deptEmps = employees.filter((e) => e.department === dept);
+                  const count = deptEmps.length;
+                  const capacity = deptEmps.reduce((s, e) => s + e.weeklyCapacityHours, 0);
+                  const load = deptEmps.reduce((s, e) => s + e.currentLoadHours, 0);
+                  const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
+
+                  return (
                     <tr key={dept} className="hover:bg-navy-800/50 transition-colors">
                       <td className="px-4 py-3 font-semibold text-white">{dept}</td>
                       <td className="px-4 py-3 font-mono">{count} member{count !== 1 ? 's' : ''}</td>
@@ -319,11 +290,19 @@ export default function ReportsPage() {
                         </Badge>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  );
+                })}
+
+                {departmentList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      No departments registered in this workspace yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>

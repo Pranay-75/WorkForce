@@ -77,17 +77,22 @@ export default function TaskDetailPage() {
 
   const employees = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.map((m) => ({
-        id: m.userId,
-        fullName: m.fullName,
-        jobTitle: m.jobTitle || 'Team Member',
-        department: m.department || 'Engineering',
-        weeklyCapacityHours: m.weeklyCapacityHours || 40,
-        currentLoadHours: 0,
-      }));
+      return orgMembers.map((m) => {
+        const load = tasks
+          .filter((t) => t.assignedTo === m.userId && t.status !== 'completed')
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          jobTitle: m.jobTitle || 'Team Member',
+          department: m.department || 'Engineering',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: load,
+        };
+      });
     }
     return mockEmployees;
-  }, [isLive, orgMembers, mockEmployees]);
+  }, [isLive, orgMembers, mockEmployees, tasks]);
 
   // Loading skeleton
   if (isLive && isTasksLoading) {
