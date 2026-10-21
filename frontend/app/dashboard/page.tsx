@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useMockStore } from '@/lib/mockStore';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -71,7 +74,9 @@ function DemoModeBanner() {
 }
 
 export default function DashboardPage() {
-  const { organization, profile, user } = useAuth();
+  const { organization, profile, user, role: authRole, isAuthenticated } = useAuth();
+  const isLive = Boolean(isAuthenticated && organization?.id);
+
   const {
     members,
     isLoading: isMembersLoading,
@@ -83,38 +88,87 @@ export default function DashboardPage() {
   } = useOrganizationMembers();
 
   const {
-    employees,
-    projects,
-    tasks,
-    recommendations,
-    auditEvents,
-    activeRole,
-    currentUser,
-    currentUserId,
+    projects: dbProjects,
+    isLoading: isProjectsLoading,
+    refetch: refetchProjects,
+  } = useProjects();
+
+  const {
+    tasks: dbTasks,
+    isLoading: isTasksLoading,
+    refetch: refetchTasks,
+    updateTaskStatus: dbUpdateTaskStatus,
+  } = useTasks();
+
+  const {
+    auditLogs: liveAuditLogs,
+    isLoading: isAuditLoading,
+    refetch: refetchAudit,
+  } = useAuditLogs();
+
+  const {
+    employees: mockEmployees,
+    projects: mockProjects,
+    tasks: mockTasks,
+    recommendations: mockRecommendations,
+    auditEvents: mockAuditEvents,
+    activeRole: mockRole,
+    currentUser: mockUser,
+    currentUserId: mockUserId,
     approveRecommendation,
-    updateTaskStatus,
+    updateTaskStatus: mockUpdateTaskStatus,
   } = useMockStore();
+
+  const projects = isLive ? dbProjects : mockProjects;
+  const tasks = isLive ? dbTasks : mockTasks;
+  const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const recommendations = isLive ? [] : mockRecommendations;
+  const activeRole = isLive ? authRole : mockRole;
+  const updateTaskStatus = isLive ? dbUpdateTaskStatus : mockUpdateTaskStatus;
+
+  // Member loads map for overload calculation
+  const memberLoads = React.useMemo(() => {
+    const map = new Map<string, number>();
+    tasks.forEach((t) => {
+      if (t.assignedTo && t.status !== 'completed') {
+        map.set(t.assignedTo, (map.get(t.assignedTo) || 0) + (Number(t.estimatedHours) || 0));
+      }
+    });
+    return map;
+  }, [tasks]);
+
+  const overloadedCount = React.useMemo(() => {
+    return members.filter((m) => {
+      const load = memberLoads.get(m.userId) || 0;
+      return m.weeklyCapacityHours > 0 && load > m.weeklyCapacityHours;
+    }).length;
+  }, [members, memberLoads]);
 
   // Find employee entity matching current user or construct from authenticated session
   const currentEmp = React.useMemo(() => {
     const userCapacity = profile?.weeklyCapacityHours ?? 40;
     const foundMember = members.find((m) => m.userId === user?.id);
-    const foundEmp = employees.find((e) => e.id === currentUserId);
+    const foundEmp = mockEmployees.find((e) => e.id === mockUserId);
+
+    const myActive = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status !== 'completed');
+    const myCompleted = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status === 'completed');
+    const myTotal = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId));
+    const loadHours = myActive.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
 
     return {
-      id: user?.id || currentUserId,
-      fullName: profile?.fullName || currentUser.name,
+      id: isLive ? (user?.id || '') : mockUserId,
+      fullName: isLive ? (profile?.fullName || user?.email || 'User') : mockUser.name,
       role: activeRole,
-      jobTitle: profile?.jobTitle || foundMember?.jobTitle || currentUser.jobTitle,
-      department: profile?.department || foundMember?.department || currentUser.department,
+      jobTitle: isLive ? (profile?.jobTitle || foundMember?.jobTitle || 'Team Member') : mockUser.jobTitle,
+      department: isLive ? (profile?.department || foundMember?.department || 'Engineering') : mockUser.department,
       skills: foundEmp?.skills || [],
       weeklyCapacityHours: userCapacity,
-      currentLoadHours: 0,
-      burnoutRiskScore: 0.05,
-      activeTaskCount: 0,
-      onTimeCompletionRate: 100,
+      currentLoadHours: loadHours,
+      burnoutRiskScore: Math.min(Math.round(((loadHours / (userCapacity || 40))) * 100) / 100, 1.0),
+      activeTaskCount: myActive.length,
+      onTimeCompletionRate: myTotal.length > 0 ? Math.round((myCompleted.length / myTotal.length) * 100) : 100,
     };
-  }, [profile, user, currentUserId, currentUser, activeRole, members, employees]);
+  }, [isLive, profile, user, mockUserId, mockUser, activeRole, members, mockEmployees, tasks]);
 
   const myTasks = tasks.filter((t) => t.assignedTo === currentEmp.id);
   const myCompletedTasks = myTasks.filter((t) => t.status === 'completed');
@@ -137,7 +191,7 @@ export default function DashboardPage() {
   const totalAllocated = React.useMemo(() => {
     return tasks
       .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
-      .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+      .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   }, [tasks, memberUserIds]);
 
   const orgUtilizationPct = totalCapacity > 0 ? Math.round((totalAllocated / totalCapacity) * 100) : 0;
@@ -173,7 +227,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-extrabold tracking-tight text-white">
-                Welcome back, {currentUser.name}
+                Welcome back, {currentEmp.fullName || profile?.fullName || 'Colleague'}
               </h2>
               <Badge variant="cyan" size="sm">
                 Employee Portal
@@ -640,7 +694,10 @@ export default function DashboardPage() {
           <Link href="/matching">
             <Button variant="primary" size="sm">
               <Sparkles className="h-4 w-4 mr-1.5" />
-              <span>Review AI Matches ({pendingRecommendations.length})</span>
+              <span>
+                Review AI Matches
+                {!isLive && pendingRecommendations.length > 0 ? ` (${pendingRecommendations.length})` : ''}
+              </span>
             </Button>
           </Link>
           <Link href="/workload">
@@ -691,10 +748,14 @@ export default function DashboardPage() {
         />
         <MetricCard
           title="Overload Risk Flags"
-          value={0}
-          subtitle="Zero overloaded members"
-          badgeText="Optimal"
-          badgeVariant="emerald"
+          value={overloadedCount}
+          subtitle={
+            overloadedCount === 0
+              ? 'Zero overloaded members'
+              : `${overloadedCount} staff exceeding weekly limit`
+          }
+          badgeText={overloadedCount === 0 ? 'Optimal' : 'Overload Alert'}
+          badgeVariant={overloadedCount === 0 ? 'emerald' : 'rose'}
           icon={<Flame className="h-5 w-5 text-rose-400" />}
         />
       </div>
@@ -862,74 +923,94 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="flex-1 space-y-3.5">
-            {pendingRecommendations.slice(0, 2).map((rec) => (
-              <div
-                key={rec.id}
-                className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[11px] font-mono text-violet-400 font-semibold block">
-                      Task Match
-                    </span>
-                    <h4 className="text-xs font-bold text-white line-clamp-1">
-                      {rec.taskTitle}
-                    </h4>
-                  </div>
-                  <Badge variant="cyan" size="sm">
-                    {rec.matchScore}% Score
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
-                    {rec.candidateAvatar}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-slate-200 truncate">
-                      {rec.candidateName}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate">
-                      Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
-                      {rec.workloadImpact.projectedLoadHours}h (
-                      {rec.workloadImpact.projectedUtilizationPct}%)
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
-                  &ldquo;{rec.rationale}&rdquo;
-                </p>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => approveRecommendation(rec.id)}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Approve
-                  </Button>
-                  <Link href="/matching">
-                    <Button variant="outline" size="sm" className="text-xs">
-                      Inspect
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-
-            {pendingRecommendations.length === 0 && (
+            {isLive ? (
               <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
-                <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                <Sparkles className="h-8 w-8 text-violet-400 mb-2" />
                 <p className="text-xs font-medium text-slate-200">
-                  All recommendations reviewed!
+                  Live AI Matching Hub
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Create new unassigned tasks to generate candidate rankings.
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  Generate and inspect explainable, human-in-the-loop candidate rankings for your unassigned organization tasks.
                 </p>
+                <Link href="/matching" className="mt-4">
+                  <Button variant="primary" size="sm" className="text-xs">
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Open Matching Hub
+                  </Button>
+                </Link>
               </div>
+            ) : (
+              <>
+                {pendingRecommendations.slice(0, 2).map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[11px] font-mono text-violet-400 font-semibold block">
+                          Task Match
+                        </span>
+                        <h4 className="text-xs font-bold text-white line-clamp-1">
+                          {rec.taskTitle}
+                        </h4>
+                      </div>
+                      <Badge variant="cyan" size="sm">
+                        {rec.matchScore}% Score
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
+                        {rec.candidateAvatar}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold text-slate-200 truncate">
+                          {rec.candidateName}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
+                          {rec.workloadImpact.projectedLoadHours}h (
+                          {rec.workloadImpact.projectedUtilizationPct}%)
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
+                      &ldquo;{rec.rationale}&rdquo;
+                    </p>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => approveRecommendation(rec.id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Approve
+                      </Button>
+                      <Link href="/matching">
+                        <Button variant="outline" size="sm" className="text-xs">
+                          Inspect
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+
+                {pendingRecommendations.length === 0 && (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                    <p className="text-xs font-medium text-slate-200">
+                      All recommendations reviewed!
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Create new unassigned tasks to generate candidate rankings.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

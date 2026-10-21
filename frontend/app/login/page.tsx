@@ -174,7 +174,7 @@ function LoginFormContent() {
   const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
     setSelectedRole(opt.id);
     setEmail(opt.demoEmail);
-    setPassword('WorkForceDemo2026!');
+    setPassword('Password123!');
     switchDemoRole(opt.demoId);
   };
 
