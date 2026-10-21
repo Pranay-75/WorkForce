@@ -19,29 +19,29 @@ export function ProgressBar({
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
 
   const getAutoColor = (pct: number) => {
-    if (pct > 100) return 'bg-gradient-to-r from-rose-500 to-red-600';
-    if (pct >= 90) return 'bg-gradient-to-r from-amber-500 to-orange-600';
-    if (pct >= 50) return 'bg-gradient-to-r from-emerald-500 to-teal-500';
-    return 'bg-gradient-to-r from-cyan-500 to-blue-500';
+    if (pct > 100) return 'bg-rose-500';
+    if (pct >= 90) return 'bg-amber-500';
+    if (pct >= 50) return 'bg-zinc-100';
+    return 'bg-zinc-300';
   };
 
   const colors = {
     auto: getAutoColor(percentage),
-    violet: 'bg-gradient-to-r from-violet-500 to-purple-600',
-    cyan: 'bg-gradient-to-r from-cyan-500 to-blue-500',
-    emerald: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+    violet: 'bg-zinc-100',
+    cyan: 'bg-zinc-300',
+    emerald: 'bg-emerald-500',
   };
 
   return (
     <div className={cn('w-full space-y-1', className)}>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80 p-0.5 border border-slate-700/50">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/80 p-0.5 border border-zinc-700/50">
         <div
           className={cn('h-full rounded-full transition-all duration-500', colors[colorScheme])}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {showLabel && (
-        <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+        <div className="flex justify-between text-[11px] text-zinc-400 font-mono">
           <span>{Math.round(percentage)}% capacity</span>
           <span>{max}h total</span>
         </div>
