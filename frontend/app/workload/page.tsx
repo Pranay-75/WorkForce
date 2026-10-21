@@ -44,6 +44,7 @@ export default function WorkloadCapacityPage() {
     isLoading: isTasksLoading,
     assignTask: dbAssignTask,
     updateTaskDetails: dbUpdateTaskDetails,
+    updateTaskStatus: dbUpdateTaskStatus,
     refetch: refetchTasks,
   } = useTasks();
 
@@ -55,6 +56,7 @@ export default function WorkloadCapacityPage() {
     activeRole: mockRole,
     currentUserId: mockUserId,
     updateTaskDetails: mockUpdateTaskDetails,
+    updateTaskStatus: mockUpdateTaskStatus,
     applyRedistribution: mockApplyRedistribution,
   } = useMockStore();
 

@@ -39,6 +39,7 @@ export default function AuditPage() {
   const { auditEvents: mockAuditEvents } = useMockStore();
 
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const isLoading = isLive && isAuditLoading;
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedAction, setSelectedAction] = React.useState('all');
@@ -154,7 +155,7 @@ export default function AuditPage() {
                       variant={
                         ev.entityType === 'Recommendation'
                           ? 'violet'
-                          : ev.entityType === 'Organization'
+                          : ev.entityType === 'Project'
                           ? 'cyan'
                           : ev.entityType === 'Task'
                           ? 'emerald'
@@ -182,16 +183,10 @@ export default function AuditPage() {
                   <span>•</span>
                   <span>Timestamp: <strong className="text-slate-300 font-mono">{new Date(ev.timestamp).toLocaleString()}</strong></span>
                 </div>
-
-                <Badge variant="slate" size="sm" className="font-mono text-[10px] shrink-0">
-                  Event ID: {ev.id.slice(0, 12)}...
-                </Badge>
               </div>
-            </Card>
-          ))}
 
               <Badge variant="slate" size="sm" className="font-mono text-[10px] shrink-0">
-                Event ID: {ev.id.slice(0, 8)}...
+                Event ID: {ev.id.slice(0, 12)}...
               </Badge>
             </div>
           </Card>
@@ -206,6 +201,7 @@ export default function AuditPage() {
           </div>
         )}
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

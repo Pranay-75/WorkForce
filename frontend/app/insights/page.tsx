@@ -16,6 +16,7 @@ import {
   Activity,
   AlertTriangle,
   RefreshCw,
+  Users,
 } from 'lucide-react';
 
 interface InsightMember {

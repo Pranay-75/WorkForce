@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
 import { Employee, UserRole } from '@/lib/types';
@@ -45,7 +46,20 @@ export default function EmployeesDirectoryPage() {
     removeMember,
   } = useOrganizationMembers();
 
-  const { tasks: liveTasks } = useTasks();
+  // Live projects and tasks hooks for project assignment workflow & workload tracking
+  const {
+    projects: dbProjects,
+    addProjectMember,
+    refetch: refetchProjects,
+  } = useProjects();
+
+  const {
+    tasks: dbTasks,
+    assignTask,
+    refetch: refetchTasks,
+  } = useTasks();
+
+  const liveTasks = dbTasks;
 
   // Compute live load hours per member from active tasks
   const memberLoads = React.useMemo(() => {
@@ -492,9 +506,6 @@ export default function EmployeesDirectoryPage() {
 
               // Derive real metrics from live tasks and projects
               const memberTasks = dbTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-              const currentLoadHours = memberTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0);
-              const weeklyCap = m.weeklyCapacityHours || 40;
-              const utilPct = weeklyCap > 0 ? Math.round((currentLoadHours / weeklyCap) * 100) : 0;
               const allocatedProjects = dbProjects.filter((p) => p.memberIds.includes(m.userId));
 
               return (
@@ -545,20 +556,6 @@ export default function EmployeesDirectoryPage() {
                           {utilPct > 100 ? 'Overloaded' : utilPct >= 80 ? 'Near Limit' : 'Optimal'}
                         </Badge>
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-slate-400">Weekly Load</span>
-                        <span
-                          className={
-                            utilPct > 100 ? 'text-rose-400 font-bold' : 'text-slate-200'
-                          }
-                        >
-                          {currentLoadHours}h / {weeklyCap}h ({utilPct}%)
-                        </span>
-                      </div>
-                      <ProgressBar value={utilPct} />
                     </div>
 
                     {/* Allocated Projects */}

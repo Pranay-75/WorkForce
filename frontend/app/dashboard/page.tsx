@@ -74,7 +74,7 @@ function DemoModeBanner() {
 }
 
 export default function DashboardPage() {
-  const { organization, profile, user, role: authRole, isAuthenticated } = useAuth();
+  const { organization, profile, user, role: authRole, isAuthenticated, isLoading: authLoading } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
 
   const {
@@ -90,12 +90,14 @@ export default function DashboardPage() {
   const {
     projects: dbProjects,
     isLoading: isProjectsLoading,
+    error: projectsError,
     refetch: refetchProjects,
   } = useProjects();
 
   const {
     tasks: dbTasks,
     isLoading: isTasksLoading,
+    error: tasksError,
     refetch: refetchTasks,
     updateTaskStatus: dbUpdateTaskStatus,
   } = useTasks();
@@ -124,6 +126,7 @@ export default function DashboardPage() {
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
   const recommendations = isLive ? [] : mockRecommendations;
   const activeRole = isLive ? authRole : mockRole;
+  const effectiveRole = activeRole;
   const updateTaskStatus = isLive ? dbUpdateTaskStatus : mockUpdateTaskStatus;
 
   // Member loads map for overload calculation

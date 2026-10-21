@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -31,58 +32,6 @@ import {
 export default function EmployeeDetailPage() {
   const params = useParams();
   const employeeId = params?.id as string;
-
-  const { isAuthenticated, organization } = useAuth();
-  const isLive = Boolean(isAuthenticated && organization?.id);
-
-  const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
-  const { tasks: liveTasks, isLoading: isTasksLoading } = useTasks();
-  const { employees: mockEmployees, tasks: mockTasks } = useMockStore();
-
-  const liveMember = liveMembers.find((m) => m.userId === employeeId || m.id === employeeId);
-  const mockEmp = mockEmployees.find((e) => e.id === employeeId);
-
-  const employee = React.useMemo(() => {
-    if (isLive) {
-      if (!liveMember) return null;
-      const assignedTasks = liveTasks.filter((t) => t.assignedTo === liveMember.userId);
-      const activeTasks = assignedTasks.filter((t) => t.status !== 'completed');
-      const loadHours = activeTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-      const capacity = liveMember.weeklyCapacityHours || 40;
-      const util = capacity > 0 ? loadHours / capacity : 0;
-
-      return {
-        id: liveMember.userId,
-        email: liveMember.email,
-        fullName: liveMember.fullName,
-        avatarUrl: liveMember.avatarUrl || undefined,
-        role: liveMember.role,
-        department: liveMember.department || 'Engineering',
-        jobTitle: liveMember.jobTitle || 'Team Member',
-        weeklyCapacityHours: capacity,
-        currentLoadHours: loadHours,
-        burnoutRiskScore: Math.min(Math.round(util * 100) / 100, 1.0),
-        skills: [] as { skillId: string; skillName: string; category: string; proficiency: string; verified: boolean }[],
-        activeTaskCount: activeTasks.length,
-        onTimeCompletionRate: 98,
-        location: 'HQ / Remote',
-      };
-    }
-    return mockEmp || null;
-  }, [isLive, liveMember, liveTasks, mockEmp]);
-
-  const tasks = isLive ? liveTasks : mockTasks;
-  const assignedTasks = tasks.filter((t) => t.assignedTo === employee?.id);
-
-  if (isLive && isMembersLoading) {
-    return (
-      <div className="space-y-6 animate-pulse p-6">
-        <div className="h-6 w-32 bg-slate-800 rounded" />
-        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
-        <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
-      </div>
-    );
-  }
 
   const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
@@ -139,9 +88,87 @@ export default function EmployeeDetailPage() {
     );
   }
 
-  const utilPct = employee.weeklyCapacityHours > 0
-    ? Math.round((employee.currentLoadHours / employee.weeklyCapacityHours) * 100)
-    : 0;
+  // Unified employee representation
+  const targetUid = isLive ? (liveMember?.userId || employeeId) : mockEmployee!.id;
+  const fullName = isLive ? liveMember!.fullName : mockEmployee!.fullName;
+  const email = isLive ? liveMember!.email : mockEmployee!.email;
+  const role = isLive ? liveMember!.role : mockEmployee!.role;
+  const department = isLive ? (liveMember!.department || 'Engineering') : mockEmployee!.department;
+  const jobTitle = isLive ? (liveMember!.jobTitle || 'Team Member') : mockEmployee!.jobTitle;
+  const weeklyCapacityHours = isLive ? (liveMember!.weeklyCapacityHours ?? 40) : mockEmployee!.weeklyCapacityHours;
+
+  // Resolve assigned tasks
+  const assignedTasks = isLive
+    ? dbTasks.filter((t) => t.assignedTo === targetUid)
+    : mockTasks.filter((t) => t.assignedTo === mockEmployee!.id);
+
+  const activeTasks = assignedTasks.filter((t) => t.status !== 'completed');
+
+  const currentLoadHours = isLive
+    ? activeTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+    : mockEmployee!.currentLoadHours;
+
+  const utilPct = weeklyCapacityHours > 0 ? Math.round((currentLoadHours / weeklyCapacityHours) * 100) : 0;
+  const riskIndex = Math.min(100, Math.round(utilPct * 0.9));
+
+  // Resolve allocated projects
+  const allocatedProjects = isLive
+    ? dbProjects.filter((p) => p.memberIds.includes(targetUid))
+    : [];
+
+  const employee = {
+    id: targetUid,
+    fullName,
+    email,
+    role,
+    department,
+    jobTitle,
+    weeklyCapacityHours,
+    currentLoadHours,
+    burnoutRiskScore: Math.min(Math.round(utilPct) / 100, 1.0),
+    skills: mockEmployee?.skills || [],
+    avatarUrl: liveMember?.avatarUrl || mockEmployee?.avatarUrl,
+  };
+
+  const handleOpenAssignModal = () => {
+    setAssignError(null);
+    setAssignSuccess(null);
+    setAssignTaskIds([]);
+    const unallocated = dbProjects.find((p) => !p.memberIds.includes(targetUid));
+    setAssignProjectId(unallocated ? unallocated.id : (dbProjects[0]?.id || ''));
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignProjectId || !targetUid) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+
+    const res = await addProjectMember(assignProjectId, targetUid);
+    if (res.error) {
+      setAssignLoading(false);
+      setAssignError(res.error);
+      return;
+    }
+
+    if (assignTaskIds.length > 0) {
+      for (const taskId of assignTaskIds) {
+        await assignTask(taskId, targetUid);
+      }
+      await refetchTasks();
+    }
+
+    await refetchProjects();
+    setAssignLoading(false);
+    setAssignSuccess(`Assigned ${fullName} to project initiative.`);
+    setTimeout(() => {
+      setIsAssignModalOpen(false);
+      setAssignSuccess(null);
+    }, 1500);
+  };
 
   const initials = employee.fullName
     .split(' ')

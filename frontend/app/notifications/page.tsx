@@ -7,9 +7,6 @@ import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useMockStore } from '@/lib/mockStore';
-import { useAuth } from '@/lib/authContext';
-import { useTasks } from '@/lib/hooks/useTasks';
-import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -130,6 +127,9 @@ export default function NotificationsPage() {
       mockMarkAllRead();
     }
   };
+
+  const handleDismiss = markNotificationAsRead;
+  const handleDismissAll = markAllNotificationsAsRead;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

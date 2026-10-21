@@ -65,6 +65,7 @@ export default function ReportsPage() {
   const projects = isLive ? liveProjects : mockProjects;
   const tasks = isLive ? liveTasks : mockTasks;
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const liveAuditCount = liveAuditLogs.length;
 
   // Reconcile employee list with live assigned tasks
   const employees = React.useMemo(() => {
