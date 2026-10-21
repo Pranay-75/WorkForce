@@ -41,12 +41,12 @@ export function MetricCard({
   return (
     <Card
       className={cn(
-        'relative overflow-hidden border-slate-800/80 hover:border-slate-700/80 transition-all hover:shadow-glow/20',
+        'relative overflow-hidden border-slate-800/80 hover:border-slate-700/80 transition-all hover:shadow-md',
         className
       )}
     >
       {/* Top subtle highlight border */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500/40 via-cyan-500/40 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500/30 via-slate-500/20 to-transparent" />
 
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
@@ -59,7 +59,7 @@ export function MetricCard({
             </div>
           </div>
           {icon && (
-            <div className="rounded-xl border border-slate-700/60 bg-navy-800/80 p-2.5 text-violet-400 shadow-sm">
+            <div className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-2.5 text-slate-300 shadow-sm">
               {icon}
             </div>
           )}

@@ -22,17 +22,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium transition-all duration-150 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background-base disabled:pointer-events-none disabled:opacity-50 select-none';
+      'inline-flex items-center justify-center font-medium transition-all duration-150 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background-base disabled:pointer-events-none disabled:opacity-50 select-none';
 
     const variants = {
       primary:
-        'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-glow active:scale-[0.98] border border-violet-500/30',
+        'bg-blue-600 hover:bg-blue-500 text-white shadow-sm active:scale-[0.98] border border-blue-500/40',
       accent:
-        'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-glow-cyan active:scale-[0.98] border border-cyan-500/30',
+        'bg-slate-800 hover:bg-slate-700 text-slate-100 shadow-sm active:scale-[0.98] border border-slate-700',
       secondary:
         'bg-navy-800 hover:bg-navy-700 text-slate-200 border border-slate-700/60 hover:border-slate-600 active:scale-[0.98]',
       outline:
-        'border border-slate-700 hover:border-violet-500/50 bg-transparent hover:bg-violet-950/20 text-slate-200 hover:text-white',
+        'border border-slate-700 hover:border-slate-500 bg-transparent hover:bg-slate-800/40 text-slate-200 hover:text-white',
       ghost:
         'bg-transparent hover:bg-navy-800 text-slate-300 hover:text-slate-100',
       danger:

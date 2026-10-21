@@ -19,17 +19,17 @@ export function ProgressBar({
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
 
   const getAutoColor = (pct: number) => {
-    if (pct > 100) return 'bg-gradient-to-r from-rose-500 to-red-600';
-    if (pct >= 90) return 'bg-gradient-to-r from-amber-500 to-orange-600';
-    if (pct >= 50) return 'bg-gradient-to-r from-emerald-500 to-teal-500';
-    return 'bg-gradient-to-r from-cyan-500 to-blue-500';
+    if (pct > 100) return 'bg-rose-500';
+    if (pct >= 90) return 'bg-amber-500';
+    if (pct >= 50) return 'bg-emerald-500';
+    return 'bg-blue-500';
   };
 
   const colors = {
     auto: getAutoColor(percentage),
-    violet: 'bg-gradient-to-r from-violet-500 to-purple-600',
-    cyan: 'bg-gradient-to-r from-cyan-500 to-blue-500',
-    emerald: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+    violet: 'bg-blue-500',
+    cyan: 'bg-slate-400',
+    emerald: 'bg-emerald-500',
   };
 
   return (

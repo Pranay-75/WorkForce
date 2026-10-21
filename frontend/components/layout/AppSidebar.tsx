@@ -186,14 +186,14 @@ export function AppSidebar({
             className="flex items-center gap-3 overflow-hidden group"
             onClick={() => setIsMobileOpen?.(false)}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-glow group-hover:scale-105 transition-transform">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm group-hover:bg-blue-500 transition-colors">
               <Zap className="h-5 w-5 fill-current" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
                   WorkForce
-                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-violet-950/80 text-violet-400 border border-violet-800/50">
+                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                     SaaS
                   </span>
                 </span>
@@ -242,19 +242,19 @@ export function AppSidebar({
                       className={cn(
                         'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 select-none',
                         isActive
-                          ? 'bg-violet-600/15 text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] border border-violet-500/30'
-                          : 'text-slate-400 hover:bg-navy-800/80 hover:text-slate-200'
+                          ? 'bg-blue-950/40 text-blue-300 border border-blue-800/40'
+                          : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                       )}
                       title={isCollapsed ? item.name : undefined}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-blue-500" />
                       )}
                       <Icon
                         className={cn(
                           'h-4 w-4 shrink-0 transition-colors',
                           isActive
-                            ? 'text-violet-400'
+                            ? 'text-blue-400'
                             : 'text-slate-400 group-hover:text-slate-200'
                         )}
                       />
@@ -266,7 +266,7 @@ export function AppSidebar({
                           className={cn(
                             'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
                             item.badge === 'AI'
-                              ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-mono'
+                              ? 'bg-blue-600 text-white font-mono'
                               : 'bg-slate-800 text-slate-300'
                           )}
                         >
@@ -290,7 +290,7 @@ export function AppSidebar({
             )}
           >
             <div className="relative">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 font-semibold text-white text-xs border border-violet-400/40 shadow-sm">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-800 font-semibold text-slate-200 text-xs border border-slate-700 shadow-sm">
                 {displayUser.avatar}
               </div>
               <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-navy-900" />
@@ -302,12 +302,12 @@ export function AppSidebar({
                   <span className="text-xs font-semibold text-slate-200 truncate">
                     {displayUser.name}
                   </span>
-                  <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <span className="truncate">{displayUser.department}</span>
                   <span>•</span>
-                  <span className="text-violet-400 font-mono text-[10px] uppercase">
+                  <span className="text-slate-400 font-mono text-[10px] uppercase">
                     {displayUser.role}
                   </span>
                 </div>

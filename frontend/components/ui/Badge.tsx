@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?:
+    | 'blue'
     | 'violet'
     | 'cyan'
     | 'emerald'
@@ -15,16 +16,18 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Badge({
   className,
-  variant = 'violet',
+  variant = 'slate',
   size = 'md',
   children,
   ...props
 }: BadgeProps) {
   const variants = {
+    blue:
+      'bg-blue-950/60 text-blue-300 border-blue-800/50',
     violet:
-      'bg-violet-950/60 text-violet-300 border-violet-700/50 shadow-[0_0_10px_-3px_rgba(139,92,246,0.3)]',
+      'bg-blue-950/50 text-blue-300 border-blue-800/40',
     cyan:
-      'bg-cyan-950/60 text-cyan-300 border-cyan-700/50 shadow-[0_0_10px_-3px_rgba(6,182,212,0.3)]',
+      'bg-slate-800/90 text-slate-300 border-slate-700',
     emerald:
       'bg-emerald-950/60 text-emerald-300 border-emerald-700/50',
     amber:
