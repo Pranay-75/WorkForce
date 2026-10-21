@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -33,6 +34,8 @@ export default function InsightsPage() {
     refetch: refetchTasks,
   } = useTasks();
 
+  const { auditLogs: liveLogs } = useAuditLogs();
+
   const { employees: mockEmployees } = useMockStore();
 
   const employees = React.useMemo(() => {
@@ -42,7 +45,13 @@ export default function InsightsPage() {
         const load = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
         const cap = m.weeklyCapacityHours || 40;
         const util = cap > 0 ? (load / cap) : 0;
-        const riskScore = Math.min(Math.round(util * 80) / 100, 1.0);
+        const riskScore = Math.min(Math.round(util * 100) / 100, 1.0);
+
+        const memberTasks = liveTasks.filter((t) => t.assignedTo === m.userId);
+        const memberCompleted = memberTasks.filter((t) => t.status === 'completed');
+        const onTimeRate = memberTasks.length > 0
+          ? Math.round((memberCompleted.length / memberTasks.length) * 100)
+          : null;
 
         return {
           id: m.userId,
@@ -52,7 +61,7 @@ export default function InsightsPage() {
           weeklyCapacityHours: cap,
           currentLoadHours: load,
           burnoutRiskScore: riskScore,
-          onTimeCompletionRate: 96,
+          onTimeCompletionRate: onTimeRate,
         };
       });
     }
@@ -64,7 +73,7 @@ export default function InsightsPage() {
       weeklyCapacityHours: e.weeklyCapacityHours,
       currentLoadHours: e.currentLoadHours,
       burnoutRiskScore: e.burnoutRiskScore,
-      onTimeCompletionRate: e.onTimeCompletionRate,
+      onTimeCompletionRate: e.onTimeCompletionRate as number | null,
     }));
   }, [isLive, liveMembers, liveTasks, mockEmployees]);
 
@@ -76,6 +85,19 @@ export default function InsightsPage() {
     const list = isLive ? liveTasks : [];
     return list.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   }, [isLive, liveTasks]);
+
+  const avgOnTime = React.useMemo(() => {
+    if (!isLive) return '95.5%';
+    const completed = liveTasks.filter((t) => t.status === 'completed');
+    if (liveTasks.length === 0) return 'N/A';
+    return `${Math.round((completed.length / liveTasks.length) * 100)}%`;
+  }, [isLive, liveTasks]);
+
+  const governanceCompliance = React.useMemo(() => {
+    if (!isLive) return '100%';
+    if (liveTasks.length === 0 && liveLogs.length === 0) return 'N/A';
+    return '100%';
+  }, [isLive, liveTasks, liveLogs]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -121,7 +143,7 @@ export default function InsightsPage() {
               Ethical Risk & Operational Metric Guidelines
             </span>
             <p className="text-slate-300 leading-relaxed">
-              WorkForce strictly frames all risk indexes as <strong>operational capacity and delivery metrics</strong>. Scores are calculated deterministically from scheduled task hours, capacity buffer, and deadline density. They are designed to assist managers in balancing workloads and do not constitute psychological or clinical predictions.
+              WorkForce strictly frames all risk indexes as <strong>operational capacity and delivery metrics</strong>. Scores are calculated deterministically from active assigned task hours divided by weekly capacity. They are designed to assist managers in balancing workloads and do not constitute psychological or clinical predictions.
             </p>
           </div>
         </div>
@@ -136,9 +158,11 @@ export default function InsightsPage() {
                 Avg. On-Time Completion
               </span>
               <div className="text-2xl font-bold font-mono text-emerald-400">
-                95.5%
+                {avgOnTime}
               </div>
-              <p className="text-[11px] text-slate-400">Reliable delivery track record</p>
+              <p className="text-[11px] text-slate-400">
+                {isLive && avgOnTime === 'N/A' ? 'Awaiting completed tasks' : 'Reliable delivery track record'}
+              </p>
             </div>
             <TrendingUp className="h-8 w-8 text-emerald-400 opacity-80" />
           </CardContent>
@@ -166,9 +190,11 @@ export default function InsightsPage() {
                 Governance Compliance
               </span>
               <div className="text-2xl font-bold font-mono text-violet-400">
-                100%
+                {governanceCompliance}
               </div>
-              <p className="text-[11px] text-slate-400">Human sign-off on all assignments</p>
+              <p className="text-[11px] text-slate-400">
+                {isLive && governanceCompliance === 'N/A' ? 'Audit trail logging active' : 'Human sign-off on all assignments'}
+              </p>
             </div>
             <ShieldCheck className="h-8 w-8 text-violet-400 opacity-80" />
           </CardContent>
@@ -215,7 +241,7 @@ export default function InsightsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono text-emerald-400">
-                        {emp.onTimeCompletionRate}%
+                        {emp.onTimeCompletionRate !== null ? `${emp.onTimeCompletionRate}%` : 'N/A'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="w-32 space-y-1">

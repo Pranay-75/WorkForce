@@ -122,7 +122,7 @@ export default function DashboardPage() {
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
-  const recommendations = mockRecommendations;
+  const recommendations = isLive ? [] : mockRecommendations;
   const activeRole = isLive ? authRole : mockRole;
   const updateTaskStatus = isLive ? dbUpdateTaskStatus : mockUpdateTaskStatus;
 
@@ -694,7 +694,10 @@ export default function DashboardPage() {
           <Link href="/matching">
             <Button variant="primary" size="sm">
               <Sparkles className="h-4 w-4 mr-1.5" />
-              <span>Review AI Matches ({pendingRecommendations.length})</span>
+              <span>
+                Review AI Matches
+                {!isLive && pendingRecommendations.length > 0 ? ` (${pendingRecommendations.length})` : ''}
+              </span>
             </Button>
           </Link>
           <Link href="/workload">
@@ -920,74 +923,94 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="flex-1 space-y-3.5">
-            {pendingRecommendations.slice(0, 2).map((rec) => (
-              <div
-                key={rec.id}
-                className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[11px] font-mono text-violet-400 font-semibold block">
-                      Task Match
-                    </span>
-                    <h4 className="text-xs font-bold text-white line-clamp-1">
-                      {rec.taskTitle}
-                    </h4>
-                  </div>
-                  <Badge variant="cyan" size="sm">
-                    {rec.matchScore}% Score
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
-                    {rec.candidateAvatar}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-slate-200 truncate">
-                      {rec.candidateName}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate">
-                      Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
-                      {rec.workloadImpact.projectedLoadHours}h (
-                      {rec.workloadImpact.projectedUtilizationPct}%)
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
-                  &ldquo;{rec.rationale}&rdquo;
-                </p>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => approveRecommendation(rec.id)}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Approve
-                  </Button>
-                  <Link href="/matching">
-                    <Button variant="outline" size="sm" className="text-xs">
-                      Inspect
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-
-            {pendingRecommendations.length === 0 && (
+            {isLive ? (
               <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
-                <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                <Sparkles className="h-8 w-8 text-violet-400 mb-2" />
                 <p className="text-xs font-medium text-slate-200">
-                  All recommendations reviewed!
+                  Live AI Matching Hub
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Create new unassigned tasks to generate candidate rankings.
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  Generate and inspect explainable, human-in-the-loop candidate rankings for your unassigned organization tasks.
                 </p>
+                <Link href="/matching" className="mt-4">
+                  <Button variant="primary" size="sm" className="text-xs">
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Open Matching Hub
+                  </Button>
+                </Link>
               </div>
+            ) : (
+              <>
+                {pendingRecommendations.slice(0, 2).map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="rounded-xl border border-violet-500/30 bg-navy-900/80 p-4 space-y-3 shadow-sm hover:border-violet-500/60 transition-all"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[11px] font-mono text-violet-400 font-semibold block">
+                          Task Match
+                        </span>
+                        <h4 className="text-xs font-bold text-white line-clamp-1">
+                          {rec.taskTitle}
+                        </h4>
+                      </div>
+                      <Badge variant="cyan" size="sm">
+                        {rec.matchScore}% Score
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 rounded-lg bg-navy-850 p-2 border border-slate-800">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white">
+                        {rec.candidateAvatar}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold text-slate-200 truncate">
+                          {rec.candidateName}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          Current: {rec.workloadImpact.currentLoadHours}h → Projected:{' '}
+                          {rec.workloadImpact.projectedLoadHours}h (
+                          {rec.workloadImpact.projectedUtilizationPct}%)
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-2 italic">
+                      &ldquo;{rec.rationale}&rdquo;
+                    </p>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => approveRecommendation(rec.id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Approve
+                      </Button>
+                      <Link href="/matching">
+                        <Button variant="outline" size="sm" className="text-xs">
+                          Inspect
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+
+                {pendingRecommendations.length === 0 && (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                    <p className="text-xs font-medium text-slate-200">
+                      All recommendations reviewed!
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Create new unassigned tasks to generate candidate rankings.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

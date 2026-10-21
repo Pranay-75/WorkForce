@@ -75,22 +75,65 @@ export default function MatchingHubPage() {
       return mockRecommendations.filter((r) => r.taskId === selectedTaskId);
     }
 
-    const taskHours = Number(targetTask.estimatedHours) || 8;
+    const taskHours = Number(targetTask.estimatedHours) || 0;
+    const isUnestimated = taskHours === 0;
 
-    return liveMembers.map((m, idx) => {
+    return liveMembers.map((m) => {
       const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
       const curLoad = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-      const cap = m.weeklyCapacityHours || 40;
+      const cap = m.weeklyCapacityHours;
       const projLoad = curLoad + taskHours;
-      const projUtil = Math.round((projLoad / cap) * 100);
+      const projUtil = cap > 0 ? Math.round((projLoad / cap) * 100) : 999;
 
-      // Deterministic heuristic score (40% capacity availability + 40% department relevance + 20% baseline)
-      const capScore = Math.max(0, 100 - projUtil);
-      const deptScore = m.department === 'Engineering' ? 95 : 75;
-      const matchScore = Math.min(99, Math.round(capScore * 0.5 + deptScore * 0.5));
+      const requiredSkills = targetTask.requiredSkills || [];
+      const matchedSkills: { skill: string; requiredLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'; candidateLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[] = [];
+      const missingSkills: string[] = [];
+
+      if (requiredSkills.length > 0) {
+        requiredSkills.forEach((req) => {
+          const deptMatch = m.department && req.skillName.toLowerCase().includes(m.department.toLowerCase());
+          const titleMatch = m.jobTitle && req.skillName.toLowerCase().includes(m.jobTitle.toLowerCase());
+          if (deptMatch || titleMatch) {
+            matchedSkills.push({
+              skill: req.skillName,
+              requiredLevel: req.minProficiency,
+              candidateLevel: req.minProficiency,
+            });
+          } else {
+            missingSkills.push(req.skillName);
+          }
+        });
+      }
+
+      const skillScore = requiredSkills.length > 0
+        ? Math.round((matchedSkills.length / requiredSkills.length) * 100)
+        : 85;
+
+      // Deterministic heuristic score: 50% capacity availability + 50% skill match
+      const capScore = cap > 0 ? Math.max(0, 100 - Math.min(projUtil, 100)) : 0;
+      const matchScore = Math.min(99, Math.max(10, Math.round(capScore * 0.5 + skillScore * 0.5)));
 
       const isCurrentAssignee = targetTask.assignedTo === m.userId;
-      const dec = decisionState[m.userId];
+      const dec = decisionState[`${targetTask.id}:${m.userId}`];
+
+      const riskFactors: string[] = [];
+      if (cap === 0) {
+        riskFactors.push('Member has 0h configured weekly capacity');
+      } else if (projUtil > 100) {
+        riskFactors.push(`Projected load exceeds ${cap}h weekly capacity`);
+      }
+
+      let rationale = '';
+      if (isCurrentAssignee) {
+        rationale = `Currently assigned to this task. Active workload is ${curLoad}h (${cap > 0 ? Math.round((curLoad / cap) * 100) : 0}% capacity).`;
+      } else {
+        const bandwidthText = cap > 0 ? `${Math.max(0, cap - curLoad)}h available bandwidth` : '0h configured capacity';
+        const hoursText = isUnestimated ? 'Task hours unestimated (0h logged).' : `Task requires ${taskHours}h.`;
+        const skillText = requiredSkills.length > 0
+          ? `Matches ${matchedSkills.length}/${requiredSkills.length} required skills.`
+          : 'No prerequisite skills specified for task.';
+        rationale = `${bandwidthText}. ${hoursText} ${skillText} Projected load is ${cap > 0 ? `${projUtil}%` : 'unbounded'}.`;
+      }
 
       return {
         id: `rec-${targetTask.id}-${m.userId}`,
@@ -102,12 +145,9 @@ export default function MatchingHubPage() {
         candidateDepartment: m.department || 'Engineering',
         matchScore: matchScore,
         skillMatchBreakdown: {
-          matchedSkills: [
-            { skill: 'Core Competency', requiredLevel: 'intermediate' as const, candidateLevel: 'advanced' as const },
-            { skill: m.department || 'Engineering', requiredLevel: 'intermediate' as const, candidateLevel: 'expert' as const },
-          ],
-          missingSkills: [] as string[],
-          skillScore: deptScore,
+          matchedSkills,
+          missingSkills,
+          skillScore,
         },
         workloadImpact: {
           currentLoadHours: curLoad,
@@ -116,11 +156,13 @@ export default function MatchingHubPage() {
           weeklyCapacityHours: cap,
           projectedUtilizationPct: projUtil,
         },
-        rationale: isCurrentAssignee
-          ? `Currently assigned. Member has ${curLoad}h active work (${Math.round((curLoad / cap) * 100)}% utilization).`
-          : `Member has ${Math.max(0, cap - curLoad)}h available bandwidth. Department skills (${m.department}) align with task requirements. Projected load is ${projUtil}%.`,
-        riskFactors: projUtil > 100 ? ['Projected load exceeds standard 40h capacity threshold'] : [],
-        status: isCurrentAssignee ? ('accepted' as const) : dec?.status || ('pending' as const),
+        rationale,
+        riskFactors,
+        status: isCurrentAssignee
+          ? ('accepted' as const)
+          : dec?.status === 'rejected'
+          ? ('rejected' as const)
+          : ('pending' as const),
         decisionReason: dec?.reason,
       };
     }).sort((a, b) => b.matchScore - a.matchScore);
@@ -136,10 +178,7 @@ export default function MatchingHubPage() {
       if (res.error) {
         setActionFeedback({ text: res.error, type: 'error' });
       } else {
-        setDecisionState((prev) => ({
-          ...prev,
-          [rec.candidateId]: { status: 'accepted' },
-        }));
+        // Assignment state is derived from refetched tasks (isCurrentAssignee)
         setActionFeedback({
           text: `Task "${rec.taskTitle}" assigned to ${rec.candidateName} successfully.`,
           type: 'success',
@@ -161,7 +200,7 @@ export default function MatchingHubPage() {
       if (rec) {
         setDecisionState((prev) => ({
           ...prev,
-          [rec.candidateId]: { status: 'rejected', reason: rejectReason.trim() },
+          [`${rec.taskId}:${rec.candidateId}`]: { status: 'rejected', reason: rejectReason.trim() },
         }));
       }
       if (!isLive) {

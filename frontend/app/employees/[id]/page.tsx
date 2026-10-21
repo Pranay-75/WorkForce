@@ -280,44 +280,58 @@ export default function EmployeeDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-end justify-between gap-2 h-36 pt-4 border-b border-slate-800/80 pb-2">
-              {historyData.map((item, idx) => {
-                const heightPct = Math.min((item.load / (employee.weeklyCapacityHours * 1.25 || 50)) * 100, 100);
-                const isOver = item.pct > 100;
-                return (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {item.load}h
-                    </span>
-                    <div
-                      className={`w-full rounded-t-md transition-all duration-300 ${
-                        isOver
-                          ? 'bg-gradient-to-t from-rose-600 to-red-500 shadow-sm'
-                          : 'bg-gradient-to-t from-violet-600 to-cyan-500'
-                      }`}
-                      style={{ height: `${heightPct}%` }}
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">
-                      {item.week}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            {isLive ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                <Clock className="h-8 w-8 text-slate-500 mb-2" />
+                <p className="text-xs font-medium text-slate-200">
+                  Historical capacity trends pending
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-sm">
+                  Sprint-over-sprint workload snapshots will populate as multi-week operational logs accumulate.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end justify-between gap-2 h-36 pt-4 border-b border-slate-800/80 pb-2">
+                  {historyData.map((item, idx) => {
+                    const heightPct = Math.min((item.load / (employee.weeklyCapacityHours * 1.25 || 50)) * 100, 100);
+                    const isOver = item.pct > 100;
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {item.load}h
+                        </span>
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-300 ${
+                            isOver
+                              ? 'bg-gradient-to-t from-rose-600 to-red-500 shadow-sm'
+                              : 'bg-gradient-to-t from-violet-600 to-cyan-500'
+                          }`}
+                          style={{ height: `${heightPct}%` }}
+                        />
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {item.week}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-              <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full bg-violet-500" />
-                <span>Standard Load</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full bg-rose-500" />
-                <span>Capacity Overload</span>
-              </div>
-              <span className="font-mono text-emerald-400">
-                Avg: {Math.round(historyData.reduce((s, i) => s + i.pct, 0) / historyData.length)}%
-              </span>
-            </div>
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-violet-500" />
+                    <span>Standard Load</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-rose-500" />
+                    <span>Capacity Overload</span>
+                  </div>
+                  <span className="font-mono text-emerald-400">
+                    Avg: {Math.round(historyData.reduce((s, i) => s + i.pct, 0) / historyData.length)}%
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -421,8 +435,8 @@ export default function EmployeeDetailPage() {
           </span>
           <p className="leading-relaxed">
             Operational risk scores ({Math.round(employee.burnoutRiskScore * 100)}% index) reflect
-            purely scheduling allocation, deadline density, and multi-week load history.
-            They are operational metrics designed to prevent delivery delays, not clinical or
+            purely active assigned workload divided by weekly capacity.
+            They are operational metrics designed to prevent delivery delays and over-allocation, not clinical or
             psychological predictions.
           </p>
         </div>

@@ -36,9 +36,10 @@ export default function NotificationsPage() {
   const { isAuthenticated, organization } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
 
-  const { tasks, isLoading: isTasksLoading } = useTasks();
-  const { members, isLoading: isMembersLoading } = useOrganizationMembers();
-  const { auditLogs, isLoading: isLogsLoading, refetch: refetchLogs } = useAuditLogs();
+  const { tasks, isLoading: isTasksLoading, error: tasksError, refetch: refetchTasks } = useTasks();
+  const { members, isLoading: isMembersLoading, error: membersError, refetch: refetchMembers } = useOrganizationMembers();
+  const { auditLogs, isLoading: isLogsLoading, error: logsError, refetch: refetchLogs } = useAuditLogs();
+  const loadError = isLive ? (tasksError || membersError || logsError) : null;
 
   const {
     notifications: mockNotifications,
@@ -156,6 +157,32 @@ export default function NotificationsPage() {
         )}
       </div>
 
+      {/* Actionable Error Banner */}
+      {loadError && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-rose-200">Failed to load organization alerts</p>
+              <p className="text-[11px] text-rose-300/80 mt-0.5">{loadError}</p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              refetchTasks();
+              refetchMembers();
+              refetchLogs();
+            }}
+            className="text-xs shrink-0"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Loading Skeleton */}
       {isLive && (isTasksLoading || isMembersLoading || isLogsLoading) && (
         <div className="space-y-3">
@@ -175,7 +202,7 @@ export default function NotificationsPage() {
       )}
 
       {/* Empty State */}
-      {!(isLive && (isTasksLoading || isMembersLoading || isLogsLoading)) && notifications.length === 0 && (
+      {!(isLive && (isTasksLoading || isMembersLoading || isLogsLoading)) && !loadError && notifications.length === 0 && (
         <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-12 text-center space-y-3">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-400">
             <CheckCircle2 className="h-6 w-6" />
