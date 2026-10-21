@@ -7,10 +7,12 @@ import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Dialog } from '@/components/ui/Dialog';
 import {
   ArrowLeft,
   Mail,
@@ -21,70 +23,60 @@ import {
   AlertTriangle,
   Award,
   Calendar,
+  FolderKanban,
+  UserPlus,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function EmployeeDetailPage() {
   const params = useParams();
   const employeeId = params?.id as string;
 
-  const { isAuthenticated, organization } = useAuth();
-  const isLive = Boolean(isAuthenticated && organization?.id);
+  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const isLive = isAuthenticated && Boolean(organization?.id);
+  const isManagerOrAdmin = authRole === 'organizer' || authRole === 'admin' || authRole === 'manager';
 
+  // Live hooks
   const { members: liveMembers, isLoading: isMembersLoading } = useOrganizationMembers();
-  const { tasks: liveTasks, isLoading: isTasksLoading } = useTasks();
+  const { projects: dbProjects, addProjectMember, refetch: refetchProjects } = useProjects();
+  const { tasks: dbTasks, assignTask, refetch: refetchTasks } = useTasks();
+
+  // Mock store fallback
   const { employees: mockEmployees, tasks: mockTasks } = useMockStore();
 
-  const liveMember = liveMembers.find((m) => m.userId === employeeId || m.id === employeeId);
-  const mockEmp = mockEmployees.find((e) => e.id === employeeId);
+  // Project Assignment Dialog State
+  const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
+  const [assignProjectId, setAssignProjectId] = React.useState<string>('');
+  const [assignTaskIds, setAssignTaskIds] = React.useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = React.useState(false);
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
 
-  const employee = React.useMemo(() => {
-    if (isLive) {
-      if (!liveMember) return null;
-      const assignedTasks = liveTasks.filter((t) => t.assignedTo === liveMember.userId);
-      const activeTasks = assignedTasks.filter((t) => t.status !== 'completed');
-      const loadHours = activeTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-      const capacity = liveMember.weeklyCapacityHours || 40;
-      const util = capacity > 0 ? loadHours / capacity : 0;
+  // Resolve employee either from live members or mock store
+  const liveMember = isLive ? liveMembers.find((m) => m.userId === employeeId || m.id === employeeId) : null;
+  const mockEmployee = !isLive ? mockEmployees.find((e) => e.id === employeeId) : null;
 
-      return {
-        id: liveMember.userId,
-        email: liveMember.email,
-        fullName: liveMember.fullName,
-        avatarUrl: liveMember.avatarUrl || undefined,
-        role: liveMember.role,
-        department: liveMember.department || 'Engineering',
-        jobTitle: liveMember.jobTitle || 'Team Member',
-        weeklyCapacityHours: capacity,
-        currentLoadHours: loadHours,
-        burnoutRiskScore: Math.min(Math.round(util * 100) / 100, 1.0),
-        skills: [] as { skillId: string; skillName: string; category: string; proficiency: string; verified: boolean }[],
-        activeTaskCount: activeTasks.length,
-        onTimeCompletionRate: 98,
-        location: 'HQ / Remote',
-      };
-    }
-    return mockEmp || null;
-  }, [isLive, liveMember, liveTasks, mockEmp]);
-
-  const tasks = isLive ? liveTasks : mockTasks;
-  const assignedTasks = tasks.filter((t) => t.assignedTo === employee?.id);
-
+  // Loading skeleton for live mode
   if (isLive && isMembersLoading) {
     return (
       <div className="space-y-6 animate-pulse p-6">
         <div className="h-6 w-32 bg-slate-800 rounded" />
         <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
-        <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+        </div>
       </div>
     );
   }
 
-  if (!employee) {
+  if (!liveMember && !mockEmployee) {
     return (
       <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-12 text-center space-y-3">
         <h3 className="text-lg font-bold text-white">Employee Not Found</h3>
         <p className="text-xs text-slate-400">
-          The requested employee identifier does not exist in the current workspace.
+          The requested employee identifier does not exist in the active organization directory.
         </p>
         <Link href="/employees">
           <Button variant="secondary" size="sm">
@@ -96,9 +88,87 @@ export default function EmployeeDetailPage() {
     );
   }
 
-  const utilPct = employee.weeklyCapacityHours > 0
-    ? Math.round((employee.currentLoadHours / employee.weeklyCapacityHours) * 100)
-    : 0;
+  // Unified employee representation
+  const targetUid = isLive ? (liveMember?.userId || employeeId) : mockEmployee!.id;
+  const fullName = isLive ? liveMember!.fullName : mockEmployee!.fullName;
+  const email = isLive ? liveMember!.email : mockEmployee!.email;
+  const role = isLive ? liveMember!.role : mockEmployee!.role;
+  const department = isLive ? (liveMember!.department || 'Engineering') : mockEmployee!.department;
+  const jobTitle = isLive ? (liveMember!.jobTitle || 'Team Member') : mockEmployee!.jobTitle;
+  const weeklyCapacityHours = isLive ? (liveMember!.weeklyCapacityHours ?? 40) : mockEmployee!.weeklyCapacityHours;
+
+  // Resolve assigned tasks
+  const assignedTasks = isLive
+    ? dbTasks.filter((t) => t.assignedTo === targetUid)
+    : mockTasks.filter((t) => t.assignedTo === mockEmployee!.id);
+
+  const activeTasks = assignedTasks.filter((t) => t.status !== 'completed');
+
+  const currentLoadHours = isLive
+    ? activeTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+    : mockEmployee!.currentLoadHours;
+
+  const utilPct = weeklyCapacityHours > 0 ? Math.round((currentLoadHours / weeklyCapacityHours) * 100) : 0;
+  const riskIndex = Math.min(100, Math.round(utilPct * 0.9));
+
+  // Resolve allocated projects
+  const allocatedProjects = isLive
+    ? dbProjects.filter((p) => p.memberIds.includes(targetUid))
+    : [];
+
+  const employee = {
+    id: targetUid,
+    fullName,
+    email,
+    role,
+    department,
+    jobTitle,
+    weeklyCapacityHours,
+    currentLoadHours,
+    burnoutRiskScore: Math.min(Math.round(utilPct) / 100, 1.0),
+    skills: mockEmployee?.skills || [],
+    avatarUrl: liveMember?.avatarUrl || mockEmployee?.avatarUrl,
+  };
+
+  const handleOpenAssignModal = () => {
+    setAssignError(null);
+    setAssignSuccess(null);
+    setAssignTaskIds([]);
+    const unallocated = dbProjects.find((p) => !p.memberIds.includes(targetUid));
+    setAssignProjectId(unallocated ? unallocated.id : (dbProjects[0]?.id || ''));
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignProjectId || !targetUid) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+
+    const res = await addProjectMember(assignProjectId, targetUid);
+    if (res.error) {
+      setAssignLoading(false);
+      setAssignError(res.error);
+      return;
+    }
+
+    if (assignTaskIds.length > 0) {
+      for (const taskId of assignTaskIds) {
+        await assignTask(taskId, targetUid);
+      }
+      await refetchTasks();
+    }
+
+    await refetchProjects();
+    setAssignLoading(false);
+    setAssignSuccess(`Assigned ${fullName} to project initiative.`);
+    setTimeout(() => {
+      setIsAssignModalOpen(false);
+      setAssignSuccess(null);
+    }, 1500);
+  };
 
   const initials = employee.fullName
     .split(' ')
@@ -131,32 +201,32 @@ export default function EmployeeDetailPage() {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
+          {isManagerOrAdmin && isLive && (
+            <Button variant="secondary" size="sm" onClick={handleOpenAssignModal}>
+              <FolderKanban className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+              <span>Assign Project</span>
+            </Button>
+          )}
           <Badge variant="violet" size="sm">
             Profile ID: {employee.id.slice(0, 8)}...
           </Badge>
           <Badge
-            variant={
-              utilPct > 100 ? 'rose' : utilPct >= 80 ? 'amber' : 'emerald'
-            }
+            variant={utilPct > 100 ? 'rose' : utilPct >= 80 ? 'amber' : 'emerald'}
             size="sm"
           >
-            {utilPct > 100
-              ? 'Overload Alert'
-              : utilPct >= 80
-              ? 'Near Limit'
-              : 'Optimal Capacity'}
+            {utilPct > 100 ? 'Overload Alert' : utilPct >= 80 ? 'Near Limit' : 'Optimal Capacity'}
           </Badge>
         </div>
       </div>
 
       {/* Hero Profile Header Card */}
-      <Card className="relative overflow-hidden border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
+      <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-xl font-bold text-white shadow-glow border border-violet-400/40">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-xl font-bold text-white shadow-lg border border-violet-400/40">
               {initials}
             </div>
-            <div className="space-y-1">
+            <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-extrabold text-white">
                   {employee.fullName}
@@ -166,59 +236,51 @@ export default function EmployeeDetailPage() {
                   {employee.role}
                 </Badge>
               </div>
-              <p className="text-xs sm:text-sm font-medium text-violet-300">
-                {employee.jobTitle} • {employee.department}
-              </p>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-1">
-                <span className="flex items-center gap-1">
+              <p className="text-sm text-slate-300 font-medium">{jobTitle}</p>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
+                <span className="flex items-center gap-1 font-mono">
                   <Mail className="h-3.5 w-3.5 text-slate-500" />
-                  {employee.email}
+                  {email}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5 text-slate-500" />
-                  {employee.location}
+                  {isLive ? 'Active Organization Member' : 'San Francisco, CA'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-row sm:flex-col items-end gap-2 text-right">
-            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-              Current Weekly Load
+          <div className="flex flex-col items-end gap-1 min-w-[200px] text-right">
+            <span className="text-xs text-slate-400 uppercase font-semibold">
+              Weekly Allocation Load
+            </span>
+            <div className="text-2xl font-bold font-mono text-white">
+              {currentLoadHours}h / {weeklyCapacityHours}h ({utilPct}%)
             </div>
-            <div className="text-2xl font-bold text-white font-mono">
-              <span
-                className={
-                  utilPct > 100
-                    ? 'text-rose-400'
-                    : utilPct >= 80
-                    ? 'text-amber-400'
-                    : 'text-emerald-400'
-                }
-              >
-                {employee.currentLoadHours}h
-              </span>
-              <span className="text-slate-400 text-sm">
-                {' '}
-                / {employee.weeklyCapacityHours}h ({utilPct}%)
-              </span>
-            </div>
-            <div className="w-44">
+            <div className="w-full">
               <ProgressBar value={utilPct} />
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Grid: Skills Matrix + Workload History */}
+      {/* Allocated Projects & Capacity Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Verified Skills Matrix */}
+        {/* Allocated Projects */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Award className="h-4 w-4 text-cyan-400" />
-              <CardTitle>Skill Matrix & Proficiencies</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-cyan-400" />
+                <CardTitle>Allocated Projects ({allocatedProjects.length})</CardTitle>
+              </div>
+              {isManagerOrAdmin && isLive && (
+                <Button variant="ghost" size="sm" onClick={handleOpenAssignModal} className="text-xs text-cyan-400">
+                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                  <span>Assign</span>
+                </Button>
+              )}
             </div>
             <CardDescription>
               Verified technical capabilities used by the deterministic task matching engine
@@ -268,12 +330,12 @@ export default function EmployeeDetailPage() {
           </CardContent>
         </Card>
 
-        {/* 8-Week Historical Workload Trend */}
+        {/* Operational Scheduling Risk */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-violet-400" />
-              <CardTitle>8-Week Capacity History</CardTitle>
+              <CardTitle>Operational Capacity Overview</CardTitle>
             </div>
             <CardDescription>
               Sprint utilization benchmarks ({employee.weeklyCapacityHours}h standard baseline)
@@ -351,7 +413,7 @@ export default function EmployeeDetailPage() {
             </Link>
           </div>
           <CardDescription>
-            Active commitments contributing to this member's current weekly workload
+            Active commitments contributing to this member&apos;s current weekly workload
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -441,6 +503,75 @@ export default function EmployeeDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Assign to Project Dialog */}
+      <Dialog
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title={`Assign ${fullName} to Project`}
+        description="Allocate this team member to an active project portfolio initiative."
+      >
+        <form onSubmit={handleAssignSubmit} className="space-y-4 py-2">
+          {assignError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{assignError}</span>
+            </div>
+          )}
+
+          {assignSuccess && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{assignSuccess}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Select Target Project *
+            </label>
+            {dbProjects.length === 0 ? (
+              <p className="text-xs text-amber-400">No active projects found in workspace.</p>
+            ) : (
+              <select
+                value={assignProjectId}
+                onChange={(e) => setAssignProjectId(e.target.value)}
+                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                required
+              >
+                <option value="" disabled>-- Select a Project --</option>
+                {dbProjects.map((p) => {
+                  const isAllocated = p.memberIds.includes(targetUid);
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.priority.toUpperCase()} Priority) {isAllocated ? '— Already Allocated' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsAssignModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={assignLoading || !assignProjectId}
+            >
+              {assignLoading ? 'Assigning...' : 'Confirm Project Assignment'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

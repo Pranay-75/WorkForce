@@ -44,6 +44,7 @@ export default function WorkloadCapacityPage() {
     isLoading: isTasksLoading,
     assignTask: dbAssignTask,
     updateTaskDetails: dbUpdateTaskDetails,
+    updateTaskStatus: dbUpdateTaskStatus,
     refetch: refetchTasks,
   } = useTasks();
 
@@ -55,6 +56,7 @@ export default function WorkloadCapacityPage() {
     activeRole: mockRole,
     currentUserId: mockUserId,
     updateTaskDetails: mockUpdateTaskDetails,
+    updateTaskStatus: mockUpdateTaskStatus,
     applyRedistribution: mockApplyRedistribution,
   } = useMockStore();
 
@@ -261,6 +263,23 @@ export default function WorkloadCapacityPage() {
   const handleApplyTransfer = async (taskId: string, targetEmpId: string) => {
     await handleReassignTask(taskId, targetEmpId);
   };
+
+  const handleCompleteTask = async (taskId: string) => {
+    if (isLive) {
+      await dbUpdateTaskStatus(taskId, 'completed');
+    } else {
+      mockUpdateTaskStatus(taskId, 'completed');
+    }
+  };
+
+  if (isLive && (isMembersLoading || isTasksLoading)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live organization telemetry &amp; workload allocations...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">

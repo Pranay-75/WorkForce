@@ -16,7 +16,19 @@ import {
   Activity,
   AlertTriangle,
   RefreshCw,
+  Users,
 } from 'lucide-react';
+
+interface InsightMember {
+  id: string;
+  fullName: string;
+  department: string;
+  currentLoadHours: number;
+  weeklyCapacityHours: number;
+  burnoutRiskScore: number;
+  activeTaskCount: number;
+  onTimeCompletionRate: number;
+}
 
 export default function InsightsPage() {
   const { isAuthenticated, organization } = useAuth();
@@ -106,14 +118,14 @@ export default function InsightsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Employee Performance & Operational Risk
+              Employee Performance &amp; Operational Risk
             </h2>
             <Badge variant="rose" size="sm">
               {isLive ? 'Live Operational Risk Matrix' : 'Operational Risk Demo'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Track milestone velocities, delivery metrics, and operational scheduling congestion
+            Deterministic workload congestion metrics, capacity distributions, and scheduling health
           </p>
         </div>
 
@@ -140,7 +152,7 @@ export default function InsightsPage() {
           <ShieldCheck className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs">
             <span className="font-bold text-white text-sm block">
-              Ethical Risk & Operational Metric Guidelines
+              Ethical Risk &amp; Operational Metric Guidelines
             </span>
             <p className="text-slate-300 leading-relaxed">
               WorkForce strictly frames all risk indexes as <strong>operational capacity and delivery metrics</strong>. Scores are calculated deterministically from active assigned task hours divided by weekly capacity. They are designed to assist managers in balancing workloads and do not constitute psychological or clinical predictions.
@@ -155,7 +167,7 @@ export default function InsightsPage() {
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[11px] uppercase font-bold text-slate-400">
-                Avg. On-Time Completion
+                Verified Team Members
               </span>
               <div className="text-2xl font-bold font-mono text-emerald-400">
                 {avgOnTime}
@@ -164,7 +176,7 @@ export default function InsightsPage() {
                 {isLive && avgOnTime === 'N/A' ? 'Awaiting completed tasks' : 'Reliable delivery track record'}
               </p>
             </div>
-            <TrendingUp className="h-8 w-8 text-emerald-400 opacity-80" />
+            <Users className="h-8 w-8 text-emerald-400 opacity-80" />
           </CardContent>
         </Card>
 
@@ -196,7 +208,7 @@ export default function InsightsPage() {
                 {isLive && governanceCompliance === 'N/A' ? 'Audit trail logging active' : 'Human sign-off on all assignments'}
               </p>
             </div>
-            <ShieldCheck className="h-8 w-8 text-violet-400 opacity-80" />
+            <AlertTriangle className="h-8 w-8 text-rose-400 opacity-80" />
           </CardContent>
         </Card>
       </div>
@@ -206,7 +218,7 @@ export default function InsightsPage() {
         <CardHeader>
           <CardTitle>Operational Scheduling Risk Index</CardTitle>
           <CardDescription>
-            Heuristic indicators based on active task density and capacity allocation
+            Deterministic indicators based on active task density and capacity allocation
           </CardDescription>
         </CardHeader>
         <CardContent>

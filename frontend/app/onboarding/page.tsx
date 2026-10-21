@@ -263,14 +263,14 @@ export default function OnboardingPage() {
               )}
             </div>
 
-            {/* Admin Role Confirmation Notice */}
+            {/* Organizer Role Confirmation Notice */}
             <div className="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 text-xs text-slate-300 space-y-1.5">
               <div className="flex items-center gap-1.5 font-semibold text-violet-300">
                 <ShieldCheck className="h-4 w-4 text-violet-400" />
-                Automatic Administrator Privileges
+                Automatic Organizer & Ownership Privileges
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                As the workspace creator, your account will be bootstrapped as the initial Active Administrator. You will have full access to invite team members, configure project boards, and approve AI recommendations.
+                As the workspace creator, your account is bootstrapped as the initial Workspace Organizer and Owner. You will have full authority over organization settings, member invitations (Admins, Managers, Employees), and workforce governance.
               </p>
             </div>
 

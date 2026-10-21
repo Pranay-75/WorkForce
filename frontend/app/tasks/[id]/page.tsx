@@ -63,7 +63,7 @@ export default function TaskDetailPage() {
   const currentUserId = isLive ? (user?.id || '') : mockUserId;
 
   const task = tasks.find((t) => t.id === taskId);
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
   const isAssignedToMe = task?.assignedTo === currentUserId;
   const canUpdateStatus = isManagerOrAdmin || isAssignedToMe;
 

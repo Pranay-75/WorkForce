@@ -30,3 +30,5 @@ export function createClient() {
     supabaseAnonKey || 'dummy-anon-key-for-build'
   );
 }
+
+export const getSupabaseBrowserClient = createClient;

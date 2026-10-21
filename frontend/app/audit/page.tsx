@@ -15,6 +15,16 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+interface DisplayAuditEvent {
+  id: string;
+  action: string;
+  entityType: string;
+  entityTitle: string;
+  actorName: string;
+  details: string;
+  timestamp: string;
+}
+
 export default function AuditPage() {
   const { isAuthenticated, organization } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
@@ -29,6 +39,7 @@ export default function AuditPage() {
   const { auditEvents: mockAuditEvents } = useMockStore();
 
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const isLoading = isLive && isAuditLoading;
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedAction, setSelectedAction] = React.useState('all');
@@ -55,9 +66,9 @@ export default function AuditPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Compliance & System Audit Trail
+              Compliance &amp; System Audit Trail
             </h2>
-            <Badge variant="cyan" size="sm">
+            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
               <ShieldCheck className="h-3 w-3 mr-1" />
               {isLive ? 'PostgreSQL Immutable Log' : 'Demo Memory Log'}
             </Badge>
@@ -125,37 +136,43 @@ export default function AuditPage() {
       )}
 
       {/* Audit Timeline List */}
-      <div className="space-y-3">
-        {filteredEvents.map((ev) => (
-          <Card
-            key={ev.id}
-            className="border-slate-800/90 hover:border-slate-700 transition-colors"
-          >
-            <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
-                      ev.entityType === 'Recommendation'
-                        ? 'violet'
-                        : ev.entityType === 'Workload'
-                        ? 'cyan'
-                        : ev.entityType === 'Task'
-                        ? 'emerald'
-                        : 'slate'
-                    }
-                    size="sm"
-                  >
-                    {ev.entityType}
-                  </Badge>
-                  <span className="text-xs font-bold text-white">
-                    {ev.action}
-                  </span>
-                </div>
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center min-h-[300px] space-y-3">
+          <RefreshCw className="h-7 w-7 animate-spin text-violet-400" />
+          <p className="text-xs text-slate-400">Loading immutable organization audit events...</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredEvents.map((ev) => (
+            <Card
+              key={ev.id}
+              className="border-slate-800/90 hover:border-slate-700 transition-colors"
+            >
+              <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        ev.entityType === 'Recommendation'
+                          ? 'violet'
+                          : ev.entityType === 'Project'
+                          ? 'cyan'
+                          : ev.entityType === 'Task'
+                          ? 'emerald'
+                          : 'slate'
+                      }
+                      size="sm"
+                    >
+                      {ev.entityType}
+                    </Badge>
+                    <span className="text-xs font-bold text-white">
+                      {ev.action}
+                    </span>
+                  </div>
 
-                <h4 className="text-sm font-semibold text-violet-300">
-                  {ev.entityTitle}
-                </h4>
+                  <h4 className="text-sm font-semibold text-violet-300">
+                    {ev.entityTitle}
+                  </h4>
 
                 <p className="text-xs text-slate-300 leading-relaxed font-mono break-all">
                   {ev.details}
@@ -169,7 +186,7 @@ export default function AuditPage() {
               </div>
 
               <Badge variant="slate" size="sm" className="font-mono text-[10px] shrink-0">
-                Event ID: {ev.id.slice(0, 8)}...
+                Event ID: {ev.id.slice(0, 12)}...
               </Badge>
             </div>
           </Card>
@@ -184,6 +201,7 @@ export default function AuditPage() {
           </div>
         )}
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

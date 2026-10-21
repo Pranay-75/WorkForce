@@ -12,6 +12,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Dialog } from '@/components/ui/Dialog';
 import {
   FolderKanban,
   Calendar,
@@ -22,19 +23,34 @@ import {
   Clock,
   Sparkles,
   AlertCircle,
+  CheckCircle2,
   RefreshCw,
+  UserPlus,
+  Trash2,
 } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params?.id as string;
 
-  const { isAuthenticated, organization } = useAuth();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
+  const isManagerOrAdmin = authRole === 'organizer' || authRole === 'admin' || authRole === 'manager';
 
   // Live hooks
-  const { projects: dbProjects, isLoading: isProjectsLoading } = useProjects();
-  const { tasks: dbTasks, isLoading: isTasksLoading } = useTasks();
+  const {
+    projects: dbProjects,
+    isLoading: isProjectsLoading,
+    addProjectMember,
+    removeProjectMember,
+    refetch: refetchProjects,
+  } = useProjects();
+  const {
+    tasks: dbTasks,
+    isLoading: isTasksLoading,
+    assignTask,
+    refetch: refetchTasks,
+  } = useTasks();
   const { members: orgMembers, isLoading: isMembersLoading } = useOrganizationMembers();
 
   // Mock store fallback
@@ -45,6 +61,17 @@ export default function ProjectDetailPage() {
 
   const project = projects.find((p) => p.id === projectId);
   const [activeTab, setActiveTab] = React.useState<'all' | 'todo' | 'in_progress' | 'completed'>('all');
+
+  // Member Assignment Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
+  const [selectedMemberId, setSelectedMemberId] = React.useState<string>('');
+  const [assignTaskIds, setAssignTaskIds] = React.useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = React.useState(false);
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
+  // Card Action feedback
+  const [actionNotice, setActionNotice] = React.useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // Loading skeleton
   if (isLive && isProjectsLoading) {
@@ -105,8 +132,79 @@ export default function ProjectDetailPage() {
   const progressPct =
     project.totalHours > 0 ? Math.round((project.completedHours / project.totalHours) * 100) : 0;
 
+  // Handlers for Member Allocation
+  const handleOpenAssignModal = () => {
+    setAssignError(null);
+    setAssignSuccess(null);
+    setAssignTaskIds([]);
+    const unallocated = orgMembers.find((m) => !project.memberIds.includes(m.userId));
+    setSelectedMemberId(unallocated ? unallocated.userId : (orgMembers[0]?.userId || ''));
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMemberId) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+
+    const res = await addProjectMember(project.id, selectedMemberId);
+    if (res.error) {
+      setAssignLoading(false);
+      setAssignError(res.error);
+      return;
+    }
+
+    if (assignTaskIds.length > 0) {
+      for (const taskId of assignTaskIds) {
+        await assignTask(taskId, selectedMemberId);
+      }
+      await refetchTasks();
+    }
+
+    await refetchProjects();
+    setAssignLoading(false);
+    const assignedMember = orgMembers.find((m) => m.userId === selectedMemberId);
+    setAssignSuccess(`Assigned ${assignedMember?.fullName || 'member'} to ${project.name}.`);
+    setTimeout(() => {
+      setIsAssignModalOpen(false);
+      setAssignSuccess(null);
+    }, 1500);
+  };
+
+  const handleRemoveMember = async (userId: string, memberName: string) => {
+    if (!confirm(`Remove ${memberName} from ${project.name}?`)) return;
+    const res = await removeProjectMember(project.id, userId);
+    if (res.error) {
+      setActionNotice({ type: 'error', text: res.error });
+    } else {
+      setActionNotice({ type: 'success', text: `${memberName} was removed from the project.` });
+      setTimeout(() => setActionNotice(null), 3000);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Action Notice */}
+      {actionNotice && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center gap-2 animate-in fade-in ${
+            actionNotice.type === 'error'
+              ? 'border-rose-500/40 bg-rose-950/30 text-rose-300'
+              : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
+          }`}
+        >
+          {actionNotice.type === 'error' ? (
+            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          )}
+          <span>{actionNotice.text}</span>
+        </div>
+      )}
+
       {/* Top Breadcrumb Header */}
       <div className="flex items-center justify-between">
         <Link href="/projects">
@@ -175,11 +273,17 @@ export default function ProjectDetailPage() {
 
       {/* Assigned Team Members Row */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-cyan-400" />
             <CardTitle>Allocated Team Members ({projectMembers.length})</CardTitle>
           </div>
+          {isManagerOrAdmin && (
+            <Button variant="secondary" size="sm" onClick={handleOpenAssignModal}>
+              <UserPlus className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+              <span>Assign Member</span>
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {projectMembers.length === 0 ? (
@@ -191,10 +295,10 @@ export default function ProjectDetailPage() {
               {projectMembers.map((m) => (
                 <div
                   key={m.id}
-                  className="rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/50 transition-all group"
+                  className="rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/50 transition-all group flex items-center justify-between"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white shrink-0">
                       {m.fullName
                         .split(' ')
                         .map((n) => n[0])
@@ -209,6 +313,17 @@ export default function ProjectDetailPage() {
                       </span>
                     </div>
                   </div>
+                  {isManagerOrAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveMember(m.id, m.fullName)}
+                      className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1 h-7 w-7 shrink-0 ml-2"
+                      title="Remove from project"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -320,12 +435,121 @@ export default function ProjectDetailPage() {
             <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400">
               <CheckSquare className="mx-auto h-8 w-8 text-slate-500 mb-2" />
               <p className="text-xs font-medium text-slate-300">
-                No tasks matching "{activeTab}" status.
+                No tasks matching &quot;{activeTab}&quot; status.
               </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Assign Member Modal */}
+      <Dialog
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title={`Assign Member to ${project.name}`}
+        description="Select an active organization member to allocate to this project initiative."
+      >
+        <form onSubmit={handleAssignMember} className="space-y-4 py-2">
+          {assignError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{assignError}</span>
+            </div>
+          )}
+
+          {assignSuccess && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{assignSuccess}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Select Active Member *
+            </label>
+            {orgMembers.length === 0 ? (
+              <p className="text-xs text-amber-400">No active members found in organization.</p>
+            ) : (
+              <select
+                value={selectedMemberId}
+                onChange={(e) => setSelectedMemberId(e.target.value)}
+                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                required
+              >
+                <option value="" disabled>-- Select a Team Member --</option>
+                {orgMembers.map((m) => {
+                  const isAllocated = project.memberIds.includes(m.userId);
+                  return (
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName} ({m.role.toUpperCase()} • {m.department || 'Engineering'}) {isAllocated ? '— Already Allocated' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          {/* Optional Task Assignment Selection */}
+          <div className="space-y-2 pt-2 border-t border-slate-800">
+            <label className="block text-xs font-semibold text-slate-300">
+              Optionally Assign Open Tasks from this Project:
+            </label>
+            {projectTasks.filter((t) => !t.assignedTo).length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic">
+                No unassigned tasks found for this project.
+              </p>
+            ) : (
+              <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+                {projectTasks
+                  .filter((t) => !t.assignedTo)
+                  .map((t) => (
+                    <label
+                      key={t.id}
+                      className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assignTaskIds.includes(t.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAssignTaskIds((prev) => [...prev, t.id]);
+                          } else {
+                            setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
+                          }
+                        }}
+                        className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                      />
+                      <span className="truncate">{t.title}</span>
+                      <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                        {t.estimatedHours}h
+                      </span>
+                    </label>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsAssignModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={assignLoading || !selectedMemberId}
+            >
+              {assignLoading ? 'Assigning...' : 'Confirm Allocation'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

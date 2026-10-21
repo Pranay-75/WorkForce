@@ -7,6 +7,7 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { useMockStore } from '@/lib/mockStore';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -64,6 +65,7 @@ export default function ReportsPage() {
   const projects = isLive ? liveProjects : mockProjects;
   const tasks = isLive ? liveTasks : mockTasks;
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const liveAuditCount = liveAuditLogs.length;
 
   // Reconcile employee list with live assigned tasks
   const employees = React.useMemo(() => {
@@ -139,7 +141,7 @@ export default function ReportsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Reports & Operational Analytics
+              Reports &amp; Operational Analytics
             </h2>
             <Badge variant="violet" size="sm">
               {isLive ? 'PostgreSQL Live Analytics' : 'Demo Analytics Suite'}
@@ -218,10 +220,12 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-cyan-400">
-              {auditEvents.length} Recorded
+              {isLive
+                ? (liveAuditCount !== null ? `${liveAuditCount} Logged` : 'Active')
+                : `${mockAuditEvents.length} Recorded`}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              100% immutable action logs preserved
+              Immutable organization governance trail preserved
             </p>
           </CardContent>
         </Card>
@@ -230,7 +234,7 @@ export default function ReportsPage() {
       {/* Department Workload Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Department Capacity & Utilization Summary</CardTitle>
+          <CardTitle>Department Capacity &amp; Utilization Summary</CardTitle>
           <CardDescription>
             Aggregated metrics for quarterly resource planning and hiring forecasts
           </CardDescription>

@@ -43,15 +43,21 @@ def generate_custom_jwt(
 # =============================================================================
 
 class MockQueryBuilder:
-    def __init__(self, data=None, error=None, single=False):
+    def __init__(self, data=None, error=None, single=False, parent=None):
         self._data = data if data is not None else []
         self._error = error
         self._single = single
+        self._parent = parent
+        self._is_order_query = False
 
     def select(self, *args, **kwargs):
         return self
 
     def eq(self, *args, **kwargs):
+        return self
+
+    def order(self, *args, **kwargs):
+        self._is_order_query = True
         return self
 
     def limit(self, *args, **kwargs):
@@ -67,14 +73,18 @@ class MockQueryBuilder:
     def execute(self):
         if self._error:
             raise self._error
-        data = self._data[0] if (self._single and self._data) else self._data
+        if self._is_order_query and self._parent and self._parent.earliest_member_data is not None:
+            data = self._parent.earliest_member_data
+        else:
+            data = self._data[0] if (self._single and self._data) else self._data
         return type("SupabaseResponse", (), {"data": data, "error": None})()
 
 
 class MockSupabaseAdmin:
-    def __init__(self, memberships_data=None, profiles_data=None, db_error=None, fail_on_auth_api=False):
+    def __init__(self, memberships_data=None, profiles_data=None, earliest_member_data=None, db_error=None, fail_on_auth_api=False):
         self.memberships_data = memberships_data if memberships_data is not None else []
         self.profiles_data = profiles_data if profiles_data is not None else []
+        self.earliest_member_data = earliest_member_data
         self.db_error = db_error
         self.fail_on_auth_api = fail_on_auth_api
 
@@ -82,10 +92,11 @@ class MockSupabaseAdmin:
         if self.db_error:
             raise self.db_error
         if table_name == "organization_memberships":
-            return MockQueryBuilder(data=self.memberships_data)
+            return MockQueryBuilder(data=self.memberships_data, parent=self)
         elif table_name == "user_profiles":
-            return MockQueryBuilder(data=self.profiles_data)
-        return MockQueryBuilder(data=[])
+            return MockQueryBuilder(data=self.profiles_data, parent=self)
+        return MockQueryBuilder(data=[], parent=self)
+
 
     @property
     def auth(self):
@@ -685,3 +696,165 @@ def test_health_check():
     data = response.json()
     assert data["status"] == "healthy"
     assert data["version"] == "0.2.0"
+
+
+# =============================================================================
+# 9. ORGANIZER AUTHORIZATION & LEAST PRIVILEGE GOVERNANCE TESTS
+# =============================================================================
+
+def test_rbac_organizer_with_verified_token(monkeypatch):
+    """Verify an Organizer role has access to organizer, admin, and manager restricted areas"""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[{
+            "role": "admin",
+            "organization_id": org_id,
+            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+        }],
+        earliest_member_data=[{"user_id": organizer_uid}],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(
+        sub=organizer_uid,
+        email="founder@acme.corp"
+    )
+
+    # 1. Accessing Organizer Area -> 200
+    res_org = client.get("/api/v1/auth/organizer-area", headers={"Authorization": f"Bearer {token}"})
+    assert res_org.status_code == 200
+    assert res_org.json()["role"] == "organizer"
+    assert res_org.json()["organizer"] == "founder@acme.corp"
+
+    # 2. Accessing Admin Area -> 200
+    res_adm = client.get("/api/v1/auth/admin-area", headers={"Authorization": f"Bearer {token}"})
+    assert res_adm.status_code == 200
+
+    # 3. Accessing Manager Area -> 200
+    res_mgr = client.get("/api/v1/auth/manager-area", headers={"Authorization": f"Bearer {token}"})
+    assert res_mgr.status_code == 200
+
+    # 4. Accessing Profile -> role is organizer
+    res_me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res_me.status_code == 200
+    assert res_me.json()["role"] == "organizer"
+
+
+def test_admin_forbidden_from_organizer_area(monkeypatch):
+    """Verify an ordinary Admin (non-creator) cannot access Organizer-exclusive endpoints (Least Privilege)"""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    founder_uid = "b0000000-0000-0000-0000-000000000099"
+    admin_uid = "b0000000-0000-0000-0000-000000000008"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[{
+            "role": "admin",
+            "organization_id": org_id,
+            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+        }],
+        earliest_member_data=[{"user_id": founder_uid}],  # Different founder UID
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    admin_token = generate_custom_jwt(
+        sub=admin_uid,
+        email="chloe.dubois@acme.corp"
+    )
+
+    # 1. Ordinary Admin CAN access Admin area
+    res_adm = client.get("/api/v1/auth/admin-area", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_adm.status_code == 200
+    assert res_adm.json()["role"] == "admin"
+
+    # 2. Ordinary Admin CANNOT access Organizer area (403 Forbidden)
+    res_org = client.get("/api/v1/auth/organizer-area", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_org.status_code == 403
+    assert "Access denied" in res_org.json()["detail"]
+    assert "organizer" in res_org.json()["detail"]
+
+
+def test_manager_and_employee_forbidden_from_organizer_area(monkeypatch):
+    """Verify Managers and Employees are strictly blocked from Organizer-exclusive endpoints"""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+
+    # Test Manager
+    mock_db_mgr = MockSupabaseAdmin(
+        memberships_data=[{
+            "role": "manager",
+            "organization_id": org_id,
+            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+        }],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db_mgr)
+    mgr_token = generate_custom_jwt(sub="b0000000-0000-0000-0000-000000000001", email="sarah.connor@acme.corp")
+
+    res_mgr = client.get("/api/v1/auth/organizer-area", headers={"Authorization": f"Bearer {mgr_token}"})
+    assert res_mgr.status_code == 403
+
+    # Test Employee
+    mock_db_emp = MockSupabaseAdmin(
+        memberships_data=[{
+            "role": "employee",
+            "organization_id": org_id,
+            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+        }],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db_emp)
+    emp_token = generate_custom_jwt(sub="b0000000-0000-0000-0000-000000000002", email="alex.chen@acme.corp")
+
+    res_emp = client.get("/api/v1/auth/organizer-area", headers={"Authorization": f"Bearer {emp_token}"})
+    assert res_emp.status_code == 403
+
+
+def test_multi_org_role_isolation_organizer_and_employee(monkeypatch):
+    """Verify multi-org role isolation: Organizer in Org 1 cannot use privileged access in Org 2"""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    user_uid = "b0000000-0000-0000-0000-000000000050"
+    org_1 = "a0000000-0000-0000-0000-000000000001"
+    org_2 = "a0000000-0000-0000-0000-000000000002"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "role": "admin",
+                "organization_id": org_1,
+                "organizations": {"id": org_1, "name": "Org One", "slug": "org-one"}
+            },
+            {
+                "role": "employee",
+                "organization_id": org_2,
+                "organizations": {"id": org_2, "name": "Org Two", "slug": "org-two"}
+            }
+        ],
+        earliest_member_data=[{"user_id": user_uid}],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=user_uid, email="user@acme.corp")
+
+    # 1. With X-Organization-Id: Org 1 -> Has Organizer access
+    res_org1 = client.get(
+        "/api/v1/auth/organizer-area",
+        headers={"Authorization": f"Bearer {token}", "X-Organization-Id": org_1}
+    )
+    assert res_org1.status_code == 200
+    assert res_org1.json()["role"] == "organizer"
+
+    # 2. With X-Organization-Id: Org 2 -> Strictly Employee access; Organizer & Admin areas return 403
+    res_org2 = client.get(
+        "/api/v1/auth/organizer-area",
+        headers={"Authorization": f"Bearer {token}", "X-Organization-Id": org_2}
+    )
+    assert res_org2.status_code == 403
+    assert "Access denied" in res_org2.json()["detail"]
+
+    res_admin2 = client.get(
+        "/api/v1/auth/admin-area",
+        headers={"Authorization": f"Bearer {token}", "X-Organization-Id": org_2}
+    )
+    assert res_admin2.status_code == 403

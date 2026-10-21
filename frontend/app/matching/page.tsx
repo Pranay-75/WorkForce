@@ -215,6 +215,15 @@ export default function MatchingHubPage() {
     }
   };
 
+  if (isLive && isTasksLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live organization tasks &amp; matching parameters...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Page Header */}
@@ -224,7 +233,7 @@ export default function MatchingHubPage() {
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
               Explainable AI Task Matching Hub
             </h2>
-            <Badge variant="violet" size="sm">
+            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
               <Sparkles className="h-3 w-3 mr-1" />
               {isLive ? 'Live Advisory Engine' : 'Gemini Advisory Demo'}
             </Badge>

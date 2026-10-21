@@ -46,25 +46,25 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Employees',
         href: '/employees',
         icon: Users,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Projects',
         href: '/projects',
         icon: FolderKanban,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Tasks',
         href: '/tasks',
         icon: CheckSquare,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
     ],
   },
@@ -76,19 +76,19 @@ const masterNavigationGroups: NavGroup[] = [
         href: '/matching',
         icon: Sparkles,
         badge: 'AI',
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Workload',
         href: '/workload',
         icon: BarChart3,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Employee Insights',
         href: '/insights',
         icon: Flame,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
     ],
   },
@@ -99,26 +99,26 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Reports',
         href: '/reports',
         icon: FileSpreadsheet,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Audit Logs',
         href: '/audit',
         icon: History,
-        allowedRoles: ['admin'],
+        allowedRoles: ['organizer', 'admin'],
       },
       {
         name: 'Notifications',
         href: '/notifications',
         icon: Bell,
         badge: '3',
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Settings',
         href: '/settings',
         icon: Settings,
-        allowedRoles: ['admin', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'hr'],
       },
     ],
   },
@@ -127,9 +127,13 @@ const masterNavigationGroups: NavGroup[] = [
 export function AppSidebar({
   isMobileOpen,
   setIsMobileOpen,
+  isCollapsed: controlledIsCollapsed,
+  setIsCollapsed: controlledSetIsCollapsed,
 }: {
   isMobileOpen?: boolean;
   setIsMobileOpen?: (open: boolean) => void;
+  isCollapsed?: boolean;
+  setIsCollapsed?: (collapsed: boolean) => void;
 }) {
   const pathname = usePathname();
   const { activeRole: mockRole, currentUser: mockUser } = useMockStore();
@@ -160,6 +164,7 @@ export function AppSidebar({
       items: group.items.filter((item) => item.allowedRoles.includes(activeRole)),
     }))
     .filter((group) => group.items.length > 0);
+
 
   return (
     <>
@@ -288,6 +293,7 @@ export function AppSidebar({
               'flex items-center gap-3 rounded-xl p-2 bg-zinc-900/60 border border-zinc-800/60',
               isCollapsed && 'justify-center p-1.5'
             )}
+            title={isCollapsed ? `${displayUser.name} (${displayUser.role.toUpperCase()})` : undefined}
           >
             <div className="relative">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 font-semibold text-zinc-200 text-xs border border-zinc-700 shadow-sm">
@@ -315,6 +321,7 @@ export function AppSidebar({
             )}
           </div>
         </div>
+
       </aside>
     </>
   );

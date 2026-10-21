@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useMockStore } from '@/lib/mockStore';
 import { Employee, UserRole } from '@/lib/types';
@@ -26,11 +27,14 @@ import {
   CheckCircle2,
   Trash2,
   Lock,
+  FolderKanban,
+  CheckSquare,
 } from 'lucide-react';
 
 export default function EmployeesDirectoryPage() {
-  const { isAuthenticated, organization, role: currentUserRole } = useAuth();
-  const isAdmin = currentUserRole === 'admin';
+  const { isAuthenticated, organization, role: currentUserRole, user } = useAuth();
+  const isOrganizer = currentUserRole === 'organizer';
+  const isAdmin = currentUserRole === 'admin' || isOrganizer;
 
   // Live Supabase organization members hook
   const {
@@ -42,7 +46,20 @@ export default function EmployeesDirectoryPage() {
     removeMember,
   } = useOrganizationMembers();
 
-  const { tasks: liveTasks } = useTasks();
+  // Live projects and tasks hooks for project assignment workflow & workload tracking
+  const {
+    projects: dbProjects,
+    addProjectMember,
+    refetch: refetchProjects,
+  } = useProjects();
+
+  const {
+    tasks: dbTasks,
+    assignTask,
+    refetch: refetchTasks,
+  } = useTasks();
+
+  const liveTasks = dbTasks;
 
   // Compute live load hours per member from active tasks
   const memberLoads = React.useMemo(() => {
@@ -70,6 +87,15 @@ export default function EmployeesDirectoryPage() {
   const [selectedRoleFilter, setSelectedRoleFilter] = React.useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
 
+  // Project Assignment Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
+  const [assignTargetMember, setAssignTargetMember] = React.useState<{ userId: string; fullName: string } | null>(null);
+  const [assignProjectId, setAssignProjectId] = React.useState<string>('');
+  const [assignTaskIds, setAssignTaskIds] = React.useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = React.useState(false);
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
   // Invite Modal Form State
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [inviteRole, setInviteRole] = React.useState<UserRole>('employee');
@@ -80,6 +106,56 @@ export default function EmployeesDirectoryPage() {
   // Card operation status
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = React.useState<string | null>(null);
+
+  // Open assign modal with a preselected member
+  const handleOpenAssignModal = (member?: { userId: string; fullName: string }) => {
+    setAssignError(null);
+    setAssignSuccess(null);
+    setAssignTaskIds([]);
+    if (member) {
+      setAssignTargetMember(member);
+      // Select first project where member is not yet allocated
+      const unassignedProj = dbProjects.find((p) => !p.memberIds.includes(member.userId));
+      setAssignProjectId(unassignedProj ? unassignedProj.id : (dbProjects[0]?.id || ''));
+    } else {
+      setAssignTargetMember(liveMembers.length > 0 ? { userId: liveMembers[0].userId, fullName: liveMembers[0].fullName } : null);
+      setAssignProjectId(dbProjects[0]?.id || '');
+    }
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignTargetMember || !assignProjectId) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+
+    // 1. Add project member
+    const res = await addProjectMember(assignProjectId, assignTargetMember.userId);
+    if (res.error) {
+      setAssignLoading(false);
+      setAssignError(res.error);
+      return;
+    }
+
+    // 2. Optionally assign selected tasks
+    if (assignTaskIds.length > 0) {
+      for (const taskId of assignTaskIds) {
+        await assignTask(taskId, assignTargetMember.userId);
+      }
+      await refetchTasks();
+    }
+
+    await refetchProjects();
+    setAssignLoading(false);
+    setAssignSuccess(`Successfully assigned ${assignTargetMember.fullName} to project.`);
+    setTimeout(() => {
+      setIsAssignModalOpen(false);
+      setAssignSuccess(null);
+    }, 1500);
+  };
 
   // Filter members based on search and filters
   const filteredLiveMembers = React.useMemo(() => {
@@ -210,18 +286,28 @@ export default function EmployeesDirectoryPage() {
 
         {isLive ? (
           isAdmin ? (
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                setInviteError(null);
-                setInviteSuccess(null);
-                setIsInviteModalOpen(true);
-              }}
-            >
-              <UserPlus className="h-4 w-4 mr-1.5" />
-              <span>Invite Team Member</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => handleOpenAssignModal()}
+              >
+                <FolderKanban className="h-4 w-4 mr-1.5 text-cyan-400" />
+                <span>Assign to Project</span>
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  setInviteError(null);
+                  setInviteSuccess(null);
+                  setIsInviteModalOpen(true);
+                }}
+              >
+                <UserPlus className="h-4 w-4 mr-1.5" />
+                <span>Invite Member</span>
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-navy-900 border border-slate-800 px-3 py-2 rounded-xl">
               <Lock className="h-3.5 w-3.5 text-slate-500" />
@@ -248,6 +334,53 @@ export default function EmployeesDirectoryPage() {
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
+      )}
+
+      {/* Live Organization Summary Metrics */}
+      {isLive && (
+        <section
+          aria-label="Live organization workforce summary"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6"
+        >
+          {[
+            {
+              label: 'Verified Members',
+              value: liveMembers.length,
+              detail: 'Active organization accounts',
+              color: 'text-violet-300',
+            },
+            {
+              label: 'Active Projects',
+              value: dbProjects.length,
+              detail: 'Organization project portfolio',
+              color: 'text-cyan-300',
+            },
+            {
+              label: 'Open Tasks',
+              value: dbTasks.filter((t) => t.status !== 'completed').length,
+              detail: 'Backlog and active tasks',
+              color: 'text-amber-300',
+            },
+            {
+              label: 'Total Effort',
+              value: `${dbTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0)}h`,
+              detail: 'Total tracked workload',
+              color: 'text-emerald-300',
+            },
+          ].map((metric) => (
+            <Card key={metric.label} className="border-slate-800/90">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  {metric.label}
+                </p>
+                <p className={`mt-3 text-3xl font-bold ${metric.color}`}>
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">{metric.detail}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
       )}
 
       {/* Synthetic demo summary — hidden for live organization data */}
@@ -360,6 +493,7 @@ export default function EmployeesDirectoryPage() {
                 .slice(0, 2);
 
               const roleColors: Record<UserRole, { badge: 'violet' | 'cyan' | 'emerald' | 'slate'; label: string }> = {
+                organizer: { badge: 'violet', label: 'Organizer' },
                 admin: { badge: 'violet', label: 'Admin' },
                 manager: { badge: 'cyan', label: 'Manager' },
                 hr: { badge: 'emerald', label: 'HR' },
@@ -369,6 +503,10 @@ export default function EmployeesDirectoryPage() {
               const loadInfo = memberLoads.get(m.userId) || { count: 0, hours: 0 };
               const cap = m.weeklyCapacityHours || 40;
               const utilPct = cap > 0 ? Math.round((loadInfo.hours / cap) * 100) : 0;
+
+              // Derive real metrics from live tasks and projects
+              const memberTasks = dbTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
+              const allocatedProjects = dbProjects.filter((p) => p.memberIds.includes(m.userId));
 
               return (
                 <Card
@@ -420,8 +558,26 @@ export default function EmployeesDirectoryPage() {
                       </div>
                     </div>
 
-                    {/* Role Administration Controls for Organization Admin */}
-                    {isAdmin && (
+                    {/* Allocated Projects */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Allocated Projects ({allocatedProjects.length})
+                      </span>
+                      {allocatedProjects.length === 0 ? (
+                        <p className="text-[11px] text-slate-500 italic">Not allocated to any projects yet</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {allocatedProjects.map((p) => (
+                            <Badge key={p.id} variant="cyan" size="sm">
+                              {p.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Role Administration Controls for Organization Admin / Organizer */}
+                    {isAdmin && m.role !== 'organizer' && (
                       <div className="space-y-2 pt-1 border-t border-slate-800/60">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -432,32 +588,58 @@ export default function EmployeesDirectoryPage() {
                         <select
                           value={m.role}
                           onChange={(e) => handleRoleChange(m.userId, e.target.value as UserRole)}
-                          className="w-full rounded-lg border border-slate-700/80 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                          disabled={!isOrganizer && m.role === 'admin'}
+                          className="w-full rounded-lg border border-slate-700/80 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none disabled:opacity-50"
                         >
-                          <option value="admin">Administrator (Full Access)</option>
-                          <option value="manager">Manager (Planning & Team Lead)</option>
-                          <option value="hr">HR (People & Capacity)</option>
+                          {isOrganizer && <option value="admin">Administrator (Full Access)</option>}
+                          <option value="manager">Manager (Planning &amp; Team Lead)</option>
+                          <option value="hr">HR (People &amp; Capacity)</option>
                           <option value="employee">Employee (Contributor)</option>
                         </select>
                       </div>
                     )}
+                    {m.role === 'organizer' && (
+                      <div className="pt-2 border-t border-slate-800/60 flex items-center gap-1.5 text-[11px] text-violet-400 font-semibold">
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>Organization Super Admin &amp; Owner</span>
+                      </div>
+                    )}
                   </CardContent>
 
-                  <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Joined {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : 'Active'}
+                  <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {memberTasks.length} active task{memberTasks.length !== 1 ? 's' : ''}
                     </span>
-                    {isAdmin && m.role !== 'admin' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveMember(m.userId, m.fullName)}
-                        className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        <span>Remove</span>
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleOpenAssignModal({ userId: m.userId, fullName: m.fullName })}
+                          className="text-xs"
+                        >
+                          <FolderKanban className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+                          <span>Assign Project</span>
+                        </Button>
+                      )}
+                      <Link href={`/employees/${m.userId}`}>
+                        <Button variant="ghost" size="sm" className="text-xs">
+                          <span>Profile</span>
+                          <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                        </Button>
+                      </Link>
+                      {isAdmin && m.userId !== user?.id && m.role !== 'organizer' && (isOrganizer || m.role !== 'admin') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveMember(m.userId, m.fullName)}
+                          className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+                          title="Remove member"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </Card>
               );
@@ -616,11 +798,16 @@ export default function EmployeesDirectoryPage() {
               onChange={(e) => setInviteRole(e.target.value as UserRole)}
               className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
             >
-              <option value="employee">Employee — Direct contributor, tasks & schedule</option>
-              <option value="manager">Manager — Team lead, allocations & task management</option>
+              <option value="employee">Employee — Direct contributor, tasks &amp; schedule</option>
+              <option value="manager">Manager — Team lead, allocations &amp; task management</option>
+              {isOrganizer && (
+                <option value="admin">Administrator — Workspace management &amp; project admin</option>
+              )}
             </select>
             <p className="text-[11px] text-slate-400">
-              Assigned role is saved to the database. Administrator promotion requires existing membership and the dedicated promotion workflow.
+              {isOrganizer
+                ? 'As Founding Organizer, you can invite Administrators, Managers, and Employees directly.'
+                : 'Assigned role is saved to the database. Administrator invitations require Organizer authority.'}
             </p>
           </div>
 
@@ -640,6 +827,143 @@ export default function EmployeesDirectoryPage() {
               disabled={inviteLoading || !inviteEmail.trim()}
             >
               {inviteLoading ? 'Sending Invitation...' : 'Send Secure Invitation'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Project Assignment Workflow Dialog */}
+      <Dialog
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title={assignTargetMember ? `Assign ${assignTargetMember.fullName} to Project` : 'Assign Member to Project'}
+        description="Allocate an existing team member to an active project portfolio initiative and optionally assign open tasks."
+      >
+        <form onSubmit={handleAssignSubmit} className="space-y-4 py-2">
+          {assignError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{assignError}</span>
+            </div>
+          )}
+
+          {assignSuccess && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{assignSuccess}</span>
+            </div>
+          )}
+
+          {!assignTargetMember && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                Select Active Member *
+              </label>
+              <select
+                onChange={(e) => {
+                  const m = liveMembers.find((mem) => mem.userId === e.target.value);
+                  if (m) setAssignTargetMember({ userId: m.userId, fullName: m.fullName });
+                }}
+                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              >
+                {liveMembers.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.fullName} ({m.role.toUpperCase()} • {m.department || 'Engineering'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Select Target Project *
+            </label>
+            {dbProjects.length === 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-300">
+                No active projects exist in this workspace. Please create a project on the Projects page first.
+              </div>
+            ) : (
+              <select
+                value={assignProjectId}
+                onChange={(e) => {
+                  setAssignProjectId(e.target.value);
+                  setAssignTaskIds([]);
+                }}
+                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                required
+              >
+                <option value="" disabled>-- Select a Project --</option>
+                {dbProjects.map((p) => {
+                  const isAllocated = assignTargetMember ? p.memberIds.includes(assignTargetMember.userId) : false;
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.priority.toUpperCase()} Priority) {isAllocated ? '— Already Allocated' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          {/* Optional Open Task Assignment */}
+          {assignProjectId && (
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="block text-xs font-semibold text-slate-300">
+                Optionally Assign Open Tasks from this Project:
+              </label>
+              {dbTasks.filter((t) => t.projectId === assignProjectId && !t.assignedTo).length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">
+                  No unassigned tasks found for this project.
+                </p>
+              ) : (
+                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+                  {dbTasks
+                    .filter((t) => t.projectId === assignProjectId && !t.assignedTo)
+                    .map((t) => (
+                      <label
+                        key={t.id}
+                        className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={assignTaskIds.includes(t.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAssignTaskIds((prev) => [...prev, t.id]);
+                            } else {
+                              setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
+                            }
+                          }}
+                          className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                        />
+                        <span className="truncate">{t.title}</span>
+                        <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                          {t.estimatedHours}h
+                        </span>
+                      </label>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsAssignModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={assignLoading || dbProjects.length === 0 || !assignProjectId}
+            >
+              {assignLoading ? 'Assigning...' : 'Confirm Assignment'}
             </Button>
           </div>
         </form>

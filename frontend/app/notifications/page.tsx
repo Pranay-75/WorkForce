@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useMockStore } from '@/lib/mockStore';
 import { useAuth } from '@/lib/authContext';
-import { useTasks } from '@/lib/hooks/useTasks';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useMockStore } from '@/lib/mockStore';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -127,6 +128,9 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleDismiss = markNotificationAsRead;
+  const handleDismissAll = markAllNotificationsAsRead;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
@@ -134,14 +138,14 @@ export default function NotificationsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Notification & Alert Center
+              Notification &amp; Alert Center
             </h2>
             <Badge variant={unreadCount > 0 ? 'amber' : 'emerald'} size="sm">
               {unreadCount} Unread
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Real-time capacity overload warnings, AI recommendation notices, and sprint updates
+            Real-time capacity overload warnings, deadline updates, and operational alerts
           </p>
         </div>
 
@@ -149,7 +153,7 @@ export default function NotificationsPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={markAllNotificationsAsRead}
+            onClick={handleDismissAll}
           >
             <CheckCheck className="h-4 w-4 mr-1.5" />
             <span>Mark All as Read</span>
@@ -267,9 +271,9 @@ export default function NotificationsPage() {
                       variant="ghost"
                       size="sm"
                       className="text-xs"
-                      onClick={() => markNotificationAsRead(n.id)}
+                      onClick={() => handleDismiss(n.id)}
                     >
-                      Mark Read
+                      Dismiss
                     </Button>
                   )}
                   {n.linkUrl && (
@@ -285,6 +289,16 @@ export default function NotificationsPage() {
             </Card>
           );
         })}
+
+        {notifications.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-400 space-y-2">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
+            <h4 className="text-base font-bold text-white">All Clear</h4>
+            <p className="text-xs text-slate-400">
+              No operational alerts, capacity bottlenecks, or critical deadlines pending.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
