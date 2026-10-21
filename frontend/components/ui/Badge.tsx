@@ -23,11 +23,11 @@ export function Badge({
 }: BadgeProps) {
   const variants = {
     blue:
-      'bg-blue-950/60 text-blue-300 border-blue-800/50',
+      'bg-zinc-800/90 text-zinc-200 border-zinc-700/80',
     violet:
-      'bg-blue-950/50 text-blue-300 border-blue-800/40',
+      'bg-zinc-800/90 text-zinc-200 border-zinc-700/80',
     cyan:
-      'bg-slate-800/90 text-slate-300 border-slate-700',
+      'bg-zinc-800/70 text-zinc-300 border-zinc-700/60',
     emerald:
       'bg-emerald-950/60 text-emerald-300 border-emerald-700/50',
     amber:
@@ -35,9 +35,9 @@ export function Badge({
     rose:
       'bg-rose-950/60 text-rose-300 border-rose-700/50',
     slate:
-      'bg-slate-800/80 text-slate-300 border-slate-700',
+      'bg-zinc-800/80 text-zinc-300 border-zinc-700',
     outline:
-      'bg-transparent text-slate-300 border-slate-700',
+      'bg-transparent text-zinc-300 border-zinc-700',
   };
 
   const sizes = {

@@ -22,19 +22,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium transition-all duration-150 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background-base disabled:pointer-events-none disabled:opacity-50 select-none';
+      'inline-flex items-center justify-center font-medium transition-all duration-150 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background-base disabled:pointer-events-none disabled:opacity-50 select-none';
 
     const variants = {
       primary:
-        'bg-blue-600 hover:bg-blue-500 text-white shadow-sm active:scale-[0.98] border border-blue-500/40',
+        'bg-zinc-100 hover:bg-white text-zinc-950 font-semibold shadow-sm active:scale-[0.98] border border-zinc-200',
       accent:
-        'bg-slate-800 hover:bg-slate-700 text-slate-100 shadow-sm active:scale-[0.98] border border-slate-700',
+        'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 shadow-sm active:scale-[0.98] border border-zinc-700',
       secondary:
-        'bg-navy-800 hover:bg-navy-700 text-slate-200 border border-slate-700/60 hover:border-slate-600 active:scale-[0.98]',
+        'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 hover:border-zinc-700 active:scale-[0.98]',
       outline:
-        'border border-slate-700 hover:border-slate-500 bg-transparent hover:bg-slate-800/40 text-slate-200 hover:text-white',
+        'border border-zinc-700 hover:border-zinc-500 bg-transparent hover:bg-zinc-800/40 text-zinc-200 hover:text-white',
       ghost:
-        'bg-transparent hover:bg-navy-800 text-slate-300 hover:text-slate-100',
+        'bg-transparent hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100',
       danger:
         'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500/30 shadow-sm active:scale-[0.98]',
     };

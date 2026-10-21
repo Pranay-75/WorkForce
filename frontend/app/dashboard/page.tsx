@@ -34,22 +34,22 @@ import {
 
 function DemoModeBanner() {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/80 p-5 sm:p-6 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 sm:p-6 shadow-sm">
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-blue-400" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+            <span className="flex h-2 w-2 rounded-full bg-zinc-400" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
               Interactive Guided Preview
             </span>
-            <Badge variant="blue" size="sm" className="hidden sm:inline-flex">
+            <Badge variant="slate" size="sm" className="hidden sm:inline-flex">
               Simulated Environment
             </Badge>
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
             Explore WorkForce AI in Demo Mode
           </h3>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
             Demo Mode lets users explore sample employees, projects, tasks, workload analytics, reports, and simulated AI recommendations in a fully interactive, risk-free preview.
           </p>
         </div>
@@ -59,9 +59,9 @@ function DemoModeBanner() {
             <Button
               variant="primary"
               size="md"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2 shadow-sm"
+              className="px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2"
             >
-              <Sparkles className="h-4 w-4 text-blue-200" />
+              <Sparkles className="h-4 w-4 text-zinc-700" />
               <span>Explore Demo Mode</span>
               <ArrowRight className="h-4 w-4 ml-0.5" />
             </Button>
@@ -723,6 +723,7 @@ export default function DashboardPage() {
           }
           trend={{ value: 3.8, isPositiveGood: true }}
           progress={{ value: orgUtilizationPct, max: 100 }}
+          sparkline={[45, 52, 50, 63, 60, 68, 71]}
         />
         <MetricCard
           title="Active Workforce"
@@ -736,14 +737,16 @@ export default function DashboardPage() {
           }
           badgeText={isMembersLoading ? 'Loading' : totalEmployees > 0 ? 'Active Roster' : 'Empty'}
           badgeVariant={totalEmployees > 0 ? 'emerald' : 'slate'}
-          icon={<Users className="h-5 w-5 text-cyan-400" />}
+          icon={<Users className="h-5 w-5 text-zinc-300" />}
+          sparkline={[7, 7, 8, 8, 8, 8, 8]}
         />
         <MetricCard
           title="Active Tasks"
           value={activeTasks.length}
           subtitle={`${completionRate}% overall completion rate`}
           trend={{ value: 12.5, isPositiveGood: true }}
-          icon={<CheckSquare className="h-5 w-5 text-violet-400" />}
+          icon={<CheckSquare className="h-5 w-5 text-zinc-300" />}
+          sparkline={[10, 12, 14, 13, 16, 17, 18]}
         />
         <MetricCard
           title="Overload Risk Flags"
@@ -756,6 +759,7 @@ export default function DashboardPage() {
           badgeText={overloadedCount === 0 ? 'Optimal' : 'Overload Alert'}
           badgeVariant={overloadedCount === 0 ? 'emerald' : 'rose'}
           icon={<Flame className="h-5 w-5 text-rose-400" />}
+          sparkline={[0, 1, 0, 0, 1, 1, 1]}
         />
       </div>
 
