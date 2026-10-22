@@ -36,12 +36,12 @@ export interface DemoIdentity {
 
 export const demoIdentities: DemoIdentity[] = [
   {
-    id: 'emp-1',
-    name: 'Sarah Connor',
-    role: 'manager',
-    jobTitle: 'Engineering Lead & Architect',
-    department: 'Engineering',
-    avatar: 'SC',
+    id: 'emp-org',
+    name: 'Dr. Aris Thorne',
+    role: 'organizer',
+    jobTitle: 'Founder & Chief System Architect',
+    department: 'Executive',
+    avatar: 'AT',
   },
   {
     id: 'emp-8',
@@ -50,6 +50,14 @@ export const demoIdentities: DemoIdentity[] = [
     jobTitle: 'VP of Operations & Workspace Admin',
     department: 'Executive Administration',
     avatar: 'CD',
+  },
+  {
+    id: 'emp-1',
+    name: 'Sarah Connor',
+    role: 'manager',
+    jobTitle: 'Engineering Lead & Architect',
+    department: 'Engineering',
+    avatar: 'SC',
   },
   {
     id: 'emp-hr',
@@ -260,11 +268,14 @@ interface MockStoreContextType {
   notifications: NotificationItem[];
   skills: Skill[];
 
-  // Role & Identity
+  // Demo Mode & Identity
+  isDemoMode: boolean;
+  enterDemoMode: (target?: UserRole | string) => void;
+  exitDemoMode: () => void;
   activeRole: UserRole;
   currentUserId: string;
   currentUser: DemoIdentity;
-  switchDemoRole: (identityId: string) => void;
+  switchDemoRole: (identityIdOrRole: string) => void;
 
   // Actions
   updateTaskStatus: (taskId: string, newStatus: TaskStatus) => void;
@@ -302,9 +313,39 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
   const [skills, setSkills] = React.useState<Skill[]>(initialSkills);
   const [feedbackMessage, setFeedbackMessage] = React.useState<string | null>(null);
 
-  // Active Role state
-  const [demoUserId, setDemoUserId] = React.useState<string>('emp-1'); // Default Sarah Connor (Manager for unauthenticated showcase)
-  
+  // Demo Mode state
+  const [isDemoMode, setIsDemoMode] = React.useState<boolean>(false);
+  const [demoUserId, setDemoUserId] = React.useState<string>('emp-1'); // Default Sarah Connor (Manager)
+
+  // Initialize and synchronize demo mode lifecycle with authentication state
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (isAuthenticated) {
+      // When a real Supabase session is authenticated, clear demo mode from storage and state
+      localStorage.removeItem('workforce_demo_mode');
+      localStorage.removeItem('workforce_demo_user_id');
+      setIsDemoMode(false);
+      setDemoUserId('emp-1');
+    } else {
+      const savedMode = localStorage.getItem('workforce_demo_mode') === 'true';
+      if (savedMode) {
+        setIsDemoMode(true);
+        const savedId = localStorage.getItem('workforce_demo_user_id');
+        if (savedId && demoIdentities.some((i) => i.id === savedId)) {
+          setDemoUserId(savedId);
+        }
+      } else {
+        setIsDemoMode(false);
+      }
+    }
+  }, [isAuthenticated]);
+
+  const showFeedback = (msg: string) => {
+    setFeedbackMessage(msg);
+    setTimeout(() => setFeedbackMessage(null), 3500);
+  };
+
   const currentUser: DemoIdentity = React.useMemo(() => {
     if (isAuthenticated && user) {
       const name = profile?.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Team Lead';
@@ -348,19 +389,49 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
     return computeDynamicRedistributionProposals(employees, tasks);
   }, [employees, tasks]);
 
-  const showFeedback = (msg: string) => {
-    setFeedbackMessage(msg);
-    setTimeout(() => setFeedbackMessage(null), 3500);
+  const enterDemoMode = (target?: UserRole | string) => {
+    if (isAuthenticated) {
+      showFeedback('Demo mode cannot be entered while a real authenticated session is active.');
+      return;
+    }
+    setIsDemoMode(true);
+    let identity = demoIdentities.find((i) => i.id === 'emp-1') || demoIdentities[0];
+    if (target) {
+      const byRole = demoIdentities.find((i) => i.role === target);
+      const byId = demoIdentities.find((i) => i.id === target);
+      identity = byRole || byId || identity;
+    }
+    setDemoUserId(identity.id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('workforce_demo_mode', 'true');
+      localStorage.setItem('workforce_demo_user_id', identity.id);
+    }
+    showFeedback(`Entered Demo Showcase as ${identity.name} (${identity.role.toUpperCase()})`);
   };
 
-  const switchDemoRole = (identityId: string) => {
+  const exitDemoMode = () => {
+    setIsDemoMode(false);
+    setDemoUserId('emp-1');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('workforce_demo_mode');
+      localStorage.removeItem('workforce_demo_user_id');
+    }
+    showFeedback('Exited Demo Mode. Returning to standard authentication.');
+  };
+
+  const switchDemoRole = (identityIdOrRole: string) => {
     if (isAuthenticated) {
       showFeedback('Simulated role switching is rejected for authenticated sessions.');
       return;
     }
-    const ident = demoIdentities.find((i) => i.id === identityId);
+    const ident = demoIdentities.find(
+      (i) => i.id === identityIdOrRole || i.role === identityIdOrRole
+    );
     if (!ident) return;
     setDemoUserId(ident.id);
+    if (typeof window !== 'undefined' && isDemoMode) {
+      localStorage.setItem('workforce_demo_user_id', ident.id);
+    }
     showFeedback(`Switched demo role to ${ident.name} (${ident.role.toUpperCase()})`);
   };
 
@@ -695,6 +766,9 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
         auditEvents,
         notifications,
         skills,
+        isDemoMode,
+        enterDemoMode,
+        exitDemoMode,
         activeRole,
         currentUserId,
         currentUser,

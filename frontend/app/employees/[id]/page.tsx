@@ -28,6 +28,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function EmployeeDetailPage() {
   const params = useParams();
@@ -43,7 +44,9 @@ export default function EmployeeDetailPage() {
   const { tasks: dbTasks, assignTask, refetch: refetchTasks } = useTasks();
 
   // Mock store fallback
-  const { employees: mockEmployees, tasks: mockTasks } = useMockStore();
+  const { employees: mockEmployees, tasks: mockTasks, activeRole: mockRole } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
 
   // Project Assignment Dialog State
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
@@ -52,6 +55,17 @@ export default function EmployeeDetailPage() {
   const [assignLoading, setAssignLoading] = React.useState(false);
   const [assignError, setAssignError] = React.useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Employee Profile & Allocation Detail"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Viewing individual employee profiles, performance insights, and allocation histories is restricted to management and administrative personnel."
+      />
+    );
+  }
 
   // Resolve employee either from live members or mock store
   const liveMember = isLive ? liveMembers.find((m) => m.userId === employeeId || m.id === employeeId) : null;

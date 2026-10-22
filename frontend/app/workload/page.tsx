@@ -27,6 +27,7 @@ import {
   AlertCircle,
   ArrowRight,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function WorkloadCapacityPage() {
   const { isAuthenticated, user, organization, role: authRole } = useAuth();
@@ -62,7 +63,7 @@ export default function WorkloadCapacityPage() {
 
   const activeRole = isLive ? authRole : mockRole;
   const currentUserId = isLive ? (user?.id || '') : mockUserId;
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'overloaded' | 'near_limit' | 'optimal'>('all');
@@ -212,6 +213,17 @@ export default function WorkloadCapacityPage() {
         return 0;
       });
   }, [employees, searchQuery, statusFilter, departmentFilter, sortBy]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Team Workload & Capacity Monitor"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Organization-wide workload heatmaps, capacity thresholds, and AI redistribution proposals are restricted to management and HR."
+      />
+    );
+  }
 
   const toggleExpand = (empId: string) => {
     setExpandedEmpId((prev) => (prev === empId ? null : empId));

@@ -15,6 +15,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+import { AccessDenied } from '@/components/ui/AccessDenied';
+
 interface DisplayAuditEvent {
   id: string;
   action: string;
@@ -26,8 +28,11 @@ interface DisplayAuditEvent {
 }
 
 export default function AuditPage() {
-  const { isAuthenticated, organization } = useAuth();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
+  const { auditEvents: mockAuditEvents, activeRole: mockRole } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
 
   const {
     auditLogs: liveAuditLogs,
@@ -36,14 +41,11 @@ export default function AuditPage() {
     refetch,
   } = useAuditLogs();
 
-  const { auditEvents: mockAuditEvents } = useMockStore();
-
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
   const isLoading = isLive && isAuditLoading;
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedAction, setSelectedAction] = React.useState('all');
-
   const filteredEvents = React.useMemo(() => {
     return auditEvents.filter((ev) => {
       const matchesSearch =
@@ -58,6 +60,17 @@ export default function AuditPage() {
       return matchesSearch && matchesAction;
     });
   }, [auditEvents, searchQuery, selectedAction]);
+
+  if (activeRole !== 'organizer' && activeRole !== 'admin') {
+    return (
+      <AccessDenied
+        resourceName="Compliance & System Audit Trail"
+        currentRole={activeRole}
+        requiredRoles={['organizer', 'admin']}
+        description="Immutable compliance audit events and security oversight records are restricted strictly to Workspace Administrators and Organizers."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

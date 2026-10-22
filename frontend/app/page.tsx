@@ -3,14 +3,18 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
+import { useMockStore } from '@/lib/mockStore';
 
 export default function RootPage() {
   const router = useRouter();
   const { isAuthenticated, organization, isLoading } = useAuth();
+  const { isDemoMode } = useMockStore();
 
   React.useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated) {
+      if (isDemoMode) {
+        router.push('/dashboard');
+      } else if (!isAuthenticated) {
         router.push('/login');
       } else if (!organization) {
         router.push('/onboarding');
@@ -18,7 +22,7 @@ export default function RootPage() {
         router.push('/dashboard');
       }
     }
-  }, [isLoading, isAuthenticated, organization, router]);
+  }, [isLoading, isDemoMode, isAuthenticated, organization, router]);
 
   return (
     <div className="min-h-screen bg-navy-950 flex items-center justify-center">

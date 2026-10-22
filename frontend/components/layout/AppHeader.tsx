@@ -42,7 +42,7 @@ export function AppHeader({
 }) {
   const pathname = usePathname() || '/dashboard';
   const router = useRouter();
-  const { currentUser, switchDemoRole, notifications } = useMockStore();
+  const { currentUser, switchDemoRole, notifications, isDemoMode, exitDemoMode } = useMockStore();
   const { user, profile, role, organization, isAuthenticated, signOut } = useAuth();
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = React.useState(false);
 
@@ -56,6 +56,7 @@ export function AppHeader({
   const pathSegments = pathname.split('/').filter(Boolean);
 
   const handleSignOut = async () => {
+    exitDemoMode();
     await signOut();
     router.push('/login');
   };
@@ -197,11 +198,15 @@ export function AppHeader({
                           </div>
                           <Badge
                             variant={
-                              identity.role === 'admin'
-                                ? 'rose'
+                              identity.role === 'organizer'
+                                ? 'amber'
+                                : identity.role === 'admin'
+                                ? 'violet'
                                 : identity.role === 'manager'
-                                ? 'slate'
-                                : 'slate'
+                                ? 'cyan'
+                                : identity.role === 'hr'
+                                ? 'emerald'
+                                : 'blue'
                             }
                             size="sm"
                           >
@@ -210,6 +215,21 @@ export function AppHeader({
                         </button>
                       );
                     })}
+                  </div>
+
+                  <div className="pt-2 mt-2 border-t border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRoleDropdownOpen(false);
+                        exitDemoMode();
+                        router.push('/login');
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-colors"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>Exit Demo &amp; Sign In</span>
+                    </button>
                   </div>
                 </div>
               )}

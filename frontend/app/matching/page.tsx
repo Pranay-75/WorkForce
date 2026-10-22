@@ -22,9 +22,10 @@ import {
   RefreshCw,
   Plus,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function MatchingHubPage() {
-  const { isAuthenticated, organization } = useAuth();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
 
   // Live hooks
@@ -46,7 +47,10 @@ export default function MatchingHubPage() {
     tasks: mockTasks,
     approveRecommendation: mockApproveRecommendation,
     rejectRecommendation: mockRejectRecommendation,
+    activeRole: mockRole,
   } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
 
   const tasks = isLive ? liveTasks : mockTasks;
 
@@ -167,6 +171,17 @@ export default function MatchingHubPage() {
       };
     }).sort((a, b) => b.matchScore - a.matchScore);
   }, [isLive, liveMembers, liveTasks, targetTask, selectedTaskId, mockRecommendations, decisionState]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="AI Matching Hub"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Candidate recommendation rankings, workload impact projections, and AI match scoring are restricted to team managers and administrators."
+      />
+    );
+  }
 
   const handleApprove = async (rec: typeof taskRecommendations[0]) => {
     setActionLoading(true);

@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Users,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 interface InsightMember {
   id: string;
@@ -31,8 +32,11 @@ interface InsightMember {
 }
 
 export default function InsightsPage() {
-  const { isAuthenticated, organization } = useAuth();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
+  const { employees: mockEmployees, activeRole: mockRole } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
 
   const {
     members: liveMembers,
@@ -47,8 +51,6 @@ export default function InsightsPage() {
   } = useTasks();
 
   const { auditLogs: liveLogs } = useAuditLogs();
-
-  const { employees: mockEmployees } = useMockStore();
 
   const employees = React.useMemo(() => {
     if (isLive) {
@@ -110,6 +112,17 @@ export default function InsightsPage() {
     if (liveTasks.length === 0 && liveLogs.length === 0) return 'N/A';
     return '100%';
   }, [isLive, liveTasks, liveLogs]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Employee Insights & Burnout Diagnostics"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Operational burnout risk indicators, sprint velocity trends, and capacity distribution analytics are restricted to management and HR."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

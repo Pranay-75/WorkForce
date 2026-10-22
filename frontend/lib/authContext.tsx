@@ -325,6 +325,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(initialSession?.user || null);
 
           if (initialSession?.user) {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('workforce_demo_mode');
+              localStorage.removeItem('workforce_demo_user_id');
+            }
             await fetchUserData(initialSession.user);
           }
         }
@@ -345,6 +349,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(newSession?.user || null);
 
       if (newSession?.user) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('workforce_demo_mode');
+          localStorage.removeItem('workforce_demo_user_id');
+        }
         await fetchUserData(newSession.user);
       } else {
         setProfile(null);
@@ -449,6 +457,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('workforce_active_org_id');
+      localStorage.removeItem('workforce_demo_mode');
+      localStorage.removeItem('workforce_demo_user_id');
     }
     setUser(null);
     setSession(null);
