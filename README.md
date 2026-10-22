@@ -1,5 +1,7 @@
 # WorkForce: AI-Powered Workforce Capacity SaaS
 
+**Production Platform**: [workforce-platform.vercel.app](https://workforce-platform.vercel.app)
+
 WorkForce is an enterprise-grade workforce capacity monitoring, explainable task matching, and workload balancing platform built with Next.js 15, Python FastAPI, Supabase PostgreSQL with Row-Level Security (RLS), and Google Gemini.
 
 ---

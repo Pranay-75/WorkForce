@@ -5,9 +5,31 @@ import { MockStoreProvider } from '@/lib/mockStore';
 import { AuthProvider } from '@/lib/authContext';
 
 export const metadata: Metadata = {
-  title: 'WorkForce - AI-Powered Workforce Management',
+  metadataBase: new URL('https://workforce-platform.vercel.app'),
+  title: {
+    default: 'WorkForce - AI-Powered Workforce Management',
+    template: '%s | WorkForce',
+  },
   description:
     'Explainable workforce capacity monitoring, intelligent skill-based task matching, and workload balancing platform.',
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://workforce-platform.vercel.app',
+    siteName: 'WorkForce',
+    title: 'WorkForce - AI-Powered Workforce Management',
+    description:
+      'Explainable workforce capacity monitoring, intelligent skill-based task matching, and workload balancing platform.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'WorkForce - AI-Powered Workforce Management',
+    description:
+      'Explainable workforce capacity monitoring, intelligent skill-based task matching, and workload balancing platform.',
+  },
+  alternates: {
+    canonical: 'https://workforce-platform.vercel.app',
+  },
 };
 
 export default function RootLayout({
