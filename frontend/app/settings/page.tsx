@@ -22,16 +22,18 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function SettingsPage() {
-  const { organization, role, isAuthenticated, refreshUserData } = useAuth();
+  const { organization, role: authRole, isAuthenticated, refreshUserData } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
-  const isOrganizerOrAdmin = role === 'organizer' || role === 'admin';
+  const { skills, resetAllSyntheticData, activeRole: mockRole } = useMockStore();
 
-  const { skills, resetAllSyntheticData } = useMockStore();
+  const activeRole = isLive && authRole ? authRole : mockRole;
+  const isOrganizerOrAdmin = activeRole === 'organizer' || activeRole === 'admin';
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = React.useState(false);
-  const [orgName, setOrgName] = React.useState(organization?.name || 'Acme Cloud Technologies');
+  const [orgName, setOrgName] = React.useState(organization?.name || 'Acme Systems Engineering');
   const [isSavingOrg, setIsSavingOrg] = React.useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = React.useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = React.useState<string | null>(null);
@@ -41,6 +43,17 @@ export default function SettingsPage() {
       setOrgName(organization.name);
     }
   }, [organization?.name]);
+
+  if (activeRole !== 'organizer' && activeRole !== 'admin' && activeRole !== 'hr') {
+    return (
+      <AccessDenied
+        resourceName="Workspace Governance Settings"
+        currentRole={activeRole}
+        requiredRoles={['organizer', 'admin', 'hr']}
+        description="Organization-level workspace configuration, governance policies, and skill taxonomy administration are restricted to administrators and human resources."
+      />
+    );
+  }
 
   const handleSaveOrgProfile = async () => {
     if (!isLive || !organization?.id) {
@@ -96,7 +109,7 @@ export default function SettingsPage() {
               Workspace Settings &amp; Governance
             </h2>
             <Badge variant={isOrganizerOrAdmin ? 'violet' : 'slate'} size="sm">
-              {role === 'organizer' ? 'Super Admin / Organizer' : role === 'admin' ? 'Organization Admin' : 'Member'}
+              {activeRole === 'organizer' ? 'Super Admin / Organizer' : activeRole === 'admin' ? 'Organization Admin' : activeRole === 'hr' ? 'People & HR Admin' : 'Member'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">

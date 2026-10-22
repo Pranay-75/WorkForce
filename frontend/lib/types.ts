@@ -26,7 +26,14 @@ export interface Employee {
   fullName: string;
   avatarUrl?: string;
   role: UserRole;
-  department: 'Engineering' | 'Design' | 'Product' | 'QA' | 'DevOps';
+  department:
+    | 'Engineering'
+    | 'Design'
+    | 'Product'
+    | 'QA'
+    | 'DevOps'
+    | 'Executive'
+    | 'Human Resources';
   jobTitle: string;
   weeklyCapacityHours: number;
   currentLoadHours: number;
@@ -131,7 +138,7 @@ export interface AuditEvent {
   actorId: string;
   actorName: string;
   action: string;
-  entityType: 'Task' | 'Recommendation' | 'Employee' | 'Project' | 'Workload';
+  entityType: 'Task' | 'Recommendation' | 'Employee' | 'Project' | 'Workload' | 'Organization';
   entityId: string;
   entityTitle: string;
   details: string;

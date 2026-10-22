@@ -30,6 +30,7 @@ import {
   FolderKanban,
   CheckSquare,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function EmployeesDirectoryPage() {
   const { isAuthenticated, organization, role: currentUserRole, user } = useAuth();
@@ -77,9 +78,10 @@ export default function EmployeesDirectoryPage() {
   }, [liveTasks]);
 
   // Mock store fallback for unauthenticated / demo exploration
-  const { employees: mockEmployees, skills: mockSkills, addNewEmployee } = useMockStore();
+  const { employees: mockEmployees, skills: mockSkills, addNewEmployee, activeRole: mockRole } = useMockStore();
 
   const isLive = Boolean(isAuthenticated && organization);
+  const activeRole = isLive && currentUserRole ? currentUserRole : mockRole;
 
   // Filters state
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -258,6 +260,17 @@ export default function EmployeesDirectoryPage() {
       departments: new Set(mockEmployees.map((employee) => employee.department)).size,
     };
   }, [mockEmployees]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Employee Directory & Talent Matrix"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="The organization-wide talent roster, individual capacity allocations, and skill matrices are restricted to management and administrative personnel."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

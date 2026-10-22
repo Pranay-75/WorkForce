@@ -35,7 +35,6 @@ export default function ProjectDetailPage() {
 
   const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
-  const isManagerOrAdmin = authRole === 'organizer' || authRole === 'admin' || authRole === 'manager';
 
   // Live hooks
   const {
@@ -54,7 +53,10 @@ export default function ProjectDetailPage() {
   const { members: orgMembers, isLoading: isMembersLoading } = useOrganizationMembers();
 
   // Mock store fallback
-  const { projects: mockProjects, employees: mockEmployees, tasks: mockTasks } = useMockStore();
+  const { projects: mockProjects, employees: mockEmployees, tasks: mockTasks, activeRole: mockRole } = useMockStore();
+
+  const activeRole = isLive ? authRole : mockRole;
+  const isManagerOrAdmin = activeRole === 'organizer' || activeRole === 'admin' || activeRole === 'manager';
 
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;

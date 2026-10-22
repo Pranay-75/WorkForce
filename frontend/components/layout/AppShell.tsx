@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
-  const { feedbackMessage } = useMockStore();
+  const { feedbackMessage, isDemoMode, currentUser, exitDemoMode } = useMockStore();
   const { isAuthenticated, organization, isLoading } = useAuth();
 
   const isAuthOrOnboardingRoute =
@@ -30,13 +30,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Enforce zero-trust authentication & onboarding routing guards
   React.useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated && !isAuthOrOnboardingRoute) {
+      if (!isAuthenticated && !isDemoMode && !isAuthOrOnboardingRoute) {
         router.push('/login');
       } else if (isAuthenticated && !organization && !isAuthOrOnboardingRoute) {
         router.push('/onboarding');
       }
     }
-  }, [isLoading, isAuthenticated, organization, isAuthOrOnboardingRoute, router]);
+  }, [isLoading, isAuthenticated, isDemoMode, organization, isAuthOrOnboardingRoute, router]);
 
   // Auth and Onboarding pages render cleanly as standalone full-screen pages
   if (isAuthOrOnboardingRoute) {
@@ -55,8 +55,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If unauthenticated or un-onboarded, prevent rendering protected layout while redirecting
-  if (!isAuthenticated || !organization) {
+  // If unauthenticated and not in demo mode, or un-onboarded, prevent rendering protected layout while redirecting
+  if ((!isAuthenticated && !isDemoMode) || (isAuthenticated && !organization)) {
     return <div className="min-h-screen bg-zinc-950 text-zinc-100" />;
   }
 
@@ -77,6 +77,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
         )}
       >
+        {/* Interactive Demo Showcase Banner */}
+        {isDemoMode && !isAuthenticated && (
+          <div className="bg-gradient-to-r from-violet-950/90 via-indigo-950/90 to-navy-950/90 border-b border-violet-800/50 px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md z-40">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+              <Badge variant="violet" size="sm" className="font-semibold uppercase tracking-wider text-[10px]">
+                <Sparkles className="h-3 w-3 mr-1 text-violet-300" />
+                Demo Mode
+              </Badge>
+              <span className="text-zinc-200">
+                Organization: <strong className="text-white font-semibold">Acme Systems Engineering</strong>
+                <span className="mx-2 text-zinc-600 hidden sm:inline">•</span>
+                <span className="hidden sm:inline">
+                  Viewing as <strong className="text-violet-300">{currentUser.name}</strong> ({currentUser.role.toUpperCase()})
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-zinc-400 font-mono hidden md:inline">
+                Isolated synthetic dataset • No Supabase changes
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  exitDemoMode();
+                  router.push('/login');
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-violet-900/60 hover:bg-violet-800/80 text-violet-200 border border-violet-700/60 transition-all hover:text-white shadow-sm"
+              >
+                Exit Demo
+              </button>
+            </div>
+          </div>
+        )}
         {/* Sticky Header */}
         <AppHeader onMobileMenuToggle={() => setIsMobileOpen(true)} />
 

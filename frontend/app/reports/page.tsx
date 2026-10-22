@@ -22,9 +22,10 @@ import {
   CheckCircle2,
   RefreshCw,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function ReportsPage() {
-  const { isAuthenticated, organization } = useAuth();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
 
   // Live hooks
@@ -60,7 +61,10 @@ export default function ReportsPage() {
     tasks: mockTasks,
     recommendations: mockRecommendations,
     auditEvents: mockAuditEvents,
+    activeRole: mockRole,
   } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
 
   const projects = isLive ? liveProjects : mockProjects;
   const tasks = isLive ? liveTasks : mockTasks;
@@ -130,6 +134,17 @@ export default function ReportsPage() {
   const totalEffortHours = React.useMemo(() => {
     return tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   }, [tasks]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Reports & Executive Analytics"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Organization capacity metrics, AI recommendation accuracy benchmarks, and historical velocity reports are restricted to management and administrative personnel."
+      />
+    );
+  }
 
   const completedTasksCount = tasks.filter((t) => t.status === 'completed').length;
   const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 100;
