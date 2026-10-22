@@ -1623,17 +1623,17 @@ export const initialRedistributionProposals: WorkloadRedistributionProposal[] = 
     id: 'prop-2',
     taskId: 'task-103',
     taskTitle: 'Optimize PostgreSQL Vector Index Queries',
-    taskHours: 16,
+    taskHours: 8,
     sourceEmployeeId: 'emp-3',
     sourceEmployeeName: 'David Kim',
     sourceCurrentLoad: 32,
-    sourceProjectedLoad: 24,
+    sourceProjectedLoad: 24, // 32 - 8 = 24h (60%)
     targetEmployeeId: 'emp-5',
     targetEmployeeName: 'Marcus Vance',
     targetCurrentLoad: 28,
-    targetProjectedLoad: 36,
+    targetProjectedLoad: 36, // 28 + 8 = 36h (90%)
     rationale:
-      'Co-assigning vector index tuning balances David Kim from upper capacity threshold (32h / 80%) while keeping Marcus Vance within safe operating margins (36h / 90%).',
+      'Splitting vector index tuning (8h co-assignment) balances David Kim from upper capacity threshold (32h -> 24h / 60%) while keeping Marcus Vance within safe operating margins (28h -> 36h / 90%).',
   },
 ];
 

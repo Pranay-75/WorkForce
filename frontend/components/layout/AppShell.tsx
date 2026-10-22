@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="font-medium text-white truncate">{feedbackMessage}</span>
+              <span className="font-medium text-white break-words leading-snug">{feedbackMessage}</span>
               <span className="text-[10px] text-zinc-400 font-mono">
                 {isDemoMode && !isAuthenticated ? 'Simulated Demo Action' : 'Live Workspace Action'}
               </span>
@@ -129,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setFeedbackMessage(null)}
-              className="text-zinc-400 hover:text-white p-1 rounded-md transition-colors"
+              className="text-zinc-400 hover:text-white p-1 rounded-md transition-colors shrink-0"
               aria-label="Dismiss notification"
             >
               <X className="h-3.5 w-3.5" />
