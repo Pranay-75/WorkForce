@@ -22,7 +22,10 @@ import {
   CheckCircle2,
   HelpCircle,
   ArrowRight,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import { validateEmail, validateLoginPassword } from '@/lib/validation';
 
 const LOGIN_ROLES: {
   id: UserRole;
@@ -121,6 +124,9 @@ function LoginFormContent() {
   const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [fieldErrors, setFieldErrors] = React.useState<{ email?: string; password?: string }>({});
+  const [touched, setTouched] = React.useState<{ email?: boolean; password?: boolean }>({});
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -175,12 +181,61 @@ function LoginFormContent() {
     }
   }, [isAuthenticated, organization, isAuthLoading, router, urlError]);
 
+  const handleBlur = (field: 'email' | 'password') => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    if (field === 'email') {
+      const err = validateEmail(email);
+      setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+    } else if (field === 'password') {
+      const err = validateLoginPassword(password);
+      setFieldErrors((prev) => ({ ...prev, password: err || undefined }));
+    }
+  };
+
+  const handleChangeEmail = (val: string) => {
+    setEmail(val);
+    if (errorMessage) setErrorMessage(null);
+    if (touched.email) {
+      const err = validateEmail(val);
+      setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+    }
+  };
+
+  const handleChangePassword = (val: string) => {
+    setPassword(val);
+    if (errorMessage) setErrorMessage(null);
+    if (touched.password) {
+      const err = validateLoginPassword(val);
+      setFieldErrors((prev) => ({ ...prev, password: err || undefined }));
+    }
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    // Run deterministic client-side validation
+    const emailErr = validateEmail(email);
+    const passwordErr = validateLoginPassword(password);
+
+    setTouched({ email: true, password: true });
+    setFieldErrors({
+      email: emailErr || undefined,
+      password: passwordErr || undefined,
+    });
+
+    if (emailErr || passwordErr) {
+      if (emailErr) {
+        document.getElementById('login-email-input')?.focus();
+      } else if (passwordErr) {
+        document.getElementById('login-password-input')?.focus();
+      }
+      return;
+    }
+
     setIsLoading(true);
 
-    const { error } = await signInWithPassword(email, password);
+    const { error } = await signInWithPassword(email.trim(), password);
 
     if (error) {
       setErrorMessage(error);
@@ -195,6 +250,9 @@ function LoginFormContent() {
     setSelectedRole(opt.id);
     setEmail(opt.demoEmail);
     setPassword('Password123!');
+    setFieldErrors({});
+    setTouched({});
+    setErrorMessage(null);
     switchDemoRole(opt.demoId);
   };
 
@@ -372,25 +430,44 @@ function LoginFormContent() {
             )}
 
             <div className="space-y-1.5 pt-1">
-              <label className="block text-xs font-semibold text-slate-300">
+              <label htmlFor="login-email-input" className="block text-xs font-semibold text-slate-300">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                <Mail
+                  className={cn(
+                    'absolute left-3 top-2.5 h-4 w-4 transition-colors',
+                    touched.email && fieldErrors.email ? 'text-rose-400' : 'text-slate-500'
+                  )}
+                />
                 <input
+                  id="login-email-input"
                   type="email"
                   required
                   placeholder="name@company.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                  onChange={(e) => handleChangeEmail(e.target.value)}
+                  onBlur={() => handleBlur('email')}
+                  aria-invalid={!!(touched.email && fieldErrors.email)}
+                  className={cn(
+                    'w-full rounded-xl border bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                    touched.email && fieldErrors.email
+                      ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
+                      : 'border-slate-700/80 focus:border-violet-500'
+                  )}
                 />
               </div>
+              {touched.email && fieldErrors.email && (
+                <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-in fade-in pt-0.5">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{fieldErrors.email}</span>
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-300">
+                <label htmlFor="login-password-input" className="block text-xs font-semibold text-slate-300">
                   Password
                 </label>
                 <Link
@@ -401,16 +478,43 @@ function LoginFormContent() {
                 </Link>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                <Lock
+                  className={cn(
+                    'absolute left-3 top-2.5 h-4 w-4 transition-colors',
+                    touched.password && fieldErrors.password ? 'text-rose-400' : 'text-slate-500'
+                  )}
+                />
                 <input
-                  type="password"
+                  id="login-password-input"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                  onChange={(e) => handleChangePassword(e.target.value)}
+                  onBlur={() => handleBlur('password')}
+                  aria-invalid={!!(touched.password && fieldErrors.password)}
+                  className={cn(
+                    'w-full rounded-xl border bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                    touched.password && fieldErrors.password
+                      ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
+                      : 'border-slate-700/80 focus:border-violet-500'
+                  )}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
+              {touched.password && fieldErrors.password && (
+                <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1.5 animate-in fade-in pt-0.5">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{fieldErrors.password}</span>
+                </p>
+              )}
             </div>
 
             <Button
