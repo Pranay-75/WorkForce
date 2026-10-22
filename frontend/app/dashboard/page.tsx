@@ -119,6 +119,7 @@ export default function DashboardPage() {
     currentUserId: mockUserId,
     approveRecommendation,
     updateTaskStatus: mockUpdateTaskStatus,
+    isDemoMode,
   } = useMockStore();
 
   const projects = isLive ? dbProjects : mockProjects;
@@ -141,11 +142,17 @@ export default function DashboardPage() {
   }, [tasks]);
 
   const overloadedCount = React.useMemo(() => {
-    return members.filter((m) => {
-      const load = memberLoads.get(m.userId) || 0;
-      return m.weeklyCapacityHours > 0 && load > m.weeklyCapacityHours;
+    if (isLive) {
+      return members.filter((m) => {
+        const load = memberLoads.get(m.userId) || 0;
+        return m.weeklyCapacityHours > 0 && load > m.weeklyCapacityHours;
+      }).length;
+    }
+    return mockEmployees.filter((e) => {
+      const load = memberLoads.get(e.id) || 0;
+      return e.weeklyCapacityHours > 0 && load > e.weeklyCapacityHours;
     }).length;
-  }, [members, memberLoads]);
+  }, [isLive, members, memberLoads, mockEmployees]);
 
   // Find employee entity matching current user or construct from authenticated session
   const currentEmp = React.useMemo(() => {
@@ -181,9 +188,9 @@ export default function DashboardPage() {
       ? Math.round(((currentEmp.currentLoadHours || 0) / currentEmp.weeklyCapacityHours) * 100)
       : 0;
 
-  // Real organization headcount and capacity derived strictly from Supabase
-  const totalEmployees = totalMembers;
-  const totalCapacity = totalCapacityHours;
+  // Real organization headcount and capacity derived strictly from Supabase (or mock store during demo)
+  const totalEmployees = isLive ? totalMembers : mockEmployees.length;
+  const totalCapacity = isLive ? totalCapacityHours : mockEmployees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
 
   const memberUserIds = React.useMemo(() => new Set(members.map((m) => m.userId)), [members]);
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
@@ -192,32 +199,56 @@ export default function DashboardPage() {
   const pendingRecommendations = recommendations.filter((r) => r.status === 'pending');
 
   const totalAllocated = React.useMemo(() => {
+    if (isLive) {
+      return tasks
+        .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
+        .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+    }
     return tasks
-      .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
+      .filter((t) => t.status !== 'completed' && t.assignedTo)
       .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-  }, [tasks, memberUserIds]);
+  }, [isLive, tasks, memberUserIds]);
 
-  // Real departmental workload aggregation derived strictly from Supabase members
+  // Departmental workload aggregation derived strictly from Supabase members (or mock store during demo)
   const deptData = React.useMemo(() => {
-    return realDepartments.map((d) => {
-      const deptMemberIds = new Set(
-        members.filter((m) => m.department === d.department).map((m) => m.userId)
-      );
+    if (isLive) {
+      return realDepartments.map((d) => {
+        const deptMemberIds = new Set(
+          members.filter((m) => m.department === d.department).map((m) => m.userId)
+        );
+        const load = tasks
+          .filter((t) => t.status !== 'completed' && t.assignedTo && deptMemberIds.has(t.assignedTo))
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        const util = d.totalCapacityHours > 0 ? Math.round((load / d.totalCapacityHours) * 100) : 0;
+        return {
+          dept: d.department,
+          count: d.headcount,
+          capacity: d.totalCapacityHours,
+          load,
+          util,
+        };
+      });
+    }
+    const mockDeptNames = Array.from(new Set(mockEmployees.map((e) => e.department)));
+    return mockDeptNames.map((dept) => {
+      const deptEmps = mockEmployees.filter((e) => e.department === dept);
+      const deptEmpIds = new Set(deptEmps.map((e) => e.id));
+      const capacity = deptEmps.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
       const load = tasks
-        .filter((t) => t.status !== 'completed' && t.assignedTo && deptMemberIds.has(t.assignedTo))
+        .filter((t) => t.status !== 'completed' && t.assignedTo && deptEmpIds.has(t.assignedTo))
         .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
-      const util = d.totalCapacityHours > 0 ? Math.round((load / d.totalCapacityHours) * 100) : 0;
+      const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
       return {
-        dept: d.department,
-        count: d.headcount,
-        capacity: d.totalCapacityHours,
+        dept,
+        count: deptEmps.length,
+        capacity,
         load,
         util,
       };
     });
-  }, [realDepartments, members, tasks]);
+  }, [isLive, realDepartments, members, tasks, mockEmployees]);
 
-  if (authLoading || !isAuthenticated) {
+  if (authLoading || (!isAuthenticated && !isDemoMode)) {
     return (
       <div className="min-h-screen bg-navy-950 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
         <div className="h-8 w-8 rounded-full border-2 border-violet-500 border-t-transparent animate-spin mb-3" />

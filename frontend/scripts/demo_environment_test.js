@@ -311,6 +311,112 @@ assert(
   'Live session: Real authenticated manager retains isManagerOrAdmin regardless of demo role'
 );
 
+console.log('\n[Test Suite 10: Dashboard Demo Mode Unblocked & Metric Aggregation]');
+
+const dashboardPageContent = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
+
+// 1. Verify code structure in dashboard/page.tsx
+assert(
+  dashboardPageContent.includes('(!isAuthenticated && !isDemoMode)'),
+  'Dashboard session verification guard allows unauthenticated demo mode rendering'
+);
+assert(
+  dashboardPageContent.includes('totalEmployees = isLive ? totalMembers : mockEmployees.length'),
+  'Dashboard resolves totalEmployees from mockEmployees when in demo mode'
+);
+assert(
+  dashboardPageContent.includes('totalCapacity = isLive ? totalCapacityHours : mockEmployees.reduce'),
+  'Dashboard resolves totalCapacity from mockEmployees when in demo mode'
+);
+
+// 2. Functional simulation of the Dashboard Loading Guard
+function evaluateDashboardLoadingGuard(authLoading, isAuthenticated, isDemoMode) {
+  return authLoading || (!isAuthenticated && !isDemoMode);
+}
+
+// Guard conditions:
+assert(
+  evaluateDashboardLoadingGuard(true, false, true) === true,
+  'Dashboard guard: Shows loading spinner when auth is loading (demo mode)'
+);
+assert(
+  evaluateDashboardLoadingGuard(true, true, false) === true,
+  'Dashboard guard: Shows loading spinner when auth is loading (real session)'
+);
+assert(
+  evaluateDashboardLoadingGuard(false, false, false) === true,
+  'Dashboard guard: Blocks unauthenticated non-demo visitor while redirecting'
+);
+assert(
+  evaluateDashboardLoadingGuard(false, false, true) === false,
+  'Dashboard guard: Correctly UNBLOCKS and renders dashboard for unauthenticated demo mode'
+);
+assert(
+  evaluateDashboardLoadingGuard(false, true, false) === false,
+  'Dashboard guard: Correctly UNBLOCKS and renders dashboard for real authenticated session'
+);
+
+// 3. Functional simulation of Metrics Aggregation (Live isolation vs Demo fallback)
+function computeDashboardMetrics(isLive, liveData, syntheticEmployees, syntheticTasks) {
+  const totalEmployees = isLive ? liveData.totalMembers : syntheticEmployees.length;
+  const totalCapacity = isLive
+    ? liveData.totalCapacityHours
+    : syntheticEmployees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
+
+  const activeTasks = syntheticTasks.filter((t) => t.status !== 'completed');
+  const totalAllocated = isLive
+    ? liveData.tasks
+        .filter((t) => t.status !== 'completed' && liveData.memberIds.includes(t.assignedTo))
+        .reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+    : activeTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+
+  const orgUtilizationPct = totalCapacity > 0 ? Math.round((totalAllocated / totalCapacity) * 100) : 0;
+
+  return { totalEmployees, totalCapacity, totalAllocated, orgUtilizationPct };
+}
+
+// Test with live authenticated mock inputs
+const mockLiveData = {
+  totalMembers: 12,
+  totalCapacityHours: 480,
+  memberIds: ['user-1', 'user-2'],
+  tasks: [
+    { assignedTo: 'user-1', estimatedHours: 40, status: 'in_progress' },
+    { assignedTo: 'user-2', estimatedHours: 20, status: 'todo' },
+    { assignedTo: 'user-3', estimatedHours: 30, status: 'todo' }, // non-member
+  ],
+};
+
+const liveMetrics = computeDashboardMetrics(true, mockLiveData, [], []);
+assert(
+  liveMetrics.totalEmployees === 12 &&
+  liveMetrics.totalCapacity === 480 &&
+  liveMetrics.totalAllocated === 60 &&
+  liveMetrics.orgUtilizationPct === 13,
+  'Live session: Strictly uses verified live Supabase members and hours (no synthetic data leakage)'
+);
+
+// Test with demo inputs (synthesizing from mockData initial values)
+const mockEmployeesSample = [
+  { id: 'emp-1', weeklyCapacityHours: 40, department: 'Engineering' },
+  { id: 'emp-2', weeklyCapacityHours: 40, department: 'Engineering' },
+  { id: 'emp-3', weeklyCapacityHours: 35, department: 'Design' },
+];
+const mockTasksSample = [
+  { assignedTo: 'emp-1', estimatedHours: 20, status: 'in_progress' },
+  { assignedTo: 'emp-2', estimatedHours: 46, status: 'in_progress' },
+  { assignedTo: 'emp-3', estimatedHours: 10, status: 'completed' }, // completed task excluded
+];
+
+const demoMetrics = computeDashboardMetrics(false, { totalMembers: 0, totalCapacityHours: 0, memberIds: [], tasks: [] }, mockEmployeesSample, mockTasksSample);
+assert(
+  demoMetrics.totalEmployees === 3 &&
+  demoMetrics.totalCapacity === 115 &&
+  demoMetrics.totalAllocated === 66 &&
+  demoMetrics.orgUtilizationPct === 57,
+  'Demo mode: Aggregates synthetic employee capacity and active tasks accurately'
+);
+
 console.log(`\n=== Test Results: ${testsPassed} passed, ${testsFailed} failed ===\n`);
 
 if (testsFailed > 0) {
