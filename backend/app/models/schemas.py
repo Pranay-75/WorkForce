@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 class UserRoleEnum(str, Enum):
+    ORGANIZER = "organizer"
     ADMIN = "admin"
     MANAGER = "manager"
     EMPLOYEE = "employee"

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'employee' | 'hr';
+export type UserRole = 'organizer' | 'admin' | 'manager' | 'employee' | 'hr';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
 export type PriorityLevel = 'low' | 'medium' | 'high' | 'critical';
@@ -26,7 +26,14 @@ export interface Employee {
   fullName: string;
   avatarUrl?: string;
   role: UserRole;
-  department: 'Engineering' | 'Design' | 'Product' | 'QA' | 'DevOps';
+  department:
+    | 'Engineering'
+    | 'Design'
+    | 'Product'
+    | 'QA'
+    | 'DevOps'
+    | 'Executive'
+    | 'Human Resources';
   jobTitle: string;
   weeklyCapacityHours: number;
   currentLoadHours: number;
@@ -131,7 +138,7 @@ export interface AuditEvent {
   actorId: string;
   actorName: string;
   action: string;
-  entityType: 'Task' | 'Recommendation' | 'Employee' | 'Project' | 'Workload';
+  entityType: 'Task' | 'Recommendation' | 'Employee' | 'Project' | 'Workload' | 'Organization';
   entityId: string;
   entityTitle: string;
   details: string;

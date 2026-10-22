@@ -34,6 +34,7 @@ interface AuthContextType {
   refreshUserData: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = React.createContext<AuthContextType | null>(null);
@@ -105,7 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (membershipData?.role) {
-          setRole(membershipData.role as UserRole);
+          // The creator who bootstrapped this organization is the initial Organizer
+          setRole('organizer');
           if (membershipData.organizations) {
             const org = membershipData.organizations as any;
             const orgObj = {
@@ -185,12 +187,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }));
           setAvailableOrganizations(orgsList);
 
+          // Helper to distinguish Organizer (first active member/creator) from delegated Admins
+          const resolveMemberRole = async (rawRole: string, orgId: string, currentUid: string, orgCreatedBy?: string): Promise<UserRole> => {
+            if (rawRole === 'organizer') return 'organizer';
+            if (rawRole === 'admin') {
+              if (orgCreatedBy && orgCreatedBy === currentUid) {
+                return 'organizer';
+              }
+              try {
+                const { data: firstMember } = await supabase
+                  .from('organization_memberships')
+                  .select('user_id')
+                  .eq('organization_id', orgId)
+                  .order('created_at', { ascending: true })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (firstMember && firstMember.user_id === currentUid) {
+                  return 'organizer';
+                }
+              } catch {
+                // Fail-safe to admin
+              }
+              return 'admin';
+            }
+            if (rawRole === 'manager') return 'manager';
+            return 'employee';
+          };
+
           if (allMemberships.length === 1) {
             // Exactly 1 membership: deterministically select it
             const m = allMemberships[0];
             const org = m.organizations as any;
-            // Role is strictly derived from verified membership row
-            setRole(m.role as UserRole);
+            const resolved = await resolveMemberRole(m.role, org.id, currentUser.id);
+            setRole(resolved);
             setOrganization({
               id: org.id,
               name: org.name,
@@ -209,8 +239,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (matched && matched.organizations) {
               const org = matched.organizations as any;
-              // Role is strictly derived from verified membership row
-              setRole(matched.role as UserRole);
+              const resolved = await resolveMemberRole(matched.role, org.id, currentUser.id);
+              setRole(resolved);
               setOrganization({
                 id: org.id,
                 name: org.name,
@@ -234,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const selectOrganization = React.useCallback(
-    (targetOrgId: string) => {
+    async (targetOrgId: string) => {
       const matched = allMembershipsRef.current.find((m: any) => m.organization_id === targetOrgId);
       if (!matched || !matched.organizations) {
         console.warn('Cannot select organization: verified active membership not found.');
@@ -244,7 +274,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('workforce_active_org_id', targetOrgId);
       }
       const org = matched.organizations as any;
-      setRole(matched.role as UserRole);
+      let determinedRole: UserRole = (matched.role as UserRole) || 'employee';
+      if (matched.role === 'admin') {
+        try {
+          const { data: firstMember } = await supabase
+            .from('organization_memberships')
+            .select('user_id')
+            .eq('organization_id', targetOrgId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (firstMember && firstMember.user_id === user?.id) {
+            determinedRole = 'organizer';
+          }
+        } catch {
+          determinedRole = 'admin';
+        }
+      }
+      setRole(determinedRole);
       setOrganization({
         id: org.id,
         name: org.name,
@@ -252,7 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setHasAmbiguousMembership(false);
     },
-    []
+    [supabase, user]
   );
 
   const refreshUserData = React.useCallback(async () => {
@@ -278,6 +325,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(initialSession?.user || null);
 
           if (initialSession?.user) {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('workforce_demo_mode');
+              localStorage.removeItem('workforce_demo_user_id');
+            }
             await fetchUserData(initialSession.user);
           }
         }
@@ -298,6 +349,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(newSession?.user || null);
 
       if (newSession?.user) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('workforce_demo_mode');
+          localStorage.removeItem('workforce_demo_user_id');
+        }
         await fetchUserData(newSession.user);
       } else {
         setProfile(null);
@@ -402,6 +457,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('workforce_active_org_id');
+      localStorage.removeItem('workforce_demo_mode');
+      localStorage.removeItem('workforce_demo_user_id');
     }
     setUser(null);
     setSession(null);
@@ -424,6 +481,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updatePassword = async (password: string) => {
+    try {
+      if (!password || password.length < 8) {
+        return { error: 'Password must be at least 8 characters.' };
+      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'Password update failed' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -443,6 +513,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshUserData,
         signOut,
         resetPasswordForEmail,
+        updatePassword,
       }}
     >
       {children}

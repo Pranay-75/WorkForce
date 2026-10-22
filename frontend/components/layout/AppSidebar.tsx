@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMockStore } from '@/lib/mockStore';
+import { useAuth } from '@/lib/authContext';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
@@ -45,25 +46,25 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Dashboard',
         href: '/dashboard',
         icon: LayoutDashboard,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Employees',
         href: '/employees',
         icon: Users,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Projects',
         href: '/projects',
         icon: FolderKanban,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Tasks',
         href: '/tasks',
         icon: CheckSquare,
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
     ],
   },
@@ -75,19 +76,19 @@ const masterNavigationGroups: NavGroup[] = [
         href: '/matching',
         icon: Sparkles,
         badge: 'AI',
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Workload',
         href: '/workload',
         icon: BarChart3,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Employee Insights',
         href: '/insights',
         icon: Flame,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
     ],
   },
@@ -98,26 +99,26 @@ const masterNavigationGroups: NavGroup[] = [
         name: 'Reports',
         href: '/reports',
         icon: FileSpreadsheet,
-        allowedRoles: ['admin', 'manager', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
       },
       {
         name: 'Audit Logs',
         href: '/audit',
         icon: History,
-        allowedRoles: ['admin'],
+        allowedRoles: ['organizer', 'admin'],
       },
       {
         name: 'Notifications',
         href: '/notifications',
         icon: Bell,
         badge: '3',
-        allowedRoles: ['admin', 'manager', 'hr', 'employee'],
+        allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
         name: 'Settings',
         href: '/settings',
         icon: Settings,
-        allowedRoles: ['admin', 'hr'],
+        allowedRoles: ['organizer', 'admin', 'hr'],
       },
     ],
   },
@@ -126,13 +127,35 @@ const masterNavigationGroups: NavGroup[] = [
 export function AppSidebar({
   isMobileOpen,
   setIsMobileOpen,
+  isCollapsed: controlledIsCollapsed,
+  setIsCollapsed: controlledSetIsCollapsed,
 }: {
   isMobileOpen?: boolean;
   setIsMobileOpen?: (open: boolean) => void;
+  isCollapsed?: boolean;
+  setIsCollapsed?: (collapsed: boolean) => void;
 }) {
   const pathname = usePathname();
-  const { activeRole, currentUser } = useMockStore();
+  const { activeRole: mockRole, currentUser: mockUser } = useMockStore();
+  const { user, profile, role: authRole, isAuthenticated, organization } = useAuth();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  const isLive = isAuthenticated && Boolean(organization?.id);
+  const activeRole = (isLive && authRole ? authRole : mockRole) as UserRole;
+
+  const displayUser = React.useMemo(() => {
+    if (isLive) {
+      const name = profile?.fullName || user?.email?.split('@')[0] || 'User';
+      const avatar = (profile?.fullName || user?.email || 'U')[0].toUpperCase();
+      return {
+        name,
+        department: organization?.name || 'Workspace',
+        role: authRole || 'member',
+        avatar,
+      };
+    }
+    return mockUser;
+  }, [isLive, profile, user, authRole, organization, mockUser]);
 
   // Filter groups based on active role
   const visibleGroups = masterNavigationGroups
@@ -141,6 +164,7 @@ export function AppSidebar({
       items: group.items.filter((item) => item.allowedRoles.includes(activeRole)),
     }))
     .filter((group) => group.items.length > 0);
+
 
   return (
     <>
@@ -155,30 +179,30 @@ export function AppSidebar({
       {/* Sidebar Container */}
       <aside
         className={cn(
-          'fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-slate-800/80 bg-navy-900 transition-all duration-300 ease-in-out',
+          'fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-zinc-800 bg-zinc-900 transition-all duration-300 ease-in-out',
           isCollapsed ? 'w-20' : 'w-64',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Branding Header */}
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-4">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 px-4">
           <Link
             href="/dashboard"
             className="flex items-center gap-3 overflow-hidden group"
             onClick={() => setIsMobileOpen?.(false)}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-glow group-hover:scale-105 transition-transform">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-950 shadow-sm group-hover:bg-white transition-colors">
               <Zap className="h-5 w-5 fill-current" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
                   WorkForce
-                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-violet-950/80 text-violet-400 border border-violet-800/50">
+                  <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                     SaaS
                   </span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium tracking-wide">
+                <span className="text-[10px] text-zinc-400 font-medium tracking-wide">
                   AI Capacity Platform
                 </span>
               </div>
@@ -188,7 +212,7 @@ export function AppSidebar({
           {/* Desktop Collapse Toggle */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden rounded-lg p-1.5 text-slate-400 hover:bg-navy-800 hover:text-slate-200 lg:flex focus:outline-none"
+            className="hidden rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 lg:flex focus:outline-none"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
@@ -204,7 +228,7 @@ export function AppSidebar({
           {visibleGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-1">
               {!isCollapsed && (
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                   {group.label}
                 </p>
               )}
@@ -223,20 +247,20 @@ export function AppSidebar({
                       className={cn(
                         'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 select-none',
                         isActive
-                          ? 'bg-violet-600/15 text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] border border-violet-500/30'
-                          : 'text-slate-400 hover:bg-navy-800/80 hover:text-slate-200'
+                          ? 'bg-zinc-800/80 text-white border border-zinc-700/60'
+                          : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
                       )}
                       title={isCollapsed ? item.name : undefined}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white" />
                       )}
                       <Icon
                         className={cn(
                           'h-4 w-4 shrink-0 transition-colors',
                           isActive
-                            ? 'text-violet-400'
-                            : 'text-slate-400 group-hover:text-slate-200'
+                            ? 'text-white'
+                            : 'text-zinc-400 group-hover:text-zinc-200'
                         )}
                       />
                       {!isCollapsed && (
@@ -247,8 +271,8 @@ export function AppSidebar({
                           className={cn(
                             'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
                             item.badge === 'AI'
-                              ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-mono'
-                              : 'bg-slate-800 text-slate-300'
+                              ? 'bg-zinc-100 text-zinc-950 font-mono'
+                              : 'bg-zinc-800 text-zinc-300'
                           )}
                         >
                           {item.badge}
@@ -263,39 +287,41 @@ export function AppSidebar({
         </nav>
 
         {/* User Account / Footer */}
-        <div className="border-t border-slate-800/80 p-3 bg-navy-950/40">
+        <div className="border-t border-zinc-800 p-3 bg-zinc-950/40">
           <div
             className={cn(
-              'flex items-center gap-3 rounded-xl p-2 bg-navy-850/60 border border-slate-800/60',
+              'flex items-center gap-3 rounded-xl p-2 bg-zinc-900/60 border border-zinc-800/60',
               isCollapsed && 'justify-center p-1.5'
             )}
+            title={isCollapsed ? `${displayUser.name} (${displayUser.role.toUpperCase()})` : undefined}
           >
             <div className="relative">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 font-semibold text-white text-xs border border-violet-400/40 shadow-sm">
-                {currentUser.avatar}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 font-semibold text-zinc-200 text-xs border border-zinc-700 shadow-sm">
+                {displayUser.avatar}
               </div>
-              <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-navy-900" />
+              <div className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-zinc-900" />
             </div>
 
             {!isCollapsed && (
               <div className="flex flex-col min-w-0 flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-200 truncate">
-                    {currentUser.name}
+                  <span className="text-xs font-semibold text-zinc-200 truncate">
+                    {displayUser.name}
                   </span>
-                  <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-zinc-300 shrink-0" />
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  <span className="truncate">{currentUser.department}</span>
+                <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                  <span className="truncate">{displayUser.department}</span>
                   <span>•</span>
-                  <span className="text-violet-400 font-mono text-[10px] uppercase">
-                    {currentUser.role}
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">
+                    {displayUser.role}
                   </span>
                 </div>
               </div>
             )}
           </div>
         </div>
+
       </aside>
     </>
   );

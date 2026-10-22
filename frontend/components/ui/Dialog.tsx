@@ -66,7 +66,7 @@ export function Dialog({
         )}
       >
         {/* Top subtle highlight */}
-        <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-cyan-500 to-purple-600" />
+        <div className="h-1 w-full bg-gradient-to-r from-blue-600 to-slate-700" />
 
         {/* Header */}
         {(title || description) && (
@@ -83,7 +83,7 @@ export function Dialog({
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-1 text-slate-400 hover:bg-navy-800 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="rounded-lg p-1 text-slate-400 hover:bg-navy-800 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Close modal"
             >
               <X className="h-4 w-4" />

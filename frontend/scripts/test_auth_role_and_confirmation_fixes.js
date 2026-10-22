@@ -89,9 +89,19 @@ async function runTests() {
       if (creatorUserId) {
         cleanupUserIds.add(creatorUserId);
       }
+      let creatorToken = signUpData.session?.access_token;
+      if (!creatorToken) {
+        runPsql(`UPDATE auth.users SET email_confirmed_at = timezone('utc'::text, now()) WHERE id = '${creatorUserId}';`);
+        const { data: creatorLogin, error: cErr } = await anon.auth.signInWithPassword({
+          email: testOrgCreatorEmail,
+          password: 'TestPassword123!',
+        });
+        if (cErr) throw new Error(`Sign in failed for creator: ${cErr.message}`);
+        creatorToken = creatorLogin.session.access_token;
+      }
       const creatorClient = createClient(SUPABASE_URL, ANON_KEY, {
         auth: { persistSession: false },
-        global: { headers: { Authorization: `Bearer ${signUpData.session.access_token}` } }
+        global: { headers: { Authorization: `Bearer ${creatorToken}` } }
       });
 
       // Creator invokes create_organization_with_admin RPC
@@ -726,9 +736,20 @@ async function runTests() {
       cleanupUserIds.add(unattachedAuth.user.id);
     }
 
+    let unattachedToken = unattachedAuth.session?.access_token;
+    if (!unattachedToken) {
+      runPsql(`UPDATE auth.users SET email_confirmed_at = timezone('utc'::text, now()) WHERE id = '${unattachedAuth.user.id}';`);
+      const { data: unattachedLogin, error: uErr } = await anon.auth.signInWithPassword({
+        email: unattachedEmail,
+        password: 'TestPassword123!',
+      });
+      if (uErr) throw new Error(`Sign in failed for unattached user: ${uErr.message}`);
+      unattachedToken = unattachedLogin.session.access_token;
+    }
+
     const unattachedClient = createClient(SUPABASE_URL, ANON_KEY, {
       auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${unattachedAuth.session.access_token}` } }
+      global: { headers: { Authorization: `Bearer ${unattachedToken}` } }
     });
 
     // Attempt to query organizations table - RLS must return 0 rows

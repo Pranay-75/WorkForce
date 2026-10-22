@@ -71,16 +71,21 @@ export default function TasksPage() {
 
   const employees = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.map((m) => ({
-        id: m.userId,
-        fullName: m.fullName,
-        department: m.department || 'Engineering',
-        weeklyCapacityHours: m.weeklyCapacityHours || 40,
-        currentLoadHours: 0,
-      }));
+      return orgMembers.map((m) => {
+        const load = tasks
+          .filter((t) => t.assignedTo === m.userId && t.status !== 'completed')
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: load,
+        };
+      });
     }
     return mockEmployees;
-  }, [isLive, orgMembers, mockEmployees]);
+  }, [isLive, orgMembers, mockEmployees, tasks]);
 
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -91,6 +96,7 @@ export default function TasksPage() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   const [newTitle, setNewTitle] = React.useState('');
   const [newDesc, setNewDesc] = React.useState('');
@@ -121,7 +127,16 @@ export default function TasksPage() {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim()) {
+      setFormError('Task title is required.');
+      return;
+    }
+
+    const parsedHours = parseFloat(newHours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setFormError('Estimated hours must be a positive number.');
+      return;
+    }
 
     const proj = projects.find((p) => p.id === newProjId) || projects[0];
     if (!proj) {
@@ -131,6 +146,7 @@ export default function TasksPage() {
 
     setSubmitting(true);
     setFormError(null);
+    setActionError(null);
 
     if (isLive) {
       const res = await createTask({
@@ -140,7 +156,7 @@ export default function TasksPage() {
         status: 'todo',
         priority: newPriority,
         complexity: 'Medium',
-        estimatedHours: parseFloat(newHours) || 8,
+        estimatedHours: parsedHours,
         dueDate: newDueDate || undefined,
         assignedTo: newAssigneeId === 'unassigned' ? null : newAssigneeId,
         requiredSkills: [
@@ -165,7 +181,7 @@ export default function TasksPage() {
         status: 'todo',
         priority: newPriority,
         complexity: 'Medium',
-        estimatedHours: parseFloat(newHours) || 8,
+        estimatedHours: parsedHours,
         dueDate: newDueDate,
         assignedTo: assignedEmp ? assignedEmp.id : undefined,
         assignedEmployeeName: assignedEmp ? assignedEmp.fullName : undefined,
@@ -190,12 +206,16 @@ export default function TasksPage() {
   };
 
   const advanceTaskStatus = async (t: Task) => {
+    setActionError(null);
     const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
     const currIdx = sequence.indexOf(t.status);
     if (currIdx < sequence.length - 1) {
       const nextStatus = sequence[currIdx + 1];
       if (isLive) {
-        await dbUpdateTaskStatus(t.id, nextStatus);
+        const res = await dbUpdateTaskStatus(t.id, nextStatus);
+        if (res.error) {
+          setActionError(`Failed to advance task: ${res.error}`);
+        }
       } else {
         mockUpdateTaskStatus(t.id, nextStatus);
       }
@@ -203,12 +223,16 @@ export default function TasksPage() {
   };
 
   const regressTaskStatus = async (t: Task) => {
+    setActionError(null);
     const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
     const currIdx = sequence.indexOf(t.status);
     if (currIdx > 0) {
       const prevStatus = sequence[currIdx - 1];
       if (isLive) {
-        await dbUpdateTaskStatus(t.id, prevStatus);
+        const res = await dbUpdateTaskStatus(t.id, prevStatus);
+        if (res.error) {
+          setActionError(`Failed to regress task: ${res.error}`);
+        }
       } else {
         mockUpdateTaskStatus(t.id, prevStatus);
       }
@@ -269,7 +293,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Error Banner */}
+      {/* Error Banners */}
       {isLive && tasksError && (
         <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -279,6 +303,18 @@ export default function TasksPage() {
           <Button variant="secondary" size="sm" onClick={() => refetchTasks()}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Retry
+          </Button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setActionError(null)}>
+            Dismiss
           </Button>
         </div>
       )}

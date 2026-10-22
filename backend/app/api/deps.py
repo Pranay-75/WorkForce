@@ -141,6 +141,31 @@ async def get_current_user(
         org_id = org_info.get("id") or row.get("organization_id")
         org_name = org_info.get("name") or "Organization"
 
+        # Resolve Organizer ownership: check database organizations.created_by first,
+        # then fallback to founding membership inference
+        if role == UserRoleEnum.ADMIN and org_id:
+            org_creator = org_info.get("created_by")
+            if org_creator and str(org_creator) == str(user_id):
+                role = UserRoleEnum.ORGANIZER
+            else:
+                try:
+                    first_mem_res = (
+                        admin_client.table("organization_memberships")
+                        .select("user_id")
+                        .eq("organization_id", org_id)
+                        .order("created_at", desc=False)
+                        .limit(1)
+                        .execute()
+                    )
+                    if first_mem_res.data and len(first_mem_res.data) > 0:
+                        first_uid = first_mem_res.data[0].get("user_id")
+                        if str(first_uid) == str(user_id):
+                            role = UserRoleEnum.ORGANIZER
+                except Exception:
+                    # Fail-safe to ADMIN on any query error or mock lack of order method
+                    pass
+
+
         # Fetch profile details
         prof = {}
         try:
@@ -237,17 +262,24 @@ def require_role(allowed_roles: List[UserRoleEnum]):
 
 
 # Reusable Role Dependencies
-require_employee = require_role([
-    UserRoleEnum.ADMIN,
-    UserRoleEnum.MANAGER,
-    UserRoleEnum.EMPLOYEE,
-])
-
-require_manager = require_role([
-    UserRoleEnum.ADMIN,
-    UserRoleEnum.MANAGER,
+require_organizer = require_role([
+    UserRoleEnum.ORGANIZER,
 ])
 
 require_admin = require_role([
+    UserRoleEnum.ORGANIZER,
     UserRoleEnum.ADMIN,
+])
+
+require_manager = require_role([
+    UserRoleEnum.ORGANIZER,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.MANAGER,
+])
+
+require_employee = require_role([
+    UserRoleEnum.ORGANIZER,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.MANAGER,
+    UserRoleEnum.EMPLOYEE,
 ])

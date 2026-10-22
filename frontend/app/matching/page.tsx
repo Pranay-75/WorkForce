@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Award,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function MatchingHubPage() {
   const { recommendations, result, loading, error, matchTask, approveRecommendation, rejectRecommendation } = useTaskMatching();
@@ -23,12 +24,97 @@ export default function MatchingHubPage() {
   const [selectedTaskId, setSelectedTaskId] = React.useState<string>('');
   const [rejectModalRecId, setRejectModalRecId] = React.useState<string | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [actionFeedback, setActionFeedback] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [decisionState, setDecisionState] = React.useState<Record<string, { status: 'accepted' | 'rejected'; reason?: string }>>({});
+
+  // Sync selected task ID
+  React.useEffect(() => {
+    if (tasks.length > 0 && (!selectedTaskId || !tasks.find((t) => t.id === selectedTaskId))) {
+      const firstUnassigned = tasks.find((t) => !t.assignedTo) || tasks[0];
+      setSelectedTaskId(firstUnassigned.id);
+    }
+  }, [tasks, selectedTaskId]);
+
+  const targetTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
+
+  // Dynamic recommendations for live or mock
+  const taskRecommendations = React.useMemo(() => {
+    if (!targetTask) return [];
+
+    if (!isLive) {
+      return mockRecommendations.filter((r) => r.taskId === selectedTaskId);
+    }
+
+    const taskHours = Number(targetTask.estimatedHours) || 0;
+    const isUnestimated = taskHours === 0;
+
+    return liveMembers.map((m) => {
+      const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
+      const curLoad = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+      const cap = m.weeklyCapacityHours;
+      const projLoad = curLoad + taskHours;
+      const projUtil = cap > 0 ? Math.round((projLoad / cap) * 100) : 999;
+
+      const requiredSkills = targetTask.requiredSkills || [];
+      const matchedSkills: { skill: string; requiredLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'; candidateLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[] = [];
+      const missingSkills: string[] = [];
+
+      if (requiredSkills.length > 0) {
+        requiredSkills.forEach((req) => {
+          const deptMatch = m.department && req.skillName.toLowerCase().includes(m.department.toLowerCase());
+          const titleMatch = m.jobTitle && req.skillName.toLowerCase().includes(m.jobTitle.toLowerCase());
+          if (deptMatch || titleMatch) {
+            matchedSkills.push({
+              skill: req.skillName,
+              requiredLevel: req.minProficiency,
+              candidateLevel: req.minProficiency,
+            });
+          } else {
+            missingSkills.push(req.skillName);
+          }
+        });
+      }
+
+      const skillScore = requiredSkills.length > 0
+        ? Math.round((matchedSkills.length / requiredSkills.length) * 100)
+        : 85;
+
+      // Deterministic heuristic score: 50% capacity availability + 50% skill match
+      const capScore = cap > 0 ? Math.max(0, 100 - Math.min(projUtil, 100)) : 0;
+      const matchScore = Math.min(99, Math.max(10, Math.round(capScore * 0.5 + skillScore * 0.5)));
+
+      const isCurrentAssignee = targetTask.assignedTo === m.userId;
+      const dec = decisionState[`${targetTask.id}:${m.userId}`];
+
+      const riskFactors: string[] = [];
+      if (cap === 0) {
+        riskFactors.push('Member has 0h configured weekly capacity');
+      } else if (projUtil > 100) {
+        riskFactors.push(`Projected load exceeds ${cap}h weekly capacity`);
+      }
+
+      let rationale = '';
+      if (isCurrentAssignee) {
+        rationale = `Currently assigned to this task. Active workload is ${curLoad}h (${cap > 0 ? Math.round((curLoad / cap) * 100) : 0}% capacity).`;
+      } else {
+        const bandwidthText = cap > 0 ? `${Math.max(0, cap - curLoad)}h available bandwidth` : '0h configured capacity';
+        const hoursText = isUnestimated ? 'Task hours unestimated (0h logged).' : `Task requires ${taskHours}h.`;
+        const skillText = requiredSkills.length > 0
+          ? `Matches ${matchedSkills.length}/${requiredSkills.length} required skills.`
+          : 'No prerequisite skills specified for task.';
+        rationale = `${bandwidthText}. ${hoursText} ${skillText} Projected load is ${cap > 0 ? `${projUtil}%` : 'unbounded'}.`;
+      }
 
   const handleConfirmReject = async () => {
     if (rejectModalRecId && rejectReason.trim()) {
       await rejectRecommendation(rejectModalRecId, rejectReason);
       setRejectModalRecId(null);
       setRejectReason('');
+      setActionFeedback({
+        text: 'Recommendation rejected with documented rationale.',
+        type: 'success',
+      });
     }
   };
 
@@ -46,9 +132,9 @@ export default function MatchingHubPage() {
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
               Explainable AI Task Matching Hub
             </h2>
-            <Badge variant="violet" size="sm">
+            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
               <Sparkles className="h-3 w-3 mr-1" />
-              Gemini Advisory Engine
+              {isLive ? 'Live Advisory Engine' : 'Gemini Advisory Demo'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -120,6 +206,20 @@ export default function MatchingHubPage() {
             <Badge variant="violet" size="sm">AI Match Complete</Badge>
           </div>
         </Card>
+      ) : (
+        <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-12 text-center text-slate-400 space-y-3">
+          <Sparkles className="mx-auto h-10 w-10 text-slate-500 mb-2" />
+          <h4 className="text-base font-bold text-white">No Tasks Available for Matching</h4>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            Create tasks in the Tasks section to generate AI-assisted matching recommendations.
+          </p>
+          <Link href="/tasks">
+            <Button variant="primary" size="sm" className="mt-2">
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              <span>Go to Tasks</span>
+            </Button>
+          </Link>
+        </div>
       )}
 
       {/* Human In The Loop Governance Notice */}
@@ -127,7 +227,7 @@ export default function MatchingHubPage() {
         <div className="flex items-center gap-2.5">
           <ShieldCheck className="h-4 w-4 text-cyan-400 shrink-0" />
           <span>
-            <strong>Human-in-the-Loop Governance:</strong> AI rankings are strictly advisory. Final assignments require explicit manager approval and are logged to the immutable audit history.
+            <strong>Human-in-the-Loop Governance:</strong> AI rankings are strictly advisory. Final assignments require explicit manager approval and execute database-enforced transactions.
           </span>
         </div>
       </div>

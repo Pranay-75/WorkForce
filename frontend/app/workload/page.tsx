@@ -9,8 +9,6 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useWorkloadOverview, useRedistributionProposals } from '@/lib/hooks/useWorkloadAPI';
 import {
   BarChart3,
-  Layers,
-  ArrowRight,
   Sparkles,
   AlertTriangle,
   RefreshCw,
@@ -21,6 +19,7 @@ import {
   CheckSquare,
   CheckCircle2,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function WorkloadCapacityPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -53,6 +52,58 @@ export default function WorkloadCapacityPage() {
     return Array.from(set);
   }, [employees]);
 
+  // Dynamic Redistribution Proposals for real or mock data
+  const dynamicProposals = React.useMemo(() => {
+    if (!isLive) return mockProposals;
+
+    const proposals: Array<{
+      id: string;
+      taskId: string;
+      taskTitle: string;
+      taskHours: number;
+      sourceEmployeeId: string;
+      sourceEmployeeName: string;
+      sourceCurrentLoad: number;
+      sourceProjectedLoad: number;
+      targetEmployeeId: string;
+      targetEmployeeName: string;
+      targetCurrentLoad: number;
+      targetProjectedLoad: number;
+      rationale: string;
+    }> = [];
+
+    // For every overloaded member, propose moving a task to an available optimal member
+    overloadedStaff.forEach((overEmp) => {
+      const assigned = tasks.filter((t) => t.assignedTo === overEmp.id && t.status !== 'completed');
+      if (assigned.length === 0) return;
+
+      const candidateTask = assigned[0];
+      const taskHours = Number(candidateTask.estimatedHours) || 0;
+
+      // Find an optimal candidate
+      const targetEmp = optimalStaff.find((opt) => opt.id !== overEmp.id);
+      if (targetEmp) {
+        proposals.push({
+          id: `prop-${candidateTask.id}`,
+          taskId: candidateTask.id,
+          taskTitle: candidateTask.title,
+          taskHours: taskHours,
+          sourceEmployeeId: overEmp.id,
+          sourceEmployeeName: overEmp.fullName,
+          sourceCurrentLoad: overEmp.currentLoadHours,
+          sourceProjectedLoad: Math.max(0, overEmp.currentLoadHours - taskHours),
+          targetEmployeeId: targetEmp.id,
+          targetEmployeeName: targetEmp.fullName,
+          targetCurrentLoad: targetEmp.currentLoadHours,
+          targetProjectedLoad: targetEmp.currentLoadHours + taskHours,
+          rationale: `Relieves ${overEmp.fullName} (+${overEmp.currentLoadHours - overEmp.weeklyCapacityHours}h overload) by shifting "${candidateTask.title}" to ${targetEmp.fullName} who has capacity available.`,
+        });
+      }
+    });
+
+    return proposals;
+  }, [isLive, mockProposals, overloadedStaff, optimalStaff, tasks]);
+
   // Filter and sort roster
   const filteredEmployees = React.useMemo(() => {
     return employees
@@ -79,6 +130,17 @@ export default function WorkloadCapacityPage() {
       });
   }, [employees, searchQuery, statusFilter, departmentFilter, sortBy]);
 
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Team Workload & Capacity Monitor"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Organization-wide workload heatmaps, capacity thresholds, and AI redistribution proposals are restricted to management and HR."
+      />
+    );
+  }
+
   const toggleExpand = (empId: string) => {
     setExpandedEmpId((prev) => (prev === empId ? null : empId));
   };
@@ -103,6 +165,23 @@ export default function WorkloadCapacityPage() {
     );
   }
 
+  const handleCompleteTask = async (taskId: string) => {
+    if (isLive) {
+      await dbUpdateTaskStatus(taskId, 'completed');
+    } else {
+      mockUpdateTaskStatus(taskId, 'completed');
+    }
+  };
+
+  if (isLive && (isMembersLoading || isTasksLoading)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
+        <p className="text-sm text-slate-400">Loading live organization telemetry &amp; workload allocations...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Header */}
@@ -113,7 +192,7 @@ export default function WorkloadCapacityPage() {
               Capacity Monitor & Workload Balancing
             </h2>
             <Badge variant="cyan" size="sm">
-              Live Telemetry
+              {isLive ? 'PostgreSQL Live Telemetry' : 'Demo Telemetry'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -121,13 +200,39 @@ export default function WorkloadCapacityPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-xs text-slate-400">
-          <span>Target Maximum Load:</span>
-          <Badge variant="emerald" size="sm">
-            85% Capacity
-          </Badge>
-        </div>
+        {isLive && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              refetchMembers();
+              refetchTasks();
+            }}
+            disabled={isMembersLoading || isTasksLoading || actionLoading}
+            className="flex items-center gap-1.5 self-start sm:self-auto"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
+            <span>Recalculate Workload</span>
+          </Button>
+        )}
       </div>
+
+      {actionMessage && (
+        <div
+          className={`flex items-center gap-2 rounded-xl p-3.5 text-xs ${
+            actionMessage.type === 'success'
+              ? 'border border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
+              : 'border border-rose-500/40 bg-rose-950/30 text-rose-300'
+          }`}
+        >
+          {actionMessage.type === 'success' ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0" />
+          )}
+          <span>{actionMessage.text}</span>
+        </div>
+      )}
 
       {/* Summary Band Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -187,7 +292,7 @@ export default function WorkloadCapacityPage() {
                 Optimal / Available (&lt;80%)
               </span>
               <div className="text-2xl font-bold font-mono text-emerald-400 mt-0.5">
-                {optimalStaff.length} Members
+                {optimalStaff.length} Member{optimalStaff.length !== 1 ? 's' : ''}
               </div>
               <span className="text-[10px] text-emerald-400/80 mt-1 block">
                 {statusFilter === 'optimal' ? 'Active Filter • Click to clear' : 'Click to filter roster'}
@@ -205,7 +310,7 @@ export default function WorkloadCapacityPage() {
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-violet-400" />
               <h3 className="text-lg font-bold text-white tracking-tight">
-                AI Workload Redistribution Sandbox
+                Workload Redistribution Sandbox
               </h3>
             </div>
             <p className="text-xs text-slate-400">
@@ -269,6 +374,10 @@ export default function WorkloadCapacityPage() {
                           Relieving -{prop.task_hours}h ({sourceBeforePct - sourceAfterPct}%)
                         </Badge>
                       </div>
+                      <Badge variant={sourceBeforePct > 100 ? 'rose' : 'amber'} size="sm">
+                        {sourceBeforePct > 100 ? 'Overload Risk Mitigation' : 'Capacity Load Smoothing'}
+                      </Badge>
+                    </div>
 
                       <div className="space-y-1.5 text-xs font-mono">
                         <div className="flex justify-between text-slate-300">
@@ -276,10 +385,10 @@ export default function WorkloadCapacityPage() {
                           <span className="text-emerald-400 font-bold">
                             After: {prop.source_employee.projected_load}h ({sourceAfterPct}%)
                           </span>
+                          <Badge variant="rose" size="sm">
+                            Relieving -{prop.taskHours}h ({sourceBeforePct - sourceAfterPct}%)
+                          </Badge>
                         </div>
-                        <ProgressBar value={sourceAfterPct} />
-                      </div>
-                    </div>
 
                     {/* Target Employee */}
                     <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-3">
@@ -298,11 +407,22 @@ export default function WorkloadCapacityPage() {
                           <span className="text-cyan-400 font-bold">
                             After: {prop.target_employee.projected_load}h ({targetAfterPct}%)
                           </span>
+                          <Badge variant="emerald" size="sm">
+                            Absorbing +{prop.taskHours}h ({targetAfterPct - targetBeforePct}%)
+                          </Badge>
                         </div>
-                        <ProgressBar value={targetAfterPct} />
+
+                        <div className="space-y-1.5 text-xs font-mono">
+                          <div className="flex justify-between text-slate-300">
+                            <span>Before: {prop.targetCurrentLoad}h ({targetBeforePct}%)</span>
+                            <span className="text-cyan-400 font-bold">
+                              After: {prop.targetProjectedLoad}h ({targetAfterPct}%)
+                            </span>
+                          </div>
+                          <ProgressBar value={targetAfterPct} />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Rationale & Execution CTA */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-xs">
@@ -311,104 +431,82 @@ export default function WorkloadCapacityPage() {
                     </p>
                     <Badge variant="slate" size="sm">Advisory — Requires Manager Approval</Badge>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
-
-          {redistributionProposals.length === 0 && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-8 text-center text-slate-300 space-y-2">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-1" />
-              <h4 className="text-sm font-bold text-white">
-                Team Workload Fully Balanced
-              </h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                No active reallocation proposals are pending. All team member capacities remain under optimal margins.
-              </p>
-            </div>
-          )}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400 space-y-2">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-1" />
+            <h4 className="text-sm font-bold text-white">No Capacity Bottlenecks Detected</h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              All active team members are currently operating within safe weekly thresholds.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Individual Employee Capacity Roster Hub */}
-      <Card className="border-slate-800">
+      {/* Team Roster Capacity Table */}
+      <Card>
         <CardHeader>
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-violet-400" />
-                <CardTitle>Team Member Capacity Roster</CardTitle>
-                <Badge variant="slate" size="sm">
-                  {filteredEmployees.length} of {employees.length} Members
-                </Badge>
-              </div>
+              <CardTitle>Team Member Workload Roster</CardTitle>
               <CardDescription>
-                Live allocations, weekly sprint limits, and interactive task rebalancing per team member
+                Detailed breakdown of assigned commitments, estimated hours, and available bandwidth
               </CardDescription>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center gap-2">
-              <Link href="/employees">
-                <Button variant="ghost" size="sm" className="text-xs">
-                  <span>Directory</span>
-                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 pl-8 text-xs text-slate-200 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none w-44"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+              >
+                <option value="all">All Statuses ({employees.length})</option>
+                <option value="overloaded">Overloaded &gt;100% ({overloadedStaff.length})</option>
+                <option value="near_limit">Near Limit 80-99% ({nearLimitStaff.length})</option>
+                <option value="optimal">Optimal &lt;80% ({optimalStaff.length})</option>
+              </select>
+
+              {/* Department Filter */}
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+              >
+                <option value="all">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+
+              {/* Sort Dropdown */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+              >
+                <option value="util_desc">Highest Utilization %</option>
+                <option value="util_asc">Lowest Utilization %</option>
+                <option value="hours_desc">Most Allocated Hours</option>
+                <option value="name_asc">Alphabetical (A-Z)</option>
+              </select>
             </div>
-          </div>
-
-          {/* Roster Controls: Search, Status Filter, Dept Filter, Sorting */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search staff, role, dept..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-navy-900 pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-violet-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-            >
-              <option value="all">All Statuses ({employees.length})</option>
-              <option value="overloaded">Overloaded &gt;100% ({overloadedStaff.length})</option>
-              <option value="near_limit">Near Limit 80-99% ({nearLimitStaff.length})</option>
-              <option value="optimal">Optimal &lt;80% ({optimalStaff.length})</option>
-            </select>
-
-            {/* Department Filter */}
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
-
-            {/* Sort Dropdown */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-            >
-              <option value="util_desc">Highest Utilization %</option>
-              <option value="util_asc">Lowest Utilization %</option>
-              <option value="hours_desc">Most Allocated Hours</option>
-              <option value="name_asc">Alphabetical (A-Z)</option>
-            </select>
           </div>
         </CardHeader>
 
@@ -421,6 +519,14 @@ export default function WorkloadCapacityPage() {
               const isOptimal = emp.load_band === 'optimal';
               const isExpanded = expandedEmpId === emp.employee_id;
               const bufferHours = emp.remaining_capacity_hours;
+
+              const initials = emp.fullName
+                .split(' ')
+                .filter(Boolean)
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase() || 'EM';
 
               return (
                 <div
@@ -489,7 +595,6 @@ export default function WorkloadCapacityPage() {
 
                     {/* Capacity Limits & Inspect Toggle */}
                     <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0">
-                      {/* Status Badge */}
                       <Badge
                         variant={isOverloaded ? 'rose' : isNearLimit ? 'amber' : 'emerald'}
                         size="sm"
@@ -516,15 +621,15 @@ export default function WorkloadCapacityPage() {
                       >
                         <span>{emp.active_task_count} Active Task{emp.active_task_count !== 1 ? 's' : ''}</span>
                         {isExpanded ? (
-                          <ChevronUp className="h-3.5 w-3.5 ml-1" />
+                          <ChevronUp className="h-3.5 w-3.5" />
                         ) : (
-                          <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </div>
                   </div>
 
-                  {/* Expandable Task Breakdown & Inline Rebalancing Tray */}
+                  {/* Expanded Task List & Rebalancing Drawer */}
                   {isExpanded && (
                     <div className="border-t border-slate-800/80 bg-navy-950/70 p-4 space-y-3 rounded-b-2xl animate-in slide-in-from-top-2 duration-200">
                       <div className="flex items-center justify-between pb-1">
@@ -550,6 +655,10 @@ export default function WorkloadCapacityPage() {
                             <p className="mt-1 text-slate-500">Active task count: {emp.active_task_count} | Risk index: {(emp.operational_risk_score * 100).toFixed(0)}%</p>
                           </div>
                         </div>
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-400">
+                          No active tasks assigned to this member.
+                        </div>
                       )}
                     </div>
                   )}
@@ -558,23 +667,9 @@ export default function WorkloadCapacityPage() {
             })}
 
             {filteredEmployees.length === 0 && (
-              <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-12 text-center text-slate-400 space-y-2">
+              <div className="p-8 text-center text-slate-400">
                 <Users className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-                <h4 className="text-base font-bold text-white">No Team Members Found</h4>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  No staff members match the current filter or search query. Try clearing search or selecting &ldquo;All Statuses&rdquo;.
-                </p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setDepartmentFilter('all');
-                  }}
-                >
-                  Reset Roster Filters
-                </Button>
+                <p className="text-xs text-slate-300">No team members match current search or filters.</p>
               </div>
             )}
           </div>

@@ -27,6 +27,8 @@ import {
   Check,
   RefreshCw,
   AlertCircle,
+  CheckCircle2,
+  UserPlus,
 } from 'lucide-react';
 
 export default function ProjectsPage() {
@@ -39,9 +41,10 @@ export default function ProjectsPage() {
     error: projectsError,
     refetch: refetchProjects,
     createProject,
+    addProjectMember,
   } = useProjects();
 
-  const { tasks: dbTasks, isLoading: isTasksLoading } = useTasks();
+  const { tasks: dbTasks, isLoading: isTasksLoading, assignTask, refetch: refetchTasks } = useTasks();
   const { members: orgMembers } = useOrganizationMembers();
 
   // Mock store fallback for unauthenticated showcase
@@ -58,17 +61,74 @@ export default function ProjectsPage() {
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;
   const activeRole = isLive ? authRole : mockRole;
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin';
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
+
+  // Member Assignment Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
+  const [targetProjectId, setTargetProjectId] = React.useState<string>('');
+  const [selectedMemberId, setSelectedMemberId] = React.useState<string>('');
+  const [assignTaskIds, setAssignTaskIds] = React.useState<string[]>([]);
+  const [assignLoading, setAssignLoading] = React.useState(false);
+  const [assignError, setAssignError] = React.useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
+  const handleOpenAssignModal = (projId: string) => {
+    setTargetProjectId(projId);
+    setAssignError(null);
+    setAssignSuccess(null);
+    setAssignTaskIds([]);
+    const proj = projects.find((p) => p.id === projId);
+    const unallocated = orgMembers.find((m) => proj && !proj.memberIds.includes(m.userId));
+    setSelectedMemberId(unallocated ? unallocated.userId : (orgMembers[0]?.userId || ''));
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetProjectId || !selectedMemberId) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+
+    const res = await addProjectMember(targetProjectId, selectedMemberId);
+    if (res.error) {
+      setAssignLoading(false);
+      setAssignError(res.error);
+      return;
+    }
+
+    if (assignTaskIds.length > 0) {
+      for (const taskId of assignTaskIds) {
+        await assignTask(taskId, selectedMemberId);
+      }
+      await refetchTasks();
+    }
+
+    await refetchProjects();
+    setAssignLoading(false);
+    const assignedMember = orgMembers.find((m) => m.userId === selectedMemberId);
+    setAssignSuccess(`Assigned ${assignedMember?.fullName || 'member'} to project.`);
+    setTimeout(() => {
+      setIsAssignModalOpen(false);
+      setAssignSuccess(null);
+    }, 1500);
+  };
 
   // Available employees/members for assignment
   const selectableMembers = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.map((m) => ({
-        id: m.userId,
-        fullName: m.fullName,
-        department: m.department || 'Engineering',
-        currentLoadHours: 0,
-      }));
+      return orgMembers.map((m) => {
+        const load = tasks
+          .filter((t) => t.assignedTo === m.userId && t.status !== 'completed')
+          .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          currentLoadHours: load,
+        };
+      });
     }
     return mockEmployees.map((e) => ({
       id: e.id,
@@ -76,7 +136,7 @@ export default function ProjectsPage() {
       department: e.department,
       currentLoadHours: e.currentLoadHours,
     }));
-  }, [isLive, orgMembers, mockEmployees]);
+  }, [isLive, orgMembers, mockEmployees, tasks]);
 
   const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
@@ -114,7 +174,21 @@ export default function ProjectsPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectName.trim()) return;
+    if (!projectName.trim()) {
+      setFormError('Project name is required.');
+      return;
+    }
+
+    const parsedHours = parseFloat(totalHours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setFormError('Total allocated hours must be a positive number.');
+      return;
+    }
+
+    if (startDate && targetEndDate && new Date(targetEndDate) < new Date(startDate)) {
+      setFormError('Target end date cannot be earlier than start date.');
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);
@@ -345,16 +419,29 @@ export default function ProjectsPage() {
                   </div>
                 </CardContent>
 
-                <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex items-center justify-between">
+                <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex flex-wrap items-center justify-between gap-2">
                   <Badge variant={proj.status === 'in_progress' ? 'cyan' : 'slate'} size="sm">
                     {proj.status.replace('_', ' ').toUpperCase()}
                   </Badge>
-                  <Link href={`/projects/${proj.id}`}>
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      <span>Project Dashboard</span>
-                      <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                    </Button>
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    {isManagerOrAdmin && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleOpenAssignModal(proj.id)}
+                        className="text-xs"
+                      >
+                        <UserPlus className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+                        <span>Assign Member</span>
+                      </Button>
+                    )}
+                    <Link href={`/projects/${proj.id}`}>
+                      <Button variant="ghost" size="sm" className="text-xs">
+                        <span>Project Dashboard</span>
+                        <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </Card>
             );
@@ -512,6 +599,118 @@ export default function ProjectsPage() {
                   <span>Launch Project</span>
                 </>
               )}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Quick Member Assignment Modal */}
+      <Dialog
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title="Assign Team Member to Project"
+        description="Select an active team member from your organization to allocate to this initiative."
+      >
+        <form onSubmit={handleAssignSubmit} className="space-y-4 py-2">
+          {assignError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{assignError}</span>
+            </div>
+          )}
+
+          {assignSuccess && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{assignSuccess}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Select Active Member *
+            </label>
+            {orgMembers.length === 0 ? (
+              <p className="text-xs text-amber-400">No active members found in organization.</p>
+            ) : (
+              <select
+                value={selectedMemberId}
+                onChange={(e) => setSelectedMemberId(e.target.value)}
+                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                required
+              >
+                <option value="" disabled>-- Select a Team Member --</option>
+                {orgMembers.map((m) => {
+                  const targetProj = projects.find((p) => p.id === targetProjectId);
+                  const isAllocated = targetProj?.memberIds.includes(m.userId);
+                  return (
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName} ({m.role.toUpperCase()} • {m.department || 'Engineering'}) {isAllocated ? '— Already Allocated' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          {/* Optional Task Assignment Selection */}
+          {targetProjectId && (
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="block text-xs font-semibold text-slate-300">
+                Optionally Assign Open Tasks from this Project:
+              </label>
+              {tasks.filter((t) => t.projectId === targetProjectId && !t.assignedTo).length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">
+                  No unassigned tasks found for this project.
+                </p>
+              ) : (
+                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+                  {tasks
+                    .filter((t) => t.projectId === targetProjectId && !t.assignedTo)
+                    .map((t) => (
+                      <label
+                        key={t.id}
+                        className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={assignTaskIds.includes(t.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAssignTaskIds((prev) => [...prev, t.id]);
+                            } else {
+                              setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
+                            }
+                          }}
+                          className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                        />
+                        <span className="truncate">{t.title}</span>
+                        <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                          {t.estimatedHours}h
+                        </span>
+                      </label>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsAssignModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={assignLoading || !selectedMemberId}
+            >
+              {assignLoading ? 'Assigning...' : 'Confirm Allocation'}
             </Button>
           </div>
         </form>

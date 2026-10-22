@@ -1,7 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import { useAuth } from '@/lib/authContext';
+import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
+import { useProjects } from '@/lib/hooks/useProjects';
+import { useTasks } from '@/lib/hooks/useTasks';
+import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { useMockStore } from '@/lib/mockStore';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,33 +20,134 @@ import {
   BarChart3,
   Calendar,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
+import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function ReportsPage() {
-  const { employees, projects, tasks, recommendations, auditEvents } = useMockStore();
+  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const isLive = Boolean(isAuthenticated && organization?.id);
+
+  // Live hooks
+  const {
+    members: liveMembers,
+    departments: liveDepartments,
+    isLoading: isMembersLoading,
+    refetch: refetchMembers,
+  } = useOrganizationMembers();
+
+  const {
+    projects: liveProjects,
+    isLoading: isProjectsLoading,
+    refetch: refetchProjects,
+  } = useProjects();
+
+  const {
+    tasks: liveTasks,
+    isLoading: isTasksLoading,
+    refetch: refetchTasks,
+  } = useTasks();
+
+  const {
+    auditLogs: liveAuditLogs,
+    isLoading: isAuditLoading,
+    refetch: refetchAudit,
+  } = useAuditLogs();
+
+  // Mock store fallback
+  const {
+    employees: mockEmployees,
+    projects: mockProjects,
+    tasks: mockTasks,
+    recommendations: mockRecommendations,
+    auditEvents: mockAuditEvents,
+    activeRole: mockRole,
+  } = useMockStore();
+
+  const activeRole = isLive && authRole ? authRole : mockRole;
+
+  const projects = isLive ? liveProjects : mockProjects;
+  const tasks = isLive ? liveTasks : mockTasks;
+  const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
+  const liveAuditCount = liveAuditLogs.length;
+
+  // Reconcile employee list with live assigned tasks
+  const employees = React.useMemo(() => {
+    if (isLive) {
+      return liveMembers.map((m) => {
+        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
+        const load = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+        return {
+          id: m.userId,
+          fullName: m.fullName,
+          department: m.department || 'Engineering',
+          jobTitle: m.jobTitle || 'Team Member',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+          currentLoadHours: load,
+        };
+      });
+    }
+    return mockEmployees.map((e) => ({
+      id: e.id,
+      fullName: e.fullName,
+      department: e.department,
+      jobTitle: e.jobTitle,
+      weeklyCapacityHours: e.weeklyCapacityHours,
+      currentLoadHours: e.currentLoadHours,
+    }));
+  }, [isLive, liveMembers, liveTasks, mockEmployees]);
+
+  // Distinct departments
+  const departmentList = React.useMemo(() => {
+    if (isLive && liveDepartments.length > 0) {
+      return liveDepartments.map((d) => d.department);
+    }
+    const set = new Set<string>();
+    employees.forEach((e) => {
+      if (e.department) set.add(e.department);
+    });
+    return set.size > 0 ? Array.from(set) : ['Engineering', 'Product', 'Design'];
+  }, [isLive, liveDepartments, employees]);
 
   const handleDownloadCSV = () => {
-    // Generate real client-side CSV string
     const headers = ['Employee ID', 'Full Name', 'Department', 'Job Title', 'Capacity Hours', 'Allocated Hours', 'Utilization Pct'];
     const rows = employees.map((e) => [
       e.id,
       `"${e.fullName}"`,
-      e.department,
+      `"${e.department}"`,
       `"${e.jobTitle}"`,
       e.weeklyCapacityHours,
       e.currentLoadHours,
-      `${Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100)}%`,
+      `${e.weeklyCapacityHours > 0 ? Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100) : 0}%`,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `workforce_capacity_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `workforce_capacity_report_${organization?.slug || 'workspace'}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
+  const totalEffortHours = React.useMemo(() => {
+    return tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+  }, [tasks]);
+
+  if (activeRole === 'employee') {
+    return (
+      <AccessDenied
+        resourceName="Reports & Executive Analytics"
+        currentRole={activeRole}
+        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
+        description="Organization capacity metrics, AI recommendation accuracy benchmarks, and historical velocity reports are restricted to management and administrative personnel."
+      />
+    );
+  }
+
+  const completedTasksCount = tasks.filter((t) => t.status === 'completed').length;
+  const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 100;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -49,21 +156,41 @@ export default function ReportsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Reports & Operational Analytics
+              Reports &amp; Operational Analytics
             </h2>
             <Badge variant="violet" size="sm">
-              Analytics Suite
+              {isLive ? 'PostgreSQL Live Analytics' : 'Demo Analytics Suite'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Executive workforce capacity summaries, AI matching effectiveness, and compliance logs
+            Executive workforce capacity summaries, project velocity, and immutable compliance audit logs
           </p>
         </div>
 
-        <Button variant="primary" size="md" onClick={handleDownloadCSV}>
-          <Download className="h-4 w-4 mr-1.5" />
-          <span>Export CSV Report</span>
-        </Button>
+        <div className="flex items-center gap-2.5">
+          {isLive && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                refetchMembers();
+                refetchProjects();
+                refetchTasks();
+                refetchAudit();
+              }}
+              disabled={isMembersLoading || isProjectsLoading || isTasksLoading}
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </Button>
+          )}
+
+          <Button variant="primary" size="md" onClick={handleDownloadCSV} disabled={employees.length === 0}>
+            <Download className="h-4 w-4 mr-1.5" />
+            <span>Export CSV Report</span>
+          </Button>
+        </div>
       </div>
 
       {/* Analytics Summary Cards */}
@@ -76,10 +203,10 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-white">
-              {projects.reduce((s, p) => s + p.totalHours, 0)} Hours
+              {totalEffortHours} Hours
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Across {projects.length} active initiatives
+              Across {projects.length} project initiative{projects.length !== 1 ? 's' : ''} ({tasks.length} total tasks)
             </p>
           </CardContent>
         </Card>
@@ -87,15 +214,15 @@ export default function ReportsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase text-slate-400">
-              AI Recommendation Approval Rate
+              Task Velocity & Completion Rate
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-emerald-400">
-              87.5%
+              {taskCompletionRate}%
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              7 of 8 suggestions approved by managers
+              {completedTasksCount} of {tasks.length} tasks marked completed
             </p>
           </CardContent>
         </Card>
@@ -103,15 +230,17 @@ export default function ReportsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase text-slate-400">
-              Audit Compliance Events
+              Compliance Audit Logs
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-cyan-400">
-              {auditEvents.length} Recorded
+              {isLive
+                ? (liveAuditCount !== null ? `${liveAuditCount} Logged` : 'Active')
+                : `${mockAuditEvents.length} Recorded`}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              100% immutable action logs preserved
+              Immutable organization governance trail preserved
             </p>
           </CardContent>
         </Card>
@@ -120,7 +249,7 @@ export default function ReportsPage() {
       {/* Department Workload Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Department Capacity & Utilization Summary</CardTitle>
+          <CardTitle>Department Capacity &amp; Utilization Summary</CardTitle>
           <CardDescription>
             Aggregated metrics for quarterly resource planning and hiring forecasts
           </CardDescription>
@@ -139,7 +268,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {['Engineering', 'Design', 'DevOps', 'QA', 'Product'].map((dept) => {
+                {departmentList.map((dept) => {
                   const deptEmps = employees.filter((e) => e.department === dept);
                   const count = deptEmps.length;
                   const capacity = deptEmps.reduce((s, e) => s + e.weeklyCapacityHours, 0);
@@ -149,7 +278,7 @@ export default function ReportsPage() {
                   return (
                     <tr key={dept} className="hover:bg-navy-800/50 transition-colors">
                       <td className="px-4 py-3 font-semibold text-white">{dept}</td>
-                      <td className="px-4 py-3 font-mono">{count} members</td>
+                      <td className="px-4 py-3 font-mono">{count} member{count !== 1 ? 's' : ''}</td>
                       <td className="px-4 py-3 font-mono text-slate-400">{capacity}h</td>
                       <td className="px-4 py-3 font-mono text-cyan-400">{load}h</td>
                       <td className="px-4 py-3">
@@ -179,6 +308,14 @@ export default function ReportsPage() {
                     </tr>
                   );
                 })}
+
+                {departmentList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      No departments registered in this workspace yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -1,1 +1,7 @@
+.next/
+.next*/
+out/
+build/
+dist/
+*.tsbuildinfo
 .vercel

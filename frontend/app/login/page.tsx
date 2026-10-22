@@ -21,6 +21,7 @@ import {
   AlertCircle,
   CheckCircle2,
   HelpCircle,
+  ArrowRight,
 } from 'lucide-react';
 
 const LOGIN_ROLES: {
@@ -38,13 +39,27 @@ const LOGIN_ROLES: {
   iconBg: string;
 }[] = [
   {
+    id: 'organizer',
+    demoId: 'emp-org',
+    demoEmail: 'aris.thorne@acme.corp',
+    title: 'Organizer',
+    badge: 'Founder / Root',
+    personName: 'Dr. Thorne',
+    description: 'Root workspace governance, multi-tenant security policies & full visibility',
+    icon: ShieldCheck,
+    accentColor: 'text-amber-400',
+    activeBorder: 'border-amber-500 shadow-[0_0_15px_-3px_rgba(245,158,11,0.35)]',
+    activeBg: 'bg-amber-950/40',
+    iconBg: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  },
+  {
     id: 'admin',
     demoId: 'emp-8',
     demoEmail: 'chloe.dubois@acme.corp',
     title: 'Admin',
-    badge: 'Owner / Exec',
+    badge: 'VP Ops / Admin',
     personName: 'Chloe D.',
-    description: 'Full workspace authority, member access & governance',
+    description: 'Full workspace authority, member access & immutable compliance audit trail',
     icon: ShieldCheck,
     accentColor: 'text-violet-400',
     activeBorder: 'border-violet-500 shadow-[0_0_15px_-3px_rgba(139,92,246,0.35)]',
@@ -58,7 +73,7 @@ const LOGIN_ROLES: {
     title: 'Manager',
     badge: 'Lead / PM',
     personName: 'Sarah C.',
-    description: 'Team planning, project allocations & task management',
+    description: 'Team planning, task assignments & AI candidate recommendations approval',
     icon: Briefcase,
     accentColor: 'text-cyan-400',
     activeBorder: 'border-cyan-500 shadow-[0_0_15px_-3px_rgba(6,182,212,0.35)]',
@@ -72,7 +87,7 @@ const LOGIN_ROLES: {
     title: 'HR',
     badge: 'Talent & Ops',
     personName: 'Elena R.',
-    description: 'People operations, talent capacity & workforce analytics',
+    description: 'People operations, talent capacity planning & workforce burnout analytics',
     icon: Users,
     accentColor: 'text-emerald-400',
     activeBorder: 'border-emerald-500 shadow-[0_0_15px_-3px_rgba(16,185,129,0.35)]',
@@ -86,7 +101,7 @@ const LOGIN_ROLES: {
     title: 'Employee',
     badge: 'Contributor',
     personName: 'Alex C.',
-    description: 'Direct task delivery, personal schedule & sprint workload',
+    description: 'Direct task delivery, task status updates & personal sprint workload',
     icon: User,
     accentColor: 'text-blue-400',
     activeBorder: 'border-blue-500 shadow-[0_0_15px_-3px_rgba(59,130,246,0.35)]',
@@ -99,7 +114,9 @@ function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signInWithPassword, isAuthenticated, organization, isLoading: isAuthLoading } = useAuth();
-  const { switchDemoRole } = useMockStore();
+  const { switchDemoRole, enterDemoMode, isDemoMode, currentUser, exitDemoMode } = useMockStore();
+
+  const isDev = process.env.NODE_ENV === 'development';
 
   const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
   const [email, setEmail] = React.useState('');
@@ -147,15 +164,16 @@ function LoginFormContent() {
   }, [urlError, urlReason]);
 
   // If already authenticated and session load finished, redirect to dashboard or onboarding
+  // Guard: do NOT auto-redirect if an error parameter is present in the URL (e.g. failed/expired confirmation callback)
   React.useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
+    if (!isAuthLoading && isAuthenticated && !urlError) {
       if (organization) {
         router.push('/dashboard');
       } else {
         router.push('/onboarding');
       }
     }
-  }, [isAuthenticated, organization, isAuthLoading, router]);
+  }, [isAuthenticated, organization, isAuthLoading, router, urlError]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,15 +185,22 @@ function LoginFormContent() {
     if (error) {
       setErrorMessage(error);
       setIsLoading(false);
+    } else {
+      exitDemoMode();
     }
   };
 
-  // Quick-fill credentials for demo testing and active role selection
+  // Quick-fill credentials for demo testing and active role selection (development only)
   const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
     setSelectedRole(opt.id);
     setEmail(opt.demoEmail);
-    setPassword('WorkForceDemo2026!');
+    setPassword('Password123!');
     switchDemoRole(opt.demoId);
+  };
+
+  const handleExploreDemo = (roleId: UserRole) => {
+    enterDemoMode(roleId);
+    router.push('/dashboard');
   };
 
   return (
@@ -199,6 +224,36 @@ function LoginFormContent() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
         <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-4">
+          {/* Active Demo Session Banner */}
+          {isDemoMode && !isAuthenticated && (
+            <div className="rounded-xl border border-violet-500/40 bg-violet-950/40 p-3 text-xs text-violet-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-violet-400 shrink-0" />
+                <span>
+                  Demo session active as <strong className="text-white">{currentUser.name}</strong> ({currentUser.role.toUpperCase()}).
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => router.push('/dashboard')}
+                  className="text-xs h-7 py-0 px-2.5"
+                >
+                  <span>Open Dashboard</span>
+                  <ArrowRight className="h-3 w-3 ml-1" />
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => exitDemoMode()}
+                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded transition-colors"
+                >
+                  Exit Demo
+                </button>
+              </div>
+            </div>
+          )}
+
           {callbackNotice && (
             <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 p-3.5 text-xs text-amber-200 space-y-1.5 animate-in fade-in">
               <div className="flex items-center gap-2 font-semibold text-amber-300">
@@ -217,80 +272,104 @@ function LoginFormContent() {
 
           <form onSubmit={handleSignIn} className="space-y-4">
             {errorMessage && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-                <span>{errorMessage}</span>
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span className="font-semibold">{errorMessage}</span>
+                </div>
+                {errorMessage.toLowerCase().includes('not confirmed') && (
+                  <p className="text-[11px] text-slate-300 pl-6 leading-relaxed">
+                    Your email address has not been confirmed yet. Please click the verification link in your email
+                    {isDev ? (
+                      <>
+                        , or check your local Mailpit inbox at{' '}
+                        <a
+                          href="http://127.0.0.1:54324"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 underline hover:text-cyan-300 font-medium"
+                        >
+                          http://127.0.0.1:54324
+                        </a>.
+                      </>
+                    ) : (
+                      '.'
+                    )}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Select Role Option */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Select Your Role
-                </label>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  Admin • Manager • HR • Employee
-                </span>
-              </div>
+            {/* Select Role Option (Development only) */}
+            {isDev && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Select Your Role
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Admin • Manager • HR • Employee
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                {LOGIN_ROLES.map((opt) => {
-                  const isSelected = selectedRole === opt.id;
-                  const Icon = opt.icon;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => fillRoleAccount(opt)}
-                      className={cn(
-                        'flex flex-col text-left p-3 rounded-xl border transition-all relative overflow-hidden group focus:outline-none',
-                        isSelected
-                          ? `${opt.activeBorder} ${opt.activeBg}`
-                          : 'border-slate-800 bg-navy-950/70 hover:border-slate-700 hover:bg-navy-900/60'
-                      )}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1.5">
-                        <div
-                          className={cn(
-                            'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
-                            isSelected
-                              ? opt.iconBg
-                              : 'border-slate-800 bg-slate-900/80 text-slate-400 group-hover:text-slate-300'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
+                <div className="grid grid-cols-2 gap-2.5">
+                  {LOGIN_ROLES.map((opt) => {
+                    const isSelected = selectedRole === opt.id;
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => fillRoleAccount(opt)}
+                        className={cn(
+                          'flex flex-col text-left p-3 rounded-xl border transition-all relative overflow-hidden group focus:outline-none',
+                          isSelected
+                            ? `${opt.activeBorder} ${opt.activeBg}`
+                            : 'border-slate-800 bg-navy-950/70 hover:border-slate-700 hover:bg-navy-900/60'
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1.5">
+                          <div
+                            className={cn(
+                              'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
+                              isSelected
+                                ? opt.iconBg
+                                : 'border-slate-800 bg-slate-900/80 text-slate-400 group-hover:text-slate-300'
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+
+                          <div
+                            className={cn(
+                              'h-4 w-4 rounded-full border flex items-center justify-center transition-colors',
+                              isSelected
+                                ? 'border-violet-500 bg-violet-600'
+                                : 'border-slate-700 bg-navy-950 group-hover:border-slate-600'
+                            )}
+                          >
+                            {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </div>
                         </div>
 
-                        <div
-                          className={cn(
-                            'h-4 w-4 rounded-full border flex items-center justify-center transition-colors',
-                            isSelected
-                              ? 'border-violet-500 bg-violet-600'
-                              : 'border-slate-700 bg-navy-950 group-hover:border-slate-600'
-                          )}
-                        >
-                          {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xs font-bold text-white">
+                            {opt.title}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            ({opt.badge})
+                          </span>
                         </div>
-                      </div>
 
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-xs font-bold text-white">
-                          {opt.title}
-                        </span>
-                        <span className="text-[9px] font-mono text-slate-400">
-                          ({opt.badge})
-                        </span>
-                      </div>
-
-                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
-                        {opt.description}
-                      </p>
-                    </button>
-                  );
-                })}
+                        <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
+                          {opt.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-1.5 pt-1">
               <label className="block text-xs font-semibold text-slate-300">
@@ -345,38 +424,110 @@ function LoginFormContent() {
             </Button>
           </form>
 
-          {/* Quick Demo Credentials Assistant */}
-          <div className="mt-6 pt-5 border-t border-slate-800 space-y-3">
+          {/* Polished Interactive Demo Showcase Section */}
+          <div className="mt-6 pt-5 border-t border-slate-800/90 space-y-3.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-slate-400">
-                Quick Demo Sign-In
-              </span>
-              <Badge variant="cyan" size="sm">
-                Instant Fill
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  <Sparkles className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white tracking-wide block">
+                    Explore Interactive Demo
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Acme Systems Engineering • 24 employees, 6 projects, 45 tasks
+                  </span>
+                </div>
+              </div>
+              <Badge variant="violet" size="sm" className="text-[10px]">
+                Instant Access
               </Badge>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
-              {LOGIN_ROLES.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => fillRoleAccount(opt)}
-                  className={cn(
-                    'rounded-lg border bg-navy-950 p-2 text-center transition-all group',
-                    selectedRole === opt.id
-                      ? 'border-violet-500 bg-violet-950/30'
-                      : 'border-slate-800 hover:border-slate-700'
-                  )}
-                >
-                  <span className={cn('text-[10px] font-bold block', opt.accentColor)}>
-                    {opt.title.toUpperCase()}
-                  </span>
-                  <span className="text-[9px] text-slate-400 block truncate">{opt.personName}</span>
-                </button>
-              ))}
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Test-drive WorkForce with an isolated synthetic company dataset. Select any role below to experience live capacity monitoring, Gemini matching, and role-based permissions without registering.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {LOGIN_ROLES.map((roleOpt) => {
+                const Icon = roleOpt.icon;
+                return (
+                  <button
+                    key={roleOpt.id}
+                    type="button"
+                    onClick={() => handleExploreDemo(roleOpt.id)}
+                    className="flex flex-col text-left p-3 rounded-xl border border-slate-800 bg-navy-950/70 hover:bg-navy-900/90 hover:border-violet-500/50 transition-all group focus:outline-none relative"
+                  >
+                    <div className="flex items-center justify-between w-full mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={cn(
+                            'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
+                            roleOpt.iconBg
+                          )}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-white block">
+                            {roleOpt.title}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 block truncate">
+                            {roleOpt.personName} • {roleOpt.badge}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[11px] text-violet-400 font-semibold group-hover:text-violet-300 transition-colors shrink-0">
+                        <span>Demo</span>
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                      {roleOpt.description}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          {/* Quick Demo Credentials Assistant (Development only) */}
+          {isDev && (
+            <div className="mt-4 pt-4 border-t border-slate-800/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-slate-400">
+                  Local Dev Credentials Quick-Fill
+                </span>
+                <Badge variant="cyan" size="sm">
+                  Dev Only
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1.5">
+                {LOGIN_ROLES.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => fillRoleAccount(opt)}
+                    className={cn(
+                      'rounded-lg border bg-navy-950 p-1.5 text-center transition-all group',
+                      selectedRole === opt.id
+                        ? 'border-violet-500 bg-violet-950/30'
+                        : 'border-slate-800 hover:border-slate-700'
+                    )}
+                  >
+                    <span className={cn('text-[9px] font-bold block truncate', opt.accentColor)}>
+                      {opt.title.toUpperCase()}
+                    </span>
+                    <span className="text-[8px] text-slate-400 block truncate">{opt.personName}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 text-center text-xs text-slate-400">
             Don&apos;t have an account yet?{' '}
