@@ -127,12 +127,28 @@ export function AppHeader({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Link href="/login" className="hidden sm:block">
-              <Button variant="secondary" size="sm" className="text-xs text-zinc-300">
-                <LogIn className="h-3.5 w-3.5 mr-1" />
-                <span>Sign In</span>
+            {isDemoMode ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  exitDemoMode();
+                  router.push('/login');
+                }}
+                className="hidden sm:inline-flex text-xs text-zinc-300 hover:text-rose-400 transition-colors"
+                title="Exit Demo session and return to login"
+              >
+                <LogOut className="h-3.5 w-3.5 mr-1" />
+                <span>Exit Demo</span>
               </Button>
-            </Link>
+            ) : (
+              <Link href="/login" className="hidden sm:block">
+                <Button variant="secondary" size="sm" className="text-xs text-zinc-300">
+                  <LogIn className="h-3.5 w-3.5 mr-1" />
+                  <span>Sign In</span>
+                </Button>
+              </Link>
+            )}
 
             {/* Simulated Demo Identity Switcher (Showcase Mode Only) */}
             <div className="relative">
@@ -163,7 +179,7 @@ export function AppHeader({
                       ⚡ Demo Showcase Identities
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono">
-                      Showcase Mode • Sign in for real workspace
+                      Acme Systems Engineering • Simulated Roles
                     </span>
                   </div>
 

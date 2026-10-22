@@ -244,7 +244,7 @@ export default function ProjectsPage() {
               Project Portfolio & Delivery Benchmarks
             </h2>
             <Badge variant="violet" size="sm">
-              {projects.length} Active Initiatives
+              {projects.filter((p) => p.status === 'in_progress').length} Active / {projects.length} Total Projects
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">

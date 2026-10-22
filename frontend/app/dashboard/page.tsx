@@ -34,37 +34,38 @@ import {
 } from 'lucide-react';
 
 function DemoModeBanner() {
+  const { currentUser } = useMockStore();
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 sm:p-6 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-violet-900/40 bg-zinc-900/90 p-4 sm:p-5 shadow-sm">
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1.5 max-w-2xl">
+        <div className="space-y-1 max-w-2xl">
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-zinc-400" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
-              Interactive Guided Preview
+            <span className="flex h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
+              Active Demo Session
             </span>
-            <Badge variant="slate" size="sm" className="hidden sm:inline-flex">
-              Simulated Environment
+            <Badge variant="violet" size="sm" className="hidden sm:inline-flex text-[10px]">
+              Acme Systems Engineering
             </Badge>
           </div>
-          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-            Explore WorkForce AI in Demo Mode
+          <h3 className="text-base font-bold text-white tracking-tight">
+            Navigating as {currentUser.name} ({currentUser.role.toUpperCase()})
           </h3>
-          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-            Demo Mode lets users explore sample employees, projects, tasks, workload analytics, reports, and simulated AI recommendations in a fully interactive, risk-free preview.
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Exploring an isolated synthetic multi-department workforce dataset (25 team members, 6 projects, 45 tasks). All metrics and actions operate in-memory without altering production data.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
           <Link href="/presentation?from=dashboard">
             <Button
               variant="primary"
-              size="md"
-              className="px-4 py-2.5 text-xs sm:text-sm flex items-center gap-2"
+              size="sm"
+              className="px-3.5 py-2 text-xs flex items-center gap-1.5"
             >
-              <Sparkles className="h-4 w-4 text-zinc-700" />
-              <span>Explore Demo Mode</span>
-              <ArrowRight className="h-4 w-4 ml-0.5" />
+              <Sparkles className="h-3.5 w-3.5 text-zinc-950" />
+              <span>Interactive Tour</span>
+              <ArrowRight className="h-3.5 w-3.5 ml-0.5 text-zinc-950" />
             </Button>
           </Link>
         </div>
@@ -191,6 +192,28 @@ export default function DashboardPage() {
   // Real organization headcount and capacity derived strictly from Supabase (or mock store during demo)
   const totalEmployees = isLive ? totalMembers : mockEmployees.length;
   const totalCapacity = isLive ? totalCapacityHours : mockEmployees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
+
+  // Active roster representation: uses verified Supabase members in live mode, or synthetic mock employees in demo mode
+  const displayRoster = React.useMemo(() => {
+    if (isLive) {
+      return members.map((m) => ({
+        id: m.userId,
+        fullName: m.fullName,
+        email: m.email,
+        role: m.role,
+        weeklyCapacityHours: m.weeklyCapacityHours,
+        isCurrentUser: m.userId === user?.id,
+      }));
+    }
+    return mockEmployees.map((e) => ({
+      id: e.id,
+      fullName: e.fullName,
+      email: e.email,
+      role: e.role,
+      weeklyCapacityHours: e.weeklyCapacityHours,
+      isCurrentUser: e.id === mockUserId,
+    }));
+  }, [isLive, members, user, mockEmployees, mockUserId]);
 
   const memberUserIds = React.useMemo(() => new Set(members.map((m) => m.userId)), [members]);
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
@@ -694,14 +717,14 @@ export default function DashboardPage() {
               <CardContent className="space-y-3">
                 {isMembersLoading ? (
                   <div className="p-8 text-center text-xs text-slate-400">Loading team members...</div>
-                ) : members.length === 0 ? (
+                ) : displayRoster.length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-400">
                     No active members enrolled. Invite team members to get started.
                   </div>
                 ) : (
-                  members.slice(0, 6).map((m) => (
+                  displayRoster.slice(0, 6).map((m) => (
                     <div
-                      key={m.userId}
+                      key={m.id}
                       className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-navy-900/60 transition-colors hover:bg-navy-900"
                     >
                       <div className="flex items-center gap-3">
@@ -716,17 +739,21 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <Badge
                           variant={
-                            m.userId === user?.id
-                              ? 'violet'
+                            m.isCurrentUser
+                              ? 'amber'
+                              : m.role === 'organizer'
+                              ? 'amber'
                               : m.role === 'admin'
                               ? 'rose'
                               : m.role === 'manager'
                               ? 'violet'
+                              : m.role === 'hr'
+                              ? 'emerald'
                               : 'cyan'
                           }
                           size="sm"
                         >
-                          {m.userId === user?.id ? 'ORGANIZER' : m.role.toUpperCase()}
+                          {m.isCurrentUser && isLive ? 'ORGANIZER' : m.role.toUpperCase()}
                         </Badge>
                         <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
                           {m.weeklyCapacityHours}h/wk
@@ -1214,7 +1241,7 @@ export default function DashboardPage() {
               Workforce Capacity & Executive Overview
             </h2>
             <Badge variant="violet" size="sm">
-              Manager View
+              {effectiveRole === 'hr' ? 'HR & Talent Ops View' : 'Manager Operations View'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -1412,40 +1439,59 @@ export default function DashboardPage() {
                 <div className="text-base font-bold text-cyan-400 font-mono">
                   {totalEmployees === 0
                     ? 0
-                    : members.filter((m) => {
+                    : isLive
+                    ? members.filter((m) => {
                         const load = tasks
                           .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours < 0.5;
+                      }).length
+                    : mockEmployees.filter((e) => {
+                        const load = memberLoads.get(e.id) || 0;
+                        return e.weeklyCapacityHours > 0 && load / e.weeklyCapacityHours < 0.5;
                       }).length}
                 </div>
+                <div className="text-[10px] text-slate-400">&lt;50% capacity</div>
               </div>
               <div className="rounded-lg bg-navy-900/80 p-2 border border-slate-800">
                 <div className="text-slate-400">Optimal Load</div>
                 <div className="text-base font-bold text-emerald-400 font-mono">
                   {totalEmployees === 0
                     ? 0
-                    : members.filter((m) => {
+                    : isLive
+                    ? members.filter((m) => {
                         const load = tasks
                           .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         const r = m.weeklyCapacityHours > 0 ? load / m.weeklyCapacityHours : 0;
                         return r >= 0.5 && r <= 0.9;
+                      }).length
+                    : mockEmployees.filter((e) => {
+                        const load = memberLoads.get(e.id) || 0;
+                        const r = e.weeklyCapacityHours > 0 ? load / e.weeklyCapacityHours : 0;
+                        return r >= 0.5 && r <= 0.9;
                       }).length}
                 </div>
+                <div className="text-[10px] text-slate-400">50-90% capacity</div>
               </div>
               <div className="rounded-lg bg-navy-900/80 p-2 border border-slate-800">
                 <div className="text-slate-400">At/Over Capacity</div>
                 <div className="text-base font-bold text-rose-400 font-mono">
                   {totalEmployees === 0
                     ? 0
-                    : members.filter((m) => {
+                    : isLive
+                    ? members.filter((m) => {
                         const load = tasks
                           .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours > 0.9;
+                      }).length
+                    : mockEmployees.filter((e) => {
+                        const load = memberLoads.get(e.id) || 0;
+                        return e.weeklyCapacityHours > 0 && load / e.weeklyCapacityHours > 0.9;
                       }).length}
                 </div>
+                <div className="text-[10px] text-slate-400">&gt;90% capacity</div>
               </div>
             </div>
           </CardContent>
@@ -1460,7 +1506,7 @@ export default function DashboardPage() {
                 <CardTitle>AI Match Previews</CardTitle>
               </div>
               <Badge variant="violet" size="sm">
-                Gemini Advisory
+                {isLive ? 'Live Advisory' : 'Simulated Demo'}
               </Badge>
             </div>
             <CardDescription>

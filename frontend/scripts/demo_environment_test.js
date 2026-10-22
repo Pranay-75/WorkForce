@@ -417,6 +417,49 @@ assert(
   'Demo mode: Aggregates synthetic employee capacity and active tasks accurately'
 );
 
+console.log('\n[Test Suite 11: Single Source of Truth, UX Readiness & Reconciled Demo Metrics]');
+
+// 1. Single source of truth in mockData.ts
+assert(mockDataContent.includes('export const SYNTHETIC_DEMO_METRICS = {'), 'mockData.ts exports canonical SYNTHETIC_DEMO_METRICS single source of truth');
+assert(mockStoreContent.includes('SYNTHETIC_DEMO_METRICS'), 'mockStore.tsx exports SYNTHETIC_DEMO_METRICS for shared client consumption');
+
+// Check exact numbers in SYNTHETIC_DEMO_METRICS
+const metricsBlock = mockDataContent.substring(
+  mockDataContent.indexOf('export const SYNTHETIC_DEMO_METRICS = {'),
+  mockDataContent.indexOf('departmentsCount: new Set(')
+);
+assert(uniqueEmpIds.length === 25, 'Single source of truth employee count is exactly 25');
+assert(projIds.length === 6, 'Single source of truth project count is exactly 6');
+assert(taskIds.length === 45, 'Single source of truth task count is exactly 45');
+
+// 2. Login page consistency
+const loginPageFresh = fs.readFileSync(path.join(__dirname, '../app/login/page.tsx'), 'utf8');
+assert(!loginPageFresh.includes('24 employees'), 'Login page does not contain stale "24 employees" string');
+assert(loginPageFresh.includes('SYNTHETIC_DEMO_METRICS'), 'Login page dynamically consumes SYNTHETIC_DEMO_METRICS single source of truth');
+assert(loginPageFresh.includes('simulated AI matching'), 'Login page clearly labels AI matching in demo mode as simulated');
+
+// 3. AppHeader demo session UX
+const appHeaderFresh = fs.readFileSync(path.join(__dirname, '../components/layout/AppHeader.tsx'), 'utf8');
+assert(appHeaderFresh.includes('{isDemoMode ? ('), 'AppHeader branches on isDemoMode for auth actions');
+assert(appHeaderFresh.includes('<span>Exit Demo</span>'), 'AppHeader provides explicit Exit Demo action in header during active demo session');
+
+// 4. Dashboard roster & empty state parity
+const dashboardFresh = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
+assert(dashboardFresh.includes('displayRoster'), 'Dashboard defines displayRoster for unified live vs demo roster presentation');
+assert(dashboardFresh.includes('displayRoster.length === 0 ? ('), 'Dashboard roster empty state checks displayRoster, preventing false "No active members enrolled" in demo mode');
+
+// 5. Manager view utilization tier parity
+assert(/isLive\s*\?\s*members\.filter/.test(dashboardFresh) && dashboardFresh.includes('mockEmployees.filter((e) =>'), 'Manager view branches on isLive for utilization tiers (Under-Utilized, Optimal, Overloaded)');
+
+// 6. MetricCard readability & contrast
+const metricCardFresh = fs.readFileSync(path.join(__dirname, '../components/ui/MetricCard.tsx'), 'utf8');
+assert(!metricCardFresh.includes('truncate">{subtitle}</span>'), 'MetricCard subtitle does not prematurely truncate metric descriptions');
+
+// 7. AppShell toast dismissibility
+const appShellFresh = fs.readFileSync(path.join(__dirname, '../components/layout/AppShell.tsx'), 'utf8');
+assert(appShellFresh.includes('Dismiss notification') || appShellFresh.includes('Dismiss message'), 'AppShell feedback toast provides explicit dismiss button');
+assert(appShellFresh.includes('Simulated Demo Action'), 'AppShell feedback toast identifies demo operations as simulated');
+
 console.log(`\n=== Test Results: ${testsPassed} passed, ${testsFailed} failed ===\n`);
 
 if (testsFailed > 0) {
