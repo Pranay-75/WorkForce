@@ -2,11 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/lib/authContext';
-import { useTasks } from '@/lib/hooks/useTasks';
-import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
-import { useMockStore } from '@/lib/mockStore';
-import { Card } from '@/components/ui/Card';
+import { useTaskMatching } from '@/lib/hooks/useMatchingAPI';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -17,42 +14,12 @@ import {
   XCircle,
   AlertTriangle,
   ShieldCheck,
-  Calendar,
-  AlertCircle,
-  RefreshCw,
-  Plus,
+  Award,
 } from 'lucide-react';
 import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function MatchingHubPage() {
-  const { isAuthenticated, organization, role: authRole } = useAuth();
-  const isLive = Boolean(isAuthenticated && organization?.id);
-
-  // Live hooks
-  const {
-    tasks: liveTasks,
-    isLoading: isTasksLoading,
-    assignTask: dbAssignTask,
-    refetch: refetchTasks,
-  } = useTasks();
-
-  const {
-    members: liveMembers,
-    isLoading: isMembersLoading,
-  } = useOrganizationMembers();
-
-  // Mock store fallback
-  const {
-    recommendations: mockRecommendations,
-    tasks: mockTasks,
-    approveRecommendation: mockApproveRecommendation,
-    rejectRecommendation: mockRejectRecommendation,
-    activeRole: mockRole,
-  } = useMockStore();
-
-  const activeRole = isLive && authRole ? authRole : mockRole;
-
-  const tasks = isLive ? liveTasks : mockTasks;
+  const { recommendations, result, loading, error, matchTask, approveRecommendation, rejectRecommendation } = useTaskMatching();
 
   const [selectedTaskId, setSelectedTaskId] = React.useState<string>('');
   const [rejectModalRecId, setRejectModalRecId] = React.useState<string | null>(null);
@@ -139,88 +106,9 @@ export default function MatchingHubPage() {
         rationale = `${bandwidthText}. ${hoursText} ${skillText} Projected load is ${cap > 0 ? `${projUtil}%` : 'unbounded'}.`;
       }
 
-      return {
-        id: `rec-${targetTask.id}-${m.userId}`,
-        taskId: targetTask.id,
-        taskTitle: targetTask.title,
-        candidateId: m.userId,
-        candidateName: m.fullName,
-        candidateTitle: m.jobTitle,
-        candidateDepartment: m.department || 'Engineering',
-        matchScore: matchScore,
-        skillMatchBreakdown: {
-          matchedSkills,
-          missingSkills,
-          skillScore,
-        },
-        workloadImpact: {
-          currentLoadHours: curLoad,
-          taskEstimatedHours: taskHours,
-          projectedLoadHours: projLoad,
-          weeklyCapacityHours: cap,
-          projectedUtilizationPct: projUtil,
-        },
-        rationale,
-        riskFactors,
-        status: isCurrentAssignee
-          ? ('accepted' as const)
-          : dec?.status === 'rejected'
-          ? ('rejected' as const)
-          : ('pending' as const),
-        decisionReason: dec?.reason,
-      };
-    }).sort((a, b) => b.matchScore - a.matchScore);
-  }, [isLive, liveMembers, liveTasks, targetTask, selectedTaskId, mockRecommendations, decisionState]);
-
-  if (activeRole === 'employee') {
-    return (
-      <AccessDenied
-        resourceName="AI Matching Hub"
-        currentRole={activeRole}
-        requiredRoles={['manager', 'admin', 'hr', 'organizer']}
-        description="Candidate recommendation rankings, workload impact projections, and AI match scoring are restricted to team managers and administrators."
-      />
-    );
-  }
-
-  const handleApprove = async (rec: typeof taskRecommendations[0]) => {
-    setActionLoading(true);
-    setActionFeedback(null);
-
-    if (isLive) {
-      const res = await dbAssignTask(rec.taskId, rec.candidateId);
-      setActionLoading(false);
-      if (res.error) {
-        setActionFeedback({ text: res.error, type: 'error' });
-      } else {
-        // Assignment state is derived from refetched tasks (isCurrentAssignee)
-        setActionFeedback({
-          text: `Task "${rec.taskTitle}" assigned to ${rec.candidateName} successfully.`,
-          type: 'success',
-        });
-      }
-    } else {
-      mockApproveRecommendation(rec.id);
-      setActionLoading(false);
-      setActionFeedback({
-        text: `Task assigned to ${rec.candidateName} (Demo).`,
-        type: 'success',
-      });
-    }
-  };
-
-  const handleConfirmReject = () => {
+  const handleConfirmReject = async () => {
     if (rejectModalRecId && rejectReason.trim()) {
-      const rec = taskRecommendations.find((r) => r.id === rejectModalRecId);
-      if (rec) {
-        setDecisionState((prev) => ({
-          ...prev,
-          [`${rec.taskId}:${rec.candidateId}`]: { status: 'rejected', reason: rejectReason.trim() },
-        }));
-      }
-      if (!isLive) {
-        mockRejectRecommendation(rejectModalRecId, rejectReason);
-      }
+      await rejectRecommendation(rejectModalRecId, rejectReason);
       setRejectModalRecId(null);
       setRejectReason('');
       setActionFeedback({
@@ -230,14 +118,10 @@ export default function MatchingHubPage() {
     }
   };
 
-  if (isLive && isTasksLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
-        <p className="text-sm text-slate-400">Loading live organization tasks &amp; matching parameters...</p>
-      </div>
-    );
-  }
+  const handleMatchTask = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    if (taskId) matchTask(taskId);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -258,83 +142,68 @@ export default function MatchingHubPage() {
           </p>
         </div>
 
-        {/* Task Selection Selector */}
-        {tasks.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Target Task:</span>
-            <select
-              value={selectedTaskId}
-              onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-violet-500 focus:outline-none max-w-xs truncate"
-            >
-              {tasks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title} ({t.estimatedHours}h - {t.status})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Task ID Input */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">Task ID:</span>
+          <input
+            type="text"
+            value={selectedTaskId}
+            onChange={(e) => setSelectedTaskId(e.target.value)}
+            placeholder="Enter task ID..."
+            className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-violet-500 focus:outline-none w-48"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleMatchTask(selectedTaskId)}
+            disabled={!selectedTaskId || loading}
+          >
+            {loading ? (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-t-2 border-white mr-1" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 mr-1" />
+            )}
+            {loading ? 'Matching...' : 'Find Candidates'}
+          </Button>
+        </div>
       </div>
 
-      {actionFeedback && (
-        <div
-          className={`flex items-center gap-2 rounded-xl p-3.5 text-xs ${
-            actionFeedback.type === 'success'
-              ? 'border border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-              : 'border border-rose-500/40 bg-rose-950/30 text-rose-300'
-          }`}
-        >
-          {actionFeedback.type === 'success' ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-          ) : (
-            <AlertCircle className="h-4 w-4 shrink-0" />
-          )}
-          <span>{actionFeedback.text}</span>
+      {/* Error State */}
+      {error && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-sm text-rose-400">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!result && !loading && !error && (
+        <div className="rounded-xl border border-slate-700 bg-navy-900/40 p-12 text-center space-y-3">
+          <Sparkles className="mx-auto h-10 w-10 text-violet-400/50" />
+          <h3 className="text-base font-bold text-white">Ready to Match</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            Enter a Task ID above and click &ldquo;Find Candidates&rdquo; to run the AI matching engine against real workload data.
+          </p>
         </div>
       )}
 
       {/* Selected Task Overview Banner */}
-      {targetTask ? (
+      {result && (
         <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
-                <span>Project: {targetTask.projectName || 'Active Workspace'}</span>
+                <span>Task ID: {result.task_id}</span>
                 <span>•</span>
-                <span className="text-slate-300">Estimated: {targetTask.estimatedHours}h</span>
-                {targetTask.dueDate && (
-                  <>
-                    <span>•</span>
-                    <span className="text-slate-300">Due: {targetTask.dueDate}</span>
-                  </>
-                )}
+                <span className="text-slate-300">Evaluated: {result.total_candidates_evaluated} candidates</span>
+                <span>•</span>
+                <span className="text-slate-300">Eligible: {result.eligible_candidate_count}</span>
               </div>
-              <h3 className="text-lg font-bold text-white">
-                {targetTask.title}
-              </h3>
-              <p className="text-xs text-slate-300 line-clamp-2">
-                {targetTask.description || 'No detailed task description provided.'}
-              </p>
+              <h3 className="text-lg font-bold text-white">{result.task_title}</h3>
+              {result.no_match_reason && (
+                <p className="text-xs text-amber-300">{result.no_match_reason}</p>
+              )}
             </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge
-                variant={
-                  targetTask.priority === 'critical'
-                    ? 'rose'
-                    : targetTask.priority === 'high'
-                    ? 'amber'
-                    : 'slate'
-                }
-                size="sm"
-              >
-                {targetTask.priority.toUpperCase()} PRIORITY
-              </Badge>
-              <Badge variant="cyan" size="sm">
-                STATUS: {targetTask.status.toUpperCase()}
-              </Badge>
-            </div>
+            <Badge variant="violet" size="sm">AI Match Complete</Badge>
           </div>
         </Card>
       ) : (
@@ -364,128 +233,155 @@ export default function MatchingHubPage() {
       </div>
 
       {/* Candidate Recommendation Cards */}
-      {taskRecommendations.length > 0 && (
+      {result && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white tracking-tight">
-              Ranked Candidate Suggestions ({taskRecommendations.length})
+              Ranked Candidate Suggestions ({recommendations.length})
             </h3>
             <span className="text-xs text-slate-400">
-              Weighted on: Capacity Availability (50%) & Department Alignment (50%)
+              Weighted on: Skill Overlap (60%), Capacity Fit (40%)
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-5">
-            {taskRecommendations.map((rec) => {
+            {recommendations.map((rec, rankIdx) => {
+              const recId = `rec-${result?.task_id}-${rec.candidate_id}`;
               const isAccepted = rec.status === 'accepted';
               const isRejected = rec.status === 'rejected';
 
               return (
                 <Card
-                  key={rec.id}
-                  className={`border-slate-800 transition-all ${
-                    isAccepted
-                      ? 'border-emerald-500/60 bg-emerald-950/15'
-                      : isRejected
-                      ? 'border-rose-900/40 opacity-75'
-                      : 'hover:border-violet-500/40'
-                  }`}
+                  key={rec.candidate_id}
+                  className={`border-slate-800 transition-all ${isAccepted
+                    ? 'border-emerald-500/60 bg-navy-900'
+                    : isRejected
+                      ? 'opacity-60 border-slate-800'
+                      : 'hover:border-violet-500/50'
+                    }`}
                 >
                   <div className="p-5 space-y-4">
-                    {/* Candidate Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    {/* Candidate Header & Composite Score */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-800 text-sm font-bold text-white">
-                          {rec.candidateName
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')}
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-sm font-bold text-white shadow-glow border border-violet-400/40">
+                          {rec.candidate_avatar || 'EM'}
                         </div>
-                        <div>
+                        <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold text-slate-400">
+                              Rank #{rankIdx + 1}
+                            </span>
                             <h4 className="text-base font-bold text-white">
-                              {rec.candidateName}
+                              {rec.candidate_name}
                             </h4>
-                            <Badge variant="cyan" size="sm">
-                              {rec.candidateDepartment}
-                            </Badge>
+                            {isAccepted && (
+                              <Badge variant="emerald" size="sm">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Assigned by Manager
+                              </Badge>
+                            )}
+                            {isRejected && (
+                              <Badge variant="rose" size="sm">
+                                Rejected
+                              </Badge>
+                            )}
                           </div>
-                          <p className="text-xs text-slate-400">{rec.candidateTitle}</p>
+                          <p className="text-xs text-slate-400">
+                            {rec.candidate_title} • {rec.candidate_department}
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                            Match Score
+                          <span className="text-[10px] uppercase font-semibold text-slate-400 block">
+                            Composite Match
                           </span>
-                          <span className="text-xl font-extrabold font-mono text-cyan-400">
-                            {rec.matchScore}%
+                          <span
+                            className={`text-2xl font-extrabold font-mono ${rec.match_score >= 90
+                              ? 'text-emerald-400'
+                              : rec.match_score >= 70
+                                ? 'text-cyan-400'
+                                : 'text-rose-400'
+                              }`}
+                          >
+                            {rec.match_score}%
                           </span>
                         </div>
-                        <Badge
-                          variant={
-                            isAccepted ? 'emerald' : isRejected ? 'rose' : 'violet'
-                          }
-                          size="md"
-                        >
-                          {isAccepted ? 'Assigned' : isRejected ? 'Rejected' : 'Recommended'}
-                        </Badge>
                       </div>
                     </div>
 
-                    {/* Breakdown & Workload Impact */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Skills */}
+                    {/* Multi-Factor Breakdown Grid */}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      {/* 1. Skill Overlap */}
                       <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2">
-                        <span className="text-xs font-semibold text-slate-200 block">
-                          Capability Alignment:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {rec.skillMatchBreakdown.matchedSkills.map((ms, idx) => (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                            <Award className="h-3.5 w-3.5 text-cyan-400" />
+                            Skill Overlap Breakdown:
+                          </span>
+                          <span className="font-mono text-emerald-400 font-bold">
+                            {rec.skill_match_breakdown.skill_score}%
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {rec.skill_match_breakdown.matched_skills.map((ms, idx) => (
                             <Badge key={idx} variant="cyan" size="sm">
-                              {ms.skill} ({ms.candidateLevel})
+                              {ms.skill}: {ms.candidate_level} (Req: {ms.required_level})
+                            </Badge>
+                          ))}
+                          {rec.skill_match_breakdown.missing_skills.map((miss, idx) => (
+                            <Badge key={idx} variant="amber" size="sm">
+                              Missing: {miss}
                             </Badge>
                           ))}
                         </div>
+                        {rec.skill_match_breakdown.missing_skills.length > 0 && (
+                          <p className="text-[10px] font-mono text-amber-400/80 pt-0.5">
+                            {rec.skill_match_breakdown.missing_skills.length} missing prerequisite(s)
+                          </p>
+                        )}
                       </div>
 
-                      {/* Capacity Impact */}
+                      {/* 2. Capacity Impact */}
                       <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-slate-200">
-                            Workload Impact:
+                            Workload Impact Simulation:
                           </span>
                           <span className="font-mono text-slate-300">
-                            {rec.workloadImpact.currentLoadHours}h →{' '}
+                            {rec.workload_impact.current_load_hours}h →{' '}
                             <strong
                               className={
-                                rec.workloadImpact.projectedUtilizationPct > 100
+                                rec.workload_impact.projected_utilization_pct > 100
                                   ? 'text-rose-400'
                                   : 'text-emerald-400'
                               }
                             >
-                              {rec.workloadImpact.projectedLoadHours}h (
-                              {rec.workloadImpact.projectedUtilizationPct}%)
+                              {rec.workload_impact.projected_load_hours}h (
+                              {rec.workload_impact.projected_utilization_pct}%)
                             </strong>
                           </span>
                         </div>
-                        <ProgressBar value={rec.workloadImpact.projectedUtilizationPct} />
+                        <ProgressBar
+                          value={rec.workload_impact.projected_utilization_pct}
+                        />
                       </div>
                     </div>
 
-                    {/* Explainability Rationale */}
+                    {/* AI Explainability Rationale */}
                     <div className="rounded-xl border border-violet-500/20 bg-navy-950/60 p-3.5 space-y-1.5 text-xs">
                       <span className="font-semibold text-violet-300 flex items-center gap-1.5">
                         <Sparkles className="h-3.5 w-3.5 text-violet-400" />
-                        Recommendation Rationale:
+                        Gemini Advisory Rationale:
                       </span>
                       <p className="text-slate-200 leading-relaxed italic">
                         &ldquo;{rec.rationale}&rdquo;
                       </p>
-                      {rec.riskFactors.length > 0 && (
+                      {rec.risk_factors.length > 0 && (
                         <div className="pt-1 text-[11px] text-amber-300 space-y-0.5">
-                          {rec.riskFactors.map((rf, idx) => (
+                          {rec.risk_factors.map((rf: string, idx: number) => (
                             <div key={idx} className="flex items-center gap-1.5">
                               <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
                               <span>Risk Note: {rf}</span>
@@ -501,8 +397,7 @@ export default function MatchingHubPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setRejectModalRecId(rec.id)}
-                          disabled={actionLoading}
+                          onClick={() => setRejectModalRecId(recId)}
                         >
                           <XCircle className="h-3.5 w-3.5 mr-1" />
                           Reject with Reason
@@ -510,8 +405,7 @@ export default function MatchingHubPage() {
                         <Button
                           variant="primary"
                           size="sm"
-                          onClick={() => handleApprove(rec)}
-                          disabled={actionLoading}
+                          onClick={() => approveRecommendation(recId)}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                           Approve & Assign Task
@@ -519,9 +413,9 @@ export default function MatchingHubPage() {
                       </div>
                     )}
 
-                    {rec.decisionReason && (
+                    {rec.decision_reason && (
                       <div className="rounded-lg bg-navy-950 p-2.5 text-xs text-rose-300 border border-rose-900/40">
-                        <strong>Rejection Feedback:</strong> {rec.decisionReason}
+                        <strong>Rejection Feedback:</strong> {rec.decision_reason}
                       </div>
                     )}
                   </div>
