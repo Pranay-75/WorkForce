@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { useMockStore } from '@/lib/mockStore';
+import { useMockStore, SYNTHETIC_DEMO_METRICS } from '@/lib/mockStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -436,7 +436,7 @@ function LoginFormContent() {
                     Explore Interactive Demo
                   </span>
                   <span className="text-[10px] text-slate-400">
-                    Acme Systems Engineering • 24 employees, 6 projects, 45 tasks
+                    {SYNTHETIC_DEMO_METRICS.organizationName} • {SYNTHETIC_DEMO_METRICS.totalEmployees} team members, {SYNTHETIC_DEMO_METRICS.totalProjects} projects ({SYNTHETIC_DEMO_METRICS.activeProjects} active), {SYNTHETIC_DEMO_METRICS.totalTasks} tasks
                   </span>
                 </div>
               </div>
@@ -446,7 +446,7 @@ function LoginFormContent() {
             </div>
 
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Test-drive WorkForce with an isolated synthetic company dataset. Select any role below to experience live capacity monitoring, Gemini matching, and role-based permissions without registering.
+              Test-drive WorkForce with an isolated synthetic company dataset. Select any role below to experience capacity monitoring, simulated AI matching, and role-based permissions without registering.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

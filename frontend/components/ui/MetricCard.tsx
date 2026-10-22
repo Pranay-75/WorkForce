@@ -129,7 +129,7 @@ export function MetricCard({
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {trend && (
             <div
               className={cn(
@@ -151,7 +151,7 @@ export function MetricCard({
             </Badge>
           )}
           {subtitle && (
-            <span className="text-xs text-zinc-400 truncate">{subtitle}</span>
+            <span className="text-xs text-zinc-300 leading-normal">{subtitle}</span>
           )}
         </div>
       </CardContent>

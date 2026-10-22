@@ -6,7 +6,7 @@ import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { useMockStore } from '@/lib/mockStore';
 import { useAuth } from '@/lib/authContext';
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Sparkles, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 
@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
-  const { feedbackMessage, isDemoMode, currentUser, exitDemoMode } = useMockStore();
+  const { feedbackMessage, setFeedbackMessage, isDemoMode, currentUser, exitDemoMode } = useMockStore();
   const { isAuthenticated, organization, isLoading } = useAuth();
 
   const isAuthOrOnboardingRoute =
@@ -116,20 +116,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Global Floating Feedback Toast */}
         {feedbackMessage && (
-          <div className="fixed top-20 right-6 z-50 flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-200 shadow-elevated backdrop-blur-md animate-in slide-in-from-top-4 duration-200">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-800 text-zinc-200">
-              <CheckCircle2 className="h-4 w-4" />
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-200 shadow-elevated backdrop-blur-md animate-in slide-in-from-bottom-4 duration-200 max-w-md">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-800 text-zinc-200 shrink-0">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-white">{feedbackMessage}</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="font-medium text-white truncate">{feedbackMessage}</span>
               <span className="text-[10px] text-zinc-400 font-mono">
-                Live Workspace State
+                {isDemoMode && !isAuthenticated ? 'Simulated Demo Action' : 'Live Workspace Action'}
               </span>
             </div>
-            <Badge variant="slate" size="sm" className="ml-2">
-              <Sparkles className="h-2.5 w-2.5 mr-1" />
-              Live
-            </Badge>
+            <button
+              type="button"
+              onClick={() => setFeedbackMessage(null)}
+              className="text-zinc-400 hover:text-white p-1 rounded-md transition-colors"
+              aria-label="Dismiss notification"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 

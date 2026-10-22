@@ -1586,16 +1586,16 @@ export const initialAIRecommendations: AIRecommendation[] = [
       skillScore: 100.0,
     },
     workloadImpact: {
-      currentLoadHours: 46,
+      currentLoadHours: 32,
       taskEstimatedHours: 10,
-      projectedLoadHours: 56,
+      projectedLoadHours: 42,
       weeklyCapacityHours: 40,
-      projectedUtilizationPct: 140.0,
+      projectedUtilizationPct: 105.0,
     },
     rationale:
-      'NOT RECOMMENDED. Although David possesses 100% skill match, he is severely over-allocated at 46h (115% capacity). Assigning this task would push him to 140% utilization, inducing extreme scheduling bottleneck.',
+      'NOT RECOMMENDED. Although David possesses 100% skill match, he is nearing upper capacity at 32h (80% load). Assigning this 10h task would push him to 42h (105% utilization), inducing an over-capacity bottleneck.',
     riskFactors: [
-      'CRITICAL: Candidate is already over 100% capacity.',
+      'Candidate would exceed 100% capacity threshold (105%).',
       'High risk of project milestone delay.',
     ],
     status: 'pending',
@@ -1605,35 +1605,35 @@ export const initialAIRecommendations: AIRecommendation[] = [
 export const initialRedistributionProposals: WorkloadRedistributionProposal[] = [
   {
     id: 'prop-1',
+    taskId: 'task-101',
+    taskTitle: 'Build Interactive Workload Heatmap Component',
+    taskHours: 16,
+    sourceEmployeeId: 'emp-2',
+    sourceEmployeeName: 'Alex Chen',
+    sourceCurrentLoad: 46,
+    sourceProjectedLoad: 30, // 46 - 16 = 30h (75%)
+    targetEmployeeId: 'emp-6',
+    targetEmployeeName: 'Priya Patel',
+    targetCurrentLoad: 18,
+    targetProjectedLoad: 34, // 18 + 16 = 34h (85%)
+    rationale:
+      'Transferring heatmap development reduces Alex Chen from an alarming 115% overload (46h) down to a healthy 75% load (30h), while Priya Patel safely absorbs the work within her available bandwidth (34h / 85%).',
+  },
+  {
+    id: 'prop-2',
     taskId: 'task-103',
     taskTitle: 'Optimize PostgreSQL Vector Index Queries',
     taskHours: 16,
     sourceEmployeeId: 'emp-3',
     sourceEmployeeName: 'David Kim',
-    sourceCurrentLoad: 46,
-    sourceProjectedLoad: 30, // 46 - 16 = 30h (75%)
-    targetEmployeeId: 'emp-1',
-    targetEmployeeName: 'Sarah Connor',
-    targetCurrentLoad: 28,
-    targetProjectedLoad: 40, // 28 + 12 (shared/reallocated) = 40h (100%)
-    rationale:
-      'Transferring vector tuning reduces David Kim from an alarming 115% overload down to a healthy 75% load, preventing imminent milestone burnout.',
-  },
-  {
-    id: 'prop-2',
-    taskId: 'task-101',
-    taskTitle: 'Build Interactive Workload Heatmap Component',
-    taskHours: 12,
-    sourceEmployeeId: 'emp-2',
-    sourceEmployeeName: 'Alex Chen',
     sourceCurrentLoad: 32,
-    sourceProjectedLoad: 26,
-    targetEmployeeId: 'emp-6',
-    targetEmployeeName: 'Priya Patel',
-    targetCurrentLoad: 18,
-    targetProjectedLoad: 24,
+    sourceProjectedLoad: 24,
+    targetEmployeeId: 'emp-5',
+    targetEmployeeName: 'Marcus Vance',
+    targetCurrentLoad: 28,
+    targetProjectedLoad: 36,
     rationale:
-      'Reallocating frontend sub-components to Priya Patel utilizes her open bandwidth (18h) while keeping Alex Chen well within optimal capacity margins.',
+      'Co-assigning vector index tuning balances David Kim from upper capacity threshold (32h / 80%) while keeping Marcus Vance within safe operating margins (36h / 90%).',
   },
 ];
 
@@ -2728,3 +2728,30 @@ export function getEmployeeIntelligenceProfile(
     actualUtilizationPct,
   };
 }
+
+/**
+ * Single source of truth for synthetic demo environment metrics across WorkForce.
+ * Reconciles employee roster, project portfolio, active tasks, and capacity utilization.
+ */
+export const SYNTHETIC_DEMO_METRICS = {
+  organizationName: 'Acme Systems Engineering',
+  totalEmployees: initialEmployees.length,
+  totalProjects: initialProjects.length,
+  activeProjects: initialProjects.filter((p) => p.status === 'in_progress').length,
+  planningProjects: initialProjects.filter((p) => p.status === 'planning').length,
+  totalTasks: initialTasks.length,
+  activeTasks: initialTasks.filter((t) => t.status !== 'completed').length,
+  completedTasks: initialTasks.filter((t) => t.status === 'completed').length,
+  totalCapacityHours: initialEmployees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0),
+  totalAllocatedHours: initialTasks
+    .filter((t) => t.status !== 'completed' && t.assignedTo)
+    .reduce((sum, t) => sum + (t.estimatedHours || 0), 0),
+  capacityUtilizationPercent: Math.round(
+    (initialTasks
+      .filter((t) => t.status !== 'completed' && t.assignedTo)
+      .reduce((sum, t) => sum + (t.estimatedHours || 0), 0) /
+      initialEmployees.reduce((sum, e) => sum + e.weeklyCapacityHours, 0)) *
+      100
+  ),
+  departmentsCount: new Set(initialEmployees.map((e) => e.department)).size,
+};

@@ -250,7 +250,7 @@ export default function MatchingHubPage() {
             </h2>
             <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
               <Sparkles className="h-3 w-3 mr-1" />
-              {isLive ? 'Live Advisory Engine' : 'Gemini Advisory Demo'}
+              {isLive ? 'Live Advisory Engine' : 'Simulated Demo Advisory'}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">

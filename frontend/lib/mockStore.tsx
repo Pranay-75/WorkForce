@@ -22,8 +22,11 @@ import {
   initialAuditEvents,
   initialNotifications,
   initialSkills,
+  SYNTHETIC_DEMO_METRICS,
 } from './mockData';
 import { useAuth } from './authContext';
+
+export { SYNTHETIC_DEMO_METRICS };
 
 export interface DemoIdentity {
   id: string;
@@ -48,7 +51,7 @@ export const demoIdentities: DemoIdentity[] = [
     name: 'Chloe Dubois',
     role: 'admin',
     jobTitle: 'VP of Operations & Workspace Admin',
-    department: 'Executive Administration',
+    department: 'Executive',
     avatar: 'CD',
   },
   {
