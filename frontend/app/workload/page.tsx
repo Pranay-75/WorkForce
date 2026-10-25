@@ -2,131 +2,53 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/lib/authContext';
-import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
-import { useTasks } from '@/lib/hooks/useTasks';
-import { useMockStore } from '@/lib/mockStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { useWorkloadOverview, useRedistributionProposals } from '@/lib/hooks/useWorkloadAPI';
 import {
   BarChart3,
   Sparkles,
   AlertTriangle,
-  CheckCircle2,
+  RefreshCw,
   Users,
   Search,
   ChevronDown,
   ChevronUp,
-  Clock,
   CheckSquare,
-  Plus,
-  Minus,
-  RefreshCw,
-  AlertCircle,
-  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function WorkloadCapacityPage() {
-  const { isAuthenticated, user, organization, role: authRole } = useAuth();
-  const isLive = Boolean(isAuthenticated && organization?.id);
-
-  // Live hooks
-  const {
-    members: liveMembers,
-    isLoading: isMembersLoading,
-    refetch: refetchMembers,
-  } = useOrganizationMembers();
-
-  const {
-    tasks: liveTasks,
-    isLoading: isTasksLoading,
-    assignTask: dbAssignTask,
-    updateTaskDetails: dbUpdateTaskDetails,
-    updateTaskStatus: dbUpdateTaskStatus,
-    refetch: refetchTasks,
-  } = useTasks();
-
-  // Mock store fallback for unauthenticated showcase
-  const {
-    employees: mockEmployees,
-    tasks: mockTasks,
-    redistributionProposals: mockProposals,
-    activeRole: mockRole,
-    currentUserId: mockUserId,
-    updateTaskDetails: mockUpdateTaskDetails,
-    updateTaskStatus: mockUpdateTaskStatus,
-    applyRedistribution: mockApplyRedistribution,
-  } = useMockStore();
-
-  const activeRole = isLive ? authRole : mockRole;
-  const currentUserId = isLive ? (user?.id || '') : mockUserId;
-  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
-
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'overloaded' | 'near_limit' | 'optimal'>('all');
   const [departmentFilter, setDepartmentFilter] = React.useState<string>('all');
   const [sortBy, setSortBy] = React.useState<'util_desc' | 'util_asc' | 'hours_desc' | 'name_asc'>('util_desc');
   const [expandedEmpId, setExpandedEmpId] = React.useState<string | null>(null);
 
-  const [actionLoading, setActionLoading] = React.useState(false);
-  const [actionMessage, setActionMessage] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
-
-  // Reconcile employees list with live assigned tasks
-  const employees = React.useMemo(() => {
-    if (isLive) {
-      return liveMembers.map((m) => {
-        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-        const loadHours = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-        const capacity = m.weeklyCapacityHours || 40;
-
-        return {
-          id: m.userId,
-          fullName: m.fullName,
-          email: m.email,
-          jobTitle: m.jobTitle || 'Team Member',
-          department: m.department || 'Engineering',
-          weeklyCapacityHours: capacity,
-          currentLoadHours: loadHours,
-          activeTaskCount: assigned.length,
-        };
-      });
-    }
-    return mockEmployees.map((e) => ({
-      id: e.id,
-      fullName: e.fullName,
-      email: e.email,
-      jobTitle: e.jobTitle,
-      department: e.department,
-      weeklyCapacityHours: e.weeklyCapacityHours,
-      currentLoadHours: e.currentLoadHours,
-      activeTaskCount: e.activeTaskCount,
-    }));
-  }, [isLive, liveMembers, liveTasks, mockEmployees]);
-
-  const tasks = isLive ? liveTasks : mockTasks;
-
-  // Capacity Bands
-  const overloadedStaff = employees.filter(
-    (e) => e.weeklyCapacityHours > 0 && e.currentLoadHours / e.weeklyCapacityHours > 1.0
+  // Real API data
+  const { data: workloadData, loading: workloadLoading, error: workloadError, refetch: refetchWorkload } = useWorkloadOverview(
+    departmentFilter !== 'all' ? departmentFilter : undefined
   );
-  const nearLimitStaff = employees.filter((e) => {
-    const r = e.weeklyCapacityHours > 0 ? e.currentLoadHours / e.weeklyCapacityHours : 0;
-    return r >= 0.8 && r <= 1.0;
-  });
-  const optimalStaff = employees.filter((e) => {
-    const r = e.weeklyCapacityHours > 0 ? e.currentLoadHours / e.weeklyCapacityHours : 0;
-    return r < 0.8;
-  });
+  const { data: redistData, loading: redistLoading, refetch: refetchRedist } = useRedistributionProposals();
 
-  // Extract distinct departments
+  const employees = workloadData?.employee_workloads ?? [];
+  const redistributionProposals = redistData?.proposals ?? [];
+
+  // Live Capacity Bands (derived from real API data)
+  const overloadedStaff = employees.filter((e) => e.is_overloaded);
+  const nearLimitStaff = employees.filter((e) => e.load_band === 'near_limit');
+  const optimalStaff = employees.filter((e) => e.load_band === 'optimal');
+
+  // Managers can see all data (backend already enforces auth)
+  const isManagerOrAdmin = true;
+
+  // Extract distinct departments from real data
   const departments = React.useMemo(() => {
     const set = new Set<string>();
-    employees.forEach((e) => {
-      if (e.department) set.add(e.department);
-    });
+    employees.forEach((e) => { if (e.department) set.add(e.department); });
     return Array.from(set);
   }, [employees]);
 
@@ -186,30 +108,24 @@ export default function WorkloadCapacityPage() {
   const filteredEmployees = React.useMemo(() => {
     return employees
       .filter((emp) => {
-        const util = emp.weeklyCapacityHours > 0 ? emp.currentLoadHours / emp.weeklyCapacityHours : 0;
-
         const matchesSearch =
-          emp.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          emp.jobTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          emp.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           emp.department.toLowerCase().includes(searchQuery.toLowerCase());
 
         let matchesStatus = true;
-        if (statusFilter === 'overloaded') matchesStatus = util > 1.0;
-        if (statusFilter === 'near_limit') matchesStatus = util >= 0.8 && util <= 1.0;
-        if (statusFilter === 'optimal') matchesStatus = util < 0.8;
+        if (statusFilter === 'overloaded') matchesStatus = emp.load_band === 'overloaded';
+        if (statusFilter === 'near_limit') matchesStatus = emp.load_band === 'near_limit';
+        if (statusFilter === 'optimal') matchesStatus = emp.load_band === 'optimal';
 
         const matchesDept = departmentFilter === 'all' || emp.department === departmentFilter;
-
         return matchesSearch && matchesStatus && matchesDept;
       })
       .sort((a, b) => {
-        const utilA = a.weeklyCapacityHours > 0 ? a.currentLoadHours / a.weeklyCapacityHours : 0;
-        const utilB = b.weeklyCapacityHours > 0 ? b.currentLoadHours / b.weeklyCapacityHours : 0;
-
-        if (sortBy === 'util_desc') return utilB - utilA;
-        if (sortBy === 'util_asc') return utilA - utilB;
-        if (sortBy === 'hours_desc') return b.currentLoadHours - a.currentLoadHours;
-        if (sortBy === 'name_asc') return a.fullName.localeCompare(b.fullName);
+        if (sortBy === 'util_desc') return b.utilization_pct - a.utilization_pct;
+        if (sortBy === 'util_asc') return a.utilization_pct - b.utilization_pct;
+        if (sortBy === 'hours_desc') return b.current_load_hours - a.current_load_hours;
+        if (sortBy === 'name_asc') return a.full_name.localeCompare(b.full_name);
         return 0;
       });
   }, [employees, searchQuery, statusFilter, departmentFilter, sortBy]);
@@ -229,52 +145,25 @@ export default function WorkloadCapacityPage() {
     setExpandedEmpId((prev) => (prev === empId ? null : empId));
   };
 
-  const handleAdjustTaskHours = async (taskId: string, currentHours: number, delta: number) => {
-    const newHours = Math.max(1, currentHours + delta);
-    setActionLoading(true);
-    setActionMessage(null);
+  // Loading / error states
+  if (workloadLoading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-violet-500 mr-3" />
+        Loading real workload data from backend...
+      </div>
+    );
+  }
 
-    if (isLive) {
-      const res = await dbUpdateTaskDetails(taskId, { estimatedHours: newHours });
-      setActionLoading(false);
-      if (res.error) {
-        setActionMessage({ text: res.error, type: 'error' });
-      } else {
-        setActionMessage({ text: `Task hours updated to ${newHours}h.`, type: 'success' });
-      }
-    } else {
-      mockUpdateTaskDetails(taskId, { estimatedHours: newHours });
-      setActionLoading(false);
-      setActionMessage({ text: `Task hours updated to ${newHours}h (Demo).`, type: 'success' });
-    }
-  };
-
-  const handleReassignTask = async (taskId: string, targetEmpId: string) => {
-    setActionLoading(true);
-    setActionMessage(null);
-
-    const assignee = targetEmpId === 'unassigned' ? null : targetEmpId;
-
-    if (isLive) {
-      const res = await dbAssignTask(taskId, assignee);
-      setActionLoading(false);
-      if (res.error) {
-        setActionMessage({ text: res.error, type: 'error' });
-      } else {
-        setActionMessage({ text: 'Task reassigned successfully.', type: 'success' });
-      }
-    } else {
-      mockUpdateTaskDetails(taskId, {
-        assignedTo: targetEmpId === 'unassigned' ? undefined : targetEmpId,
-      });
-      setActionLoading(false);
-      setActionMessage({ text: 'Task reassigned (Demo).', type: 'success' });
-    }
-  };
-
-  const handleApplyTransfer = async (taskId: string, targetEmpId: string) => {
-    await handleReassignTask(taskId, targetEmpId);
-  };
+  if (workloadError) {
+    return (
+      <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-6 text-center space-y-3">
+        <p className="text-rose-400 font-bold">Failed to load workload data</p>
+        <p className="text-xs text-slate-400">{workloadError}</p>
+        <Button variant="secondary" size="sm" onClick={refetchWorkload}>Retry</Button>
+      </div>
+    );
+  }
 
   const handleCompleteTask = async (taskId: string) => {
     if (isLive) {
@@ -430,74 +319,93 @@ export default function WorkloadCapacityPage() {
           </div>
 
           <Badge variant="violet" size="sm">
-            {dynamicProposals.length} Proposed Transfer{dynamicProposals.length !== 1 ? 's' : ''}
+            {redistLoading ? '...' : redistributionProposals.length} Proposed Transfers
           </Badge>
+          <Button variant="ghost" size="sm" onClick={() => { refetchWorkload(); refetchRedist(); }} className="text-xs">
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Refresh
+          </Button>
         </div>
 
-        {dynamicProposals.length > 0 ? (
-          <div className="grid grid-cols-1 gap-5">
-            {dynamicProposals.map((prop) => {
-              const sourceEmp = employees.find((e) => e.id === prop.sourceEmployeeId);
-              const targetEmp = employees.find((e) => e.id === prop.targetEmployeeId);
+        <div className="grid grid-cols-1 gap-5">
+          {redistributionProposals.map((prop) => {
+            // sourceBeforePct = utilisation BEFORE transfer = current_load / capacity
+            const sourceBeforePct = prop.source_employee.weekly_capacity > 0
+              ? Math.round((prop.source_employee.current_load / prop.source_employee.weekly_capacity) * 100)
+              : 0;
+            // sourceAfterPct = utilisation AFTER transfer = projected_load / capacity
+            const sourceAfterPct = Math.round(prop.source_employee.projected_utilization_pct);
+            // targetBeforePct = utilisation BEFORE absorbing = current_load / capacity
+            const targetBeforePct = prop.target_employee.weekly_capacity > 0
+              ? Math.round((prop.target_employee.current_load / prop.target_employee.weekly_capacity) * 100)
+              : 0;
+            // targetAfterPct = utilisation AFTER absorbing = projected_load / capacity
+            const targetAfterPct = Math.round(prop.target_employee.projected_utilization_pct);
 
-              const sourceCap = sourceEmp?.weeklyCapacityHours || 40;
-              const targetCap = targetEmp?.weeklyCapacityHours || 40;
+            return (
+              <Card
+                key={prop.id}
+                className="border-violet-500/40 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card"
+              >
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold font-mono text-cyan-400">
+                        Task Transfer Candidate
+                      </span>
+                      <h4 className="text-base font-bold text-white">
+                        {prop.task_title} ({prop.task_hours}h)
+                      </h4>
+                    </div>
+                    <Badge variant={sourceBeforePct > 100 ? 'rose' : 'amber'} size="sm">
+                      {sourceBeforePct > 100 ? 'Overload Risk Mitigation' : 'Capacity Load Smoothing'}
+                    </Badge>
+                  </div>
 
-              const sourceBeforePct = Math.round((prop.sourceCurrentLoad / sourceCap) * 100);
-              const sourceAfterPct = Math.round((prop.sourceProjectedLoad / sourceCap) * 100);
-
-              const targetBeforePct = Math.round((prop.targetCurrentLoad / targetCap) * 100);
-              const targetAfterPct = Math.round((prop.targetProjectedLoad / targetCap) * 100);
-
-              return (
-                <Card
-                  key={prop.id}
-                  className="border-violet-500/40 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card"
-                >
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] uppercase font-bold font-mono text-cyan-400">
-                          Task Transfer Candidate
+                  {/* Redistribution Comparison Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Source Employee */}
+                    <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-300">
+                          Source: {prop.source_employee.name}
                         </span>
-                        <h4 className="text-base font-bold text-white">
-                          {prop.taskTitle} ({prop.taskHours}h)
-                        </h4>
+                        <Badge variant="rose" size="sm">
+                          Relieving -{prop.task_hours}h ({sourceBeforePct - sourceAfterPct}%)
+                        </Badge>
                       </div>
                       <Badge variant={sourceBeforePct > 100 ? 'rose' : 'amber'} size="sm">
                         {sourceBeforePct > 100 ? 'Overload Risk Mitigation' : 'Capacity Load Smoothing'}
                       </Badge>
                     </div>
 
-                    {/* Redistribution Comparison Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Source Employee */}
-                      <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-rose-300">
-                            Source: {prop.sourceEmployeeName}
+                      <div className="space-y-1.5 text-xs font-mono">
+                        <div className="flex justify-between text-slate-300">
+                          <span>Before: {prop.source_employee.current_load}h ({sourceBeforePct}%)</span>
+                          <span className="text-emerald-400 font-bold">
+                            After: {prop.source_employee.projected_load}h ({sourceAfterPct}%)
                           </span>
                           <Badge variant="rose" size="sm">
                             Relieving -{prop.taskHours}h ({sourceBeforePct - sourceAfterPct}%)
                           </Badge>
                         </div>
 
-                        <div className="space-y-1.5 text-xs font-mono">
-                          <div className="flex justify-between text-slate-300">
-                            <span>Before: {prop.sourceCurrentLoad}h ({sourceBeforePct}%)</span>
-                            <span className="text-emerald-400 font-bold">
-                              After: {prop.sourceProjectedLoad}h ({sourceAfterPct}%)
-                            </span>
-                          </div>
-                          <ProgressBar value={sourceAfterPct} />
-                        </div>
+                    {/* Target Employee */}
+                    <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-300">
+                          Target: {prop.target_employee.name}
+                        </span>
+                        <Badge variant="emerald" size="sm">
+                          Absorbing +{prop.task_hours}h ({targetAfterPct - targetBeforePct}%)
+                        </Badge>
                       </div>
 
-                      {/* Target Employee */}
-                      <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-emerald-300">
-                            Target: {prop.targetEmployeeName}
+                      <div className="space-y-1.5 text-xs font-mono">
+                        <div className="flex justify-between text-slate-300">
+                          <span>Before: {prop.target_employee.current_load}h ({targetBeforePct}%)</span>
+                          <span className="text-cyan-400 font-bold">
+                            After: {prop.target_employee.projected_load}h ({targetAfterPct}%)
                           </span>
                           <Badge variant="emerald" size="sm">
                             Absorbing +{prop.taskHours}h ({targetAfterPct - targetBeforePct}%)
@@ -516,23 +424,12 @@ export default function WorkloadCapacityPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                      <p className="text-xs text-slate-400 italic">
-                        {prop.rationale}
-                      </p>
-                      {isManagerOrAdmin && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleApplyTransfer(prop.taskId, prop.targetEmployeeId)}
-                          disabled={actionLoading}
-                          className="shrink-0"
-                        >
-                          <span>Apply Reassignment</span>
-                          <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                        </Button>
-                      )}
-                    </div>
+                  {/* Rationale & Execution CTA */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 text-xs">
+                    <p className="text-slate-300 italic flex-1">
+                      &ldquo;{prop.rationale}&rdquo;
+                    </p>
+                    <Badge variant="slate" size="sm">Advisory — Requires Manager Approval</Badge>
                   </div>
                 </Card>
               );
@@ -616,19 +513,12 @@ export default function WorkloadCapacityPage() {
         <CardContent>
           <div className="space-y-4">
             {filteredEmployees.map((emp) => {
-              const util = emp.weeklyCapacityHours > 0
-                ? Math.round((emp.currentLoadHours / emp.weeklyCapacityHours) * 100)
-                : 0;
-
-              const isOverloaded = util > 100;
-              const isNearLimit = util >= 80 && util <= 100;
-              const isOptimal = util < 80;
-              const isExpanded = expandedEmpId === emp.id;
-
-              const empTasks = tasks.filter(
-                (t) => t.assignedTo === emp.id && t.status !== 'completed'
-              );
-              const bufferHours = emp.weeklyCapacityHours - emp.currentLoadHours;
+              const util = Math.round(emp.utilization_pct);
+              const isOverloaded = emp.is_overloaded;
+              const isNearLimit = emp.load_band === 'near_limit';
+              const isOptimal = emp.load_band === 'optimal';
+              const isExpanded = expandedEmpId === emp.employee_id;
+              const bufferHours = emp.remaining_capacity_hours;
 
               const initials = emp.fullName
                 .split(' ')
@@ -640,7 +530,7 @@ export default function WorkloadCapacityPage() {
 
               return (
                 <div
-                  key={emp.id}
+                  key={emp.employee_id}
                   className={`rounded-2xl border transition-all ${
                     isExpanded
                       ? 'border-violet-500/60 bg-navy-900/90 shadow-lg'
@@ -652,24 +542,19 @@ export default function WorkloadCapacityPage() {
                     {/* Employee Identity */}
                     <div className="flex items-center gap-3 min-w-[240px]">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white shadow-sm">
-                        {initials}
+                        {emp.full_name.split(' ').map((n) => n[0]).join('')}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <Link
-                            href={`/employees/${emp.id}`}
+                            href={`/employees/${emp.employee_id}`}
                             className="text-sm font-bold text-white hover:text-violet-300 transition-colors truncate"
                           >
-                            {emp.fullName}
+                            {emp.full_name}
                           </Link>
-                          {emp.id === currentUserId && (
-                            <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.2 rounded">
-                              YOU
-                            </span>
-                          )}
                         </div>
                         <span className="text-xs text-slate-400 block truncate">
-                          {emp.jobTitle} • {emp.department}
+                          {emp.job_title} • {emp.department}
                         </span>
                       </div>
                     </div>
@@ -688,7 +573,7 @@ export default function WorkloadCapacityPage() {
                                 : 'text-slate-200'
                             }
                           >
-                            {emp.currentLoadHours}h / {emp.weeklyCapacityHours}h ({util}%)
+                            {emp.current_load_hours}h / {emp.weekly_capacity_hours}h ({util}%)
                           </span>
                         </div>
 
@@ -696,11 +581,11 @@ export default function WorkloadCapacityPage() {
                         <div>
                           {isOverloaded ? (
                             <span className="text-rose-400 font-bold text-[11px]">
-                              +{Math.abs(bufferHours)}h over capacity
+                              +{Math.abs(bufferHours).toFixed(1)}h over capacity
                             </span>
                           ) : (
                             <span className="text-emerald-400 font-medium text-[11px]">
-                              {bufferHours}h buffer left
+                              {bufferHours.toFixed(1)}h buffer left
                             </span>
                           )}
                         </div>
@@ -711,29 +596,30 @@ export default function WorkloadCapacityPage() {
                     {/* Capacity Limits & Inspect Toggle */}
                     <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0">
                       <Badge
-                        variant={
-                          isOverloaded
-                            ? 'rose'
-                            : isNearLimit
-                            ? 'amber'
-                            : 'emerald'
-                        }
+                        variant={isOverloaded ? 'rose' : isNearLimit ? 'amber' : 'emerald'}
                         size="sm"
                       >
-                        {isOverloaded
-                          ? 'Overloaded'
-                          : isNearLimit
-                          ? 'Near Limit'
-                          : 'Optimal'}
+                        {isOverloaded ? 'Overloaded' : isNearLimit ? 'Near Limit' : 'Optimal'}
                       </Badge>
 
+                      {/* Capacity info for managers */}
+                      {isManagerOrAdmin && (
+                        <div className="flex items-center gap-1 bg-navy-950 px-2 py-1 rounded-lg border border-slate-800">
+                          <span className="text-[10px] text-slate-400 font-mono">Sprint:</span>
+                          <span className="text-xs font-bold font-mono text-cyan-400">
+                            {emp.weekly_capacity_hours}h
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Expand / Collapse Button */}
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => toggleExpand(emp.id)}
-                        className="text-xs flex items-center gap-1"
+                        onClick={() => toggleExpand(emp.employee_id)}
+                        className="text-xs"
                       >
-                        <span>{empTasks.length} Tasks</span>
+                        <span>{emp.active_task_count} Active Task{emp.active_task_count !== 1 ? 's' : ''}</span>
                         {isExpanded ? (
                           <ChevronUp className="h-3.5 w-3.5" />
                         ) : (
@@ -745,102 +631,29 @@ export default function WorkloadCapacityPage() {
 
                   {/* Expanded Task List & Rebalancing Drawer */}
                   {isExpanded && (
-                    <div className="border-t border-slate-800/80 bg-navy-950/40 p-4 space-y-3 animate-in fade-in">
-                      <div className="flex items-center justify-between">
-                        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                          Active Assigned Tasks ({empTasks.length})
-                        </h5>
+                    <div className="border-t border-slate-800/80 bg-navy-950/70 p-4 space-y-3 rounded-b-2xl animate-in slide-in-from-top-2 duration-200">
+                      <div className="flex items-center justify-between pb-1">
+                        <div className="flex items-center gap-2">
+                          <CheckSquare className="h-4 w-4 text-cyan-400" />
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                            Active Tasks for {emp.full_name} ({emp.active_task_count})
+                          </h4>
+                        </div>
                         <span className="text-[11px] text-slate-400">
-                          Manager reassignments execute atomic database RPC transactions
+                          Real-time data from backend • Risk: {(emp.operational_risk_score * 100).toFixed(0)}%
                         </span>
                       </div>
 
-                      {empTasks.length > 0 ? (
-                        <div className="space-y-2">
-                          {empTasks.map((t) => (
-                            <div
-                              key={t.id}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-navy-900/80 p-3"
-                            >
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                  <Link
-                                    href={`/tasks/${t.id}`}
-                                    className="text-xs font-bold text-white hover:text-violet-300"
-                                  >
-                                    {t.title}
-                                  </Link>
-                                  <Badge
-                                    variant={
-                                      t.priority === 'critical'
-                                        ? 'rose'
-                                        : t.priority === 'high'
-                                        ? 'amber'
-                                        : 'slate'
-                                    }
-                                    size="sm"
-                                  >
-                                    {t.priority}
-                                  </Badge>
-                                </div>
-                                <span className="text-[11px] text-slate-400">
-                                  {t.projectName} • Status: {t.status}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {/* Hour Adjuster */}
-                                {isManagerOrAdmin && (
-                                  <div className="flex items-center gap-1 bg-navy-850 border border-slate-700/80 rounded-lg p-0.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAdjustTaskHours(t.id, Number(t.estimatedHours) || 0, -1)}
-                                      disabled={actionLoading || Number(t.estimatedHours) <= 1}
-                                      className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
-                                      title="Decrease estimated hours"
-                                    >
-                                      <Minus className="h-3 w-3" />
-                                    </button>
-                                    <span className="font-mono text-xs font-bold text-white px-1">
-                                      {t.estimatedHours}h
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAdjustTaskHours(t.id, Number(t.estimatedHours) || 0, 1)}
-                                      disabled={actionLoading}
-                                      className="p-1 text-slate-400 hover:text-white"
-                                      title="Increase estimated hours"
-                                    >
-                                      <Plus className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Reassign Dropdown */}
-                                {isManagerOrAdmin && (
-                                  <select
-                                    value={t.assignedTo || 'unassigned'}
-                                    onChange={(e) => handleReassignTask(t.id, e.target.value)}
-                                    disabled={actionLoading}
-                                    className="rounded-lg border border-slate-700 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-                                  >
-                                    <option value="unassigned">Unassigned (Backlog)</option>
-                                    {employees.map((opt) => (
-                                      <option key={opt.id} value={opt.id}>
-                                        Reassign to: {opt.fullName} ({opt.currentLoadHours}h)
-                                      </option>
-                                    ))}
-                                  </select>
-                                )}
-
-                                <Link href={`/tasks/${t.id}`}>
-                                  <Button variant="outline" size="sm" className="text-xs">
-                                    Details
-                                  </Button>
-                                </Link>
-                              </div>
-                            </div>
-                          ))}
+                      {emp.active_task_count === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-xs text-slate-400">
+                          No active sprint tasks currently assigned. Full capacity is available for new assignments.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2.5">
+                          <div className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-xs text-slate-400">
+                            <p>Task details available on the <Link href="/tasks" className="text-violet-400 hover:underline">Tasks page</Link>.</p>
+                            <p className="mt-1 text-slate-500">Active task count: {emp.active_task_count} | Risk index: {(emp.operational_risk_score * 100).toFixed(0)}%</p>
+                          </div>
                         </div>
                       ) : (
                         <div className="p-4 text-center text-xs text-slate-400">
