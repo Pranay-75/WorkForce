@@ -4,8 +4,17 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
+import {
+  computeDeterministicMatchScores,
+  calculateEmployeeWorkload,
+} from '@/lib/workloadEngine';
+import {
+  getAIMatchingExplanation,
+  MatchingExplanationResult,
+} from '@/lib/aiService';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +34,7 @@ import {
 import { AccessDenied } from '@/components/ui/AccessDenied';
 
 export default function MatchingHubPage() {
-  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const { isAuthenticated, organization, session, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
 
   // Live hooks
@@ -36,6 +45,8 @@ export default function MatchingHubPage() {
     refetch: refetchTasks,
   } = useTasks();
 
+  const { projects: liveProjects } = useProjects();
+
   const {
     members: liveMembers,
     isLoading: isMembersLoading,
@@ -44,6 +55,8 @@ export default function MatchingHubPage() {
   // Mock store fallback
   const {
     recommendations: mockRecommendations,
+    projects: mockProjects,
+    employees: mockEmployees,
     tasks: mockTasks,
     approveRecommendation: mockApproveRecommendation,
     rejectRecommendation: mockRejectRecommendation,
@@ -60,6 +73,8 @@ export default function MatchingHubPage() {
   const [actionLoading, setActionLoading] = React.useState(false);
   const [actionFeedback, setActionFeedback] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [decisionState, setDecisionState] = React.useState<Record<string, { status: 'accepted' | 'rejected'; reason?: string }>>({});
+  const [aiExplanations, setAiExplanations] = React.useState<Record<string, MatchingExplanationResult>>({});
+  const [explainingId, setExplainingId] = React.useState<string | null>(null);
 
   // Sync selected task ID
   React.useEffect(() => {
@@ -71,97 +86,38 @@ export default function MatchingHubPage() {
 
   const targetTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
 
-  // Dynamic recommendations for live or mock
+  const projects = isLive ? liveProjects : mockProjects;
+
+  // Dynamic recommendations using shared workload engine
   const taskRecommendations = React.useMemo(() => {
     if (!targetTask) return [];
 
-    if (!isLive) {
-      return mockRecommendations.filter((r) => r.taskId === selectedTaskId);
-    }
+    const currentProj = projects.find((p) => p.id === targetTask.projectId);
+    const projMemberIds = currentProj?.memberIds || [];
 
-    const taskHours = Number(targetTask.estimatedHours) || 0;
-    const isUnestimated = taskHours === 0;
+    const candidatesList = isLive
+      ? liveMembers.map((m) => ({
+          id: m.userId,
+          fullName: m.fullName,
+          jobTitle: m.jobTitle || 'Team Member',
+          department: m.department || 'Engineering',
+          weeklyCapacityHours: m.weeklyCapacityHours || 40,
+        }))
+      : mockEmployees;
 
-    return liveMembers.map((m) => {
-      const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-      const curLoad = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-      const cap = m.weeklyCapacityHours;
-      const projLoad = curLoad + taskHours;
-      const projUtil = cap > 0 ? Math.round((projLoad / cap) * 100) : 999;
+    const baseRecs = computeDeterministicMatchScores(
+      targetTask,
+      candidatesList as any,
+      tasks,
+      projMemberIds
+    );
 
-      const requiredSkills = targetTask.requiredSkills || [];
-      const matchedSkills: { skill: string; requiredLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'; candidateLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[] = [];
-      const missingSkills: string[] = [];
-
-      if (requiredSkills.length > 0) {
-        requiredSkills.forEach((req) => {
-          const deptMatch = m.department && req.skillName.toLowerCase().includes(m.department.toLowerCase());
-          const titleMatch = m.jobTitle && req.skillName.toLowerCase().includes(m.jobTitle.toLowerCase());
-          if (deptMatch || titleMatch) {
-            matchedSkills.push({
-              skill: req.skillName,
-              requiredLevel: req.minProficiency,
-              candidateLevel: req.minProficiency,
-            });
-          } else {
-            missingSkills.push(req.skillName);
-          }
-        });
-      }
-
-      const skillScore = requiredSkills.length > 0
-        ? Math.round((matchedSkills.length / requiredSkills.length) * 100)
-        : 85;
-
-      // Deterministic heuristic score: 50% capacity availability + 50% skill match
-      const capScore = cap > 0 ? Math.max(0, 100 - Math.min(projUtil, 100)) : 0;
-      const matchScore = Math.min(99, Math.max(10, Math.round(capScore * 0.5 + skillScore * 0.5)));
-
-      const isCurrentAssignee = targetTask.assignedTo === m.userId;
-      const dec = decisionState[`${targetTask.id}:${m.userId}`];
-
-      const riskFactors: string[] = [];
-      if (cap === 0) {
-        riskFactors.push('Member has 0h configured weekly capacity');
-      } else if (projUtil > 100) {
-        riskFactors.push(`Projected load exceeds ${cap}h weekly capacity`);
-      }
-
-      let rationale = '';
-      if (isCurrentAssignee) {
-        rationale = `Currently assigned to this task. Active workload is ${curLoad}h (${cap > 0 ? Math.round((curLoad / cap) * 100) : 0}% capacity).`;
-      } else {
-        const bandwidthText = cap > 0 ? `${Math.max(0, cap - curLoad)}h available bandwidth` : '0h configured capacity';
-        const hoursText = isUnestimated ? 'Task hours unestimated (0h logged).' : `Task requires ${taskHours}h.`;
-        const skillText = requiredSkills.length > 0
-          ? `Matches ${matchedSkills.length}/${requiredSkills.length} required skills.`
-          : 'No prerequisite skills specified for task.';
-        rationale = `${bandwidthText}. ${hoursText} ${skillText} Projected load is ${cap > 0 ? `${projUtil}%` : 'unbounded'}.`;
-      }
+    return baseRecs.map((rec) => {
+      const isCurrentAssignee = targetTask.assignedTo === rec.candidateId;
+      const dec = decisionState[`${targetTask.id}:${rec.candidateId}`];
 
       return {
-        id: `rec-${targetTask.id}-${m.userId}`,
-        taskId: targetTask.id,
-        taskTitle: targetTask.title,
-        candidateId: m.userId,
-        candidateName: m.fullName,
-        candidateTitle: m.jobTitle,
-        candidateDepartment: m.department || 'Engineering',
-        matchScore: matchScore,
-        skillMatchBreakdown: {
-          matchedSkills,
-          missingSkills,
-          skillScore,
-        },
-        workloadImpact: {
-          currentLoadHours: curLoad,
-          taskEstimatedHours: taskHours,
-          projectedLoadHours: projLoad,
-          weeklyCapacityHours: cap,
-          projectedUtilizationPct: projUtil,
-        },
-        rationale,
-        riskFactors,
+        ...rec,
         status: isCurrentAssignee
           ? ('accepted' as const)
           : dec?.status === 'rejected'
@@ -169,8 +125,36 @@ export default function MatchingHubPage() {
           : ('pending' as const),
         decisionReason: dec?.reason,
       };
-    }).sort((a, b) => b.matchScore - a.matchScore);
-  }, [isLive, liveMembers, liveTasks, targetTask, selectedTaskId, mockRecommendations, decisionState]);
+    });
+  }, [isLive, liveMembers, mockEmployees, tasks, targetTask, projects, decisionState]);
+
+  const handleExplainWithAI = async (rec: typeof taskRecommendations[0]) => {
+    setExplainingId(rec.candidateId);
+    const explanation = await getAIMatchingExplanation(
+      {
+        task_title: rec.taskTitle,
+        estimated_hours: rec.workloadImpact.taskEstimatedHours,
+        candidate_name: rec.candidateName,
+        candidate_job_title: rec.candidateTitle,
+        candidate_department: rec.candidateDepartment,
+        current_load_hours: rec.workloadImpact.currentLoadHours,
+        weekly_capacity_hours: rec.workloadImpact.weeklyCapacityHours,
+        projected_utilization_pct: rec.workloadImpact.projectedUtilizationPct,
+        match_score: rec.matchScore,
+        is_allocated_to_project: projects.find((p) => p.id === targetTask?.projectId)?.memberIds?.includes(rec.candidateId) ?? true,
+        satisfied_skills: rec.skillMatchBreakdown.matchedSkills.map((s) => s.skill),
+        missing_skills: rec.skillMatchBreakdown.missingSkills,
+      },
+      session?.access_token,
+      organization?.id
+    );
+
+    setAiExplanations((prev) => ({
+      ...prev,
+      [rec.candidateId]: explanation,
+    }));
+    setExplainingId(null);
+  };
 
   if (activeRole === 'employee') {
     return (
@@ -495,9 +479,51 @@ export default function MatchingHubPage() {
                       )}
                     </div>
 
+                    {/* Gemini AI Detailed Explanation Card */}
+                    {aiExplanations[rec.candidateId] && (
+                      <div className="rounded-xl border border-violet-500/40 bg-navy-950/80 p-3.5 space-y-2 text-xs animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-violet-300 flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                            Executive Assessment ({aiExplanations[rec.candidateId].model_used || 'Operational AI'}):
+                          </span>
+                          <Badge variant={aiExplanations[rec.candidateId].is_ai_generated ? 'violet' : 'slate'} size="sm">
+                            {aiExplanations[rec.candidateId].is_ai_generated ? 'Powered by Gemini 3.8-Flash' : 'Deterministic Rationale'}
+                          </Badge>
+                        </div>
+                        <p className="text-slate-200 leading-relaxed font-medium">
+                          {aiExplanations[rec.candidateId].ai_rationale}
+                        </p>
+                        <p className="text-slate-300">
+                          <strong>Capacity Impact:</strong> {aiExplanations[rec.candidateId].capacity_assessment}
+                        </p>
+                        {aiExplanations[rec.candidateId].trade_offs.length > 0 && (
+                          <div className="space-y-0.5 pt-1 text-slate-400">
+                            <span className="font-semibold text-slate-300 block">Trade-Off Considerations:</span>
+                            {aiExplanations[rec.candidateId].trade_offs.map((to, i) => (
+                              <div key={i} className="flex items-start gap-1.5">
+                                <span className="text-amber-400">•</span>
+                                <span>{to}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Manager Action Bar */}
                     {!isAccepted && !isRejected && (
-                      <div className="flex items-center justify-end gap-2.5 pt-1">
+                      <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleExplainWithAI(rec)}
+                          disabled={explainingId === rec.candidateId}
+                          className="text-xs"
+                        >
+                          <Sparkles className={`h-3.5 w-3.5 mr-1 text-violet-400 ${explainingId === rec.candidateId ? 'animate-spin' : ''}`} />
+                          <span>{explainingId === rec.candidateId ? 'Consulting Gemini...' : 'Explain Fit with Gemini'}</span>
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"

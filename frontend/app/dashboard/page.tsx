@@ -9,6 +9,7 @@ import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
+import { isTaskActive } from '@/lib/workloadEngine';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -135,7 +136,7 @@ export default function DashboardPage() {
   const memberLoads = React.useMemo(() => {
     const map = new Map<string, number>();
     tasks.forEach((t) => {
-      if (t.assignedTo && t.status !== 'completed') {
+      if (t.assignedTo && isTaskActive(t)) {
         map.set(t.assignedTo, (map.get(t.assignedTo) || 0) + (Number(t.estimatedHours) || 0));
       }
     });
@@ -161,7 +162,7 @@ export default function DashboardPage() {
     const foundMember = members.find((m) => m.userId === user?.id);
     const foundEmp = mockEmployees.find((e) => e.id === mockUserId);
 
-    const myActive = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status !== 'completed');
+    const myActive = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && isTaskActive(t));
     const myCompleted = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId) && t.status === 'completed');
     const myTotal = tasks.filter((t) => (t.assignedTo === user?.id || t.assignedTo === mockUserId));
     const loadHours = myActive.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
@@ -183,7 +184,7 @@ export default function DashboardPage() {
 
   const myTasks = tasks.filter((t) => t.assignedTo === currentEmp.id);
   const myCompletedTasks = myTasks.filter((t) => t.status === 'completed');
-  const myActiveTasks = myTasks.filter((t) => t.status !== 'completed');
+  const myActiveTasks = myTasks.filter((t) => isTaskActive(t));
   const myUtilPct =
     currentEmp.weeklyCapacityHours > 0
       ? Math.round(((currentEmp.currentLoadHours || 0) / currentEmp.weeklyCapacityHours) * 100)
@@ -216,7 +217,7 @@ export default function DashboardPage() {
   }, [isLive, members, user, mockEmployees, mockUserId]);
 
   const memberUserIds = React.useMemo(() => new Set(members.map((m) => m.userId)), [members]);
-  const activeTasks = tasks.filter((t) => t.status !== 'completed');
+  const activeTasks = tasks.filter((t) => isTaskActive(t));
   const completedTasks = tasks.filter((t) => t.status === 'completed');
   const completionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
   const pendingRecommendations = recommendations.filter((r) => r.status === 'pending');
@@ -224,11 +225,11 @@ export default function DashboardPage() {
   const totalAllocated = React.useMemo(() => {
     if (isLive) {
       return tasks
-        .filter((t) => t.status !== 'completed' && t.assignedTo && memberUserIds.has(t.assignedTo))
+        .filter((t) => isTaskActive(t) && t.assignedTo && memberUserIds.has(t.assignedTo))
         .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
     }
     return tasks
-      .filter((t) => t.status !== 'completed' && t.assignedTo)
+      .filter((t) => isTaskActive(t) && t.assignedTo)
       .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   }, [isLive, tasks, memberUserIds]);
 
@@ -240,7 +241,7 @@ export default function DashboardPage() {
           members.filter((m) => m.department === d.department).map((m) => m.userId)
         );
         const load = tasks
-          .filter((t) => t.status !== 'completed' && t.assignedTo && deptMemberIds.has(t.assignedTo))
+          .filter((t) => isTaskActive(t) && t.assignedTo && deptMemberIds.has(t.assignedTo))
           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
         const util = d.totalCapacityHours > 0 ? Math.round((load / d.totalCapacityHours) * 100) : 0;
         return {
@@ -258,7 +259,7 @@ export default function DashboardPage() {
       const deptEmpIds = new Set(deptEmps.map((e) => e.id));
       const capacity = deptEmps.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
       const load = tasks
-        .filter((t) => t.status !== 'completed' && t.assignedTo && deptEmpIds.has(t.assignedTo))
+        .filter((t) => isTaskActive(t) && t.assignedTo && deptEmpIds.has(t.assignedTo))
         .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
       const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
       return {
@@ -1442,7 +1443,7 @@ export default function DashboardPage() {
                     : isLive
                     ? members.filter((m) => {
                         const load = tasks
-                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .filter((t) => isTaskActive(t) && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours < 0.5;
                       }).length
@@ -1461,7 +1462,7 @@ export default function DashboardPage() {
                     : isLive
                     ? members.filter((m) => {
                         const load = tasks
-                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .filter((t) => isTaskActive(t) && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         const r = m.weeklyCapacityHours > 0 ? load / m.weeklyCapacityHours : 0;
                         return r >= 0.5 && r <= 0.9;
@@ -1482,7 +1483,7 @@ export default function DashboardPage() {
                     : isLive
                     ? members.filter((m) => {
                         const load = tasks
-                          .filter((t) => t.status !== 'completed' && t.assignedTo === m.userId)
+                          .filter((t) => isTaskActive(t) && t.assignedTo === m.userId)
                           .reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
                         return m.weeklyCapacityHours > 0 && load / m.weeklyCapacityHours > 0.9;
                       }).length

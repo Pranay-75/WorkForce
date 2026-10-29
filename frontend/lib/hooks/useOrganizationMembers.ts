@@ -5,6 +5,14 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/authContext';
 import { OrganizationMember, DepartmentSummary, UserRole } from '@/lib/types';
 
+export interface UpdateProfileInput {
+  fullName: string;
+  phone?: string | null;
+  department: string;
+  jobTitle: string;
+  weeklyCapacityHours: number;
+}
+
 export interface UseOrganizationMembersResult {
   members: OrganizationMember[];
   isLoading: boolean;
@@ -16,6 +24,7 @@ export interface UseOrganizationMembersResult {
   inviteMember: (email: string, role?: UserRole) => Promise<{ error: string | null; data?: any }>;
   updateMemberRole: (targetUserId: string, newRole: UserRole) => Promise<{ error: string | null; data?: any }>;
   removeMember: (targetUserId: string) => Promise<{ error: string | null }>;
+  updateCurrentUserProfile: (updates: UpdateProfileInput) => Promise<{ error: string | null }>;
 }
 
 /**
@@ -31,7 +40,7 @@ export interface UseOrganizationMembersResult {
  * - An empty query result remains strictly empty; never falls back to synthetic mock data.
  */
 export function useOrganizationMembers(): UseOrganizationMembersResult {
-  const { organization, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { organization, isAuthenticated, isLoading: authLoading, user, refreshUserData } = useAuth();
   const [members, setMembers] = React.useState<OrganizationMember[]>([]);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -257,6 +266,59 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
     [supabase, verifiedOrgId, fetchMembers]
   );
 
+  const updateCurrentUserProfile = React.useCallback(
+    async (updates: UpdateProfileInput) => {
+      if (!isAuthenticated || !user?.id) {
+        return { error: 'Authentication required to update profile details.' };
+      }
+
+      // Input validation
+      const trimmedName = updates.fullName.trim();
+      if (trimmedName.length < 2 || trimmedName.length > 100) {
+        return { error: 'Full name must be between 2 and 100 characters.' };
+      }
+
+      const trimmedJob = updates.jobTitle.trim();
+      if (trimmedJob.length < 2 || trimmedJob.length > 100) {
+        return { error: 'Job title must be between 2 and 100 characters.' };
+      }
+
+      const capacity = Number(updates.weeklyCapacityHours);
+      if (isNaN(capacity) || capacity <= 0 || capacity > 168) {
+        return { error: 'Weekly capacity hours must be greater than 0 and at most 168 hours.' };
+      }
+
+      try {
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({
+            full_name: trimmedName,
+            phone: updates.phone ? updates.phone.trim() : null,
+            department: updates.department.trim(),
+            job_title: trimmedJob,
+            weekly_capacity_hours: capacity,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          return { error: updateError.message || 'Failed to update profile.' };
+        }
+
+        // Refresh auth state and local organization members cache
+        if (refreshUserData) {
+          await refreshUserData();
+        }
+        await fetchMembers();
+
+        return { error: null };
+      } catch (err: any) {
+        return { error: err?.message || 'An unexpected error occurred while updating profile.' };
+      }
+    },
+    [supabase, isAuthenticated, user?.id, refreshUserData, fetchMembers]
+  );
+
   return {
     members,
     isLoading,
@@ -268,5 +330,6 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
     inviteMember,
     updateMemberRole,
     removeMember,
+    updateCurrentUserProfile,
   };
 }

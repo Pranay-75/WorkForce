@@ -187,9 +187,9 @@ export default function TasksPage() {
         assignedEmployeeName: assignedEmp ? assignedEmp.fullName : undefined,
         assignedEmployeeAvatar: assignedEmp
           ? assignedEmp.fullName
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
+            .split(' ')
+            .map((n) => n[0])
+            .join('')
           : undefined,
         requiredSkills: [
           { skillId: 's1', skillName: 'React', minProficiency: 'intermediate' },
@@ -262,22 +262,20 @@ export default function TasksPage() {
           <div className="flex items-center rounded-xl bg-navy-900 p-1 border border-slate-800">
             <button
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                viewMode === 'kanban'
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'kanban'
                   ? 'bg-violet-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               <Kanban className="h-3.5 w-3.5" />
               <span>Kanban</span>
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                viewMode === 'table'
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${viewMode === 'table'
                   ? 'bg-violet-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               <TableIcon className="h-3.5 w-3.5" />
               <span>Table</span>
@@ -410,8 +408,8 @@ export default function TasksPage() {
                               t.priority === 'critical'
                                 ? 'rose'
                                 : t.priority === 'high'
-                                ? 'amber'
-                                : 'slate'
+                                  ? 'amber'
+                                  : 'slate'
                             }
                             size="sm"
                           >
@@ -429,10 +427,27 @@ export default function TasksPage() {
                           {t.title}
                         </Link>
 
-                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 truncate">
-                          <Calendar className="h-3 w-3 text-slate-500" />
-                          Due {t.dueDate || 'Unscheduled'}
-                        </div>
+                        {(() => {
+                          const isTaskOverdue =
+                            t.status !== 'completed' &&
+                            Boolean(t.dueDate) &&
+                            new Date(t.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+                          return (
+                            <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between gap-1 truncate">
+                              <span className="flex items-center gap-1 truncate">
+                                <Calendar className={`h-3 w-3 ${isTaskOverdue ? 'text-rose-400' : 'text-slate-500'}`} />
+                                <span className={isTaskOverdue ? 'text-rose-300 font-bold' : ''}>
+                                  Due {t.dueDate || 'Unscheduled'}
+                                </span>
+                              </span>
+                              {isTaskOverdue && (
+                                <Badge variant="rose" size="sm" className="text-[9px] py-0 px-1 font-bold">
+                                  LATE
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Assignee & Actions */}
                         <div className="flex items-center justify-between border-t border-slate-800/60 pt-2.5 text-xs">
@@ -539,8 +554,8 @@ export default function TasksPage() {
                           t.priority === 'critical'
                             ? 'rose'
                             : t.priority === 'high'
-                            ? 'amber'
-                            : 'slate'
+                              ? 'amber'
+                              : 'slate'
                         }
                         size="sm"
                       >
@@ -555,7 +570,26 @@ export default function TasksPage() {
                     <td className="px-4 py-3 font-mono font-bold text-cyan-400">
                       {t.estimatedHours}h
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400">{t.dueDate || 'Unscheduled'}</td>
+                    <td className="px-4 py-3 font-mono text-slate-400">
+                      {(() => {
+                        const isTaskOverdue =
+                          t.status !== 'completed' &&
+                          Boolean(t.dueDate) &&
+                          new Date(t.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <span className={isTaskOverdue ? 'text-rose-300 font-bold' : ''}>
+                              {t.dueDate || 'Unscheduled'}
+                            </span>
+                            {isTaskOverdue && (
+                              <Badge variant="rose" size="sm" className="text-[10px] font-bold">
+                                Overdue
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3">
                       {t.assignedEmployeeName ? (
                         <span className="text-slate-200 font-medium">
@@ -650,10 +684,14 @@ export default function TasksPage() {
             onChange={(e) => setNewAssigneeId(e.target.value)}
             options={[
               { label: 'Unassigned (Route to AI Matching Hub)', value: 'unassigned' },
-              ...employees.map((emp) => ({
-                label: `${emp.fullName} (${emp.department})`,
-                value: emp.id,
-              })),
+              ...employees.map((emp) => {
+                const targetProj = projects.find((p) => p.id === newProjId);
+                const isAllocated = targetProj?.memberIds?.includes(emp.id);
+                return {
+                  label: `${emp.fullName} (${emp.department})${isAllocated ? ' [Project Member]' : ''}`,
+                  value: emp.id,
+                };
+              }),
             ]}
           />
 

@@ -337,9 +337,17 @@ export default function ProjectsPage() {
       {!isProjectsLoading && filteredProjects.length > 0 && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {filteredProjects.map((proj) => {
-            const progressPct =
-              proj.totalHours > 0 ? Math.round((proj.completedHours / proj.totalHours) * 100) : 0;
             const projectTasks = tasks.filter((t) => t.projectId === proj.id);
+            const completedTasksHours = projectTasks
+              .filter((t) => t.status === 'completed')
+              .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+            const completedHours = isLive ? completedTasksHours : (proj.completedHours || completedTasksHours);
+            const totalTaskHours = projectTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+            const totalEffortHours = Math.max(proj.totalHours || 0, totalTaskHours);
+            const progressPct =
+              totalEffortHours > 0
+                ? Math.min(100, Math.round((completedHours / totalEffortHours) * 100))
+                : 0;
 
             return (
               <Card
@@ -380,7 +388,7 @@ export default function ProjectsPage() {
                     <div className="flex justify-between text-xs font-mono">
                       <span className="text-slate-400">Total Completion</span>
                       <span className="text-slate-200 font-bold">
-                        {proj.completedHours}h / {proj.totalHours}h ({progressPct}%)
+                        {completedHours}h / {totalEffortHours}h ({progressPct}%)
                       </span>
                     </div>
                     <ProgressBar value={progressPct} />

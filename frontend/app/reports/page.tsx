@@ -21,12 +21,25 @@ import {
   Calendar,
   CheckCircle2,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { AccessDenied } from '@/components/ui/AccessDenied';
+import {
+  calculateEmployeeWorkload,
+  calculateOrganizationWorkloadMetrics,
+  isTaskActive,
+  isTaskOverdue,
+} from '@/lib/workloadEngine';
+import {
+  getAIExecutiveReport,
+  ExecutiveReportResult,
+} from '@/lib/aiService';
 
 export default function ReportsPage() {
-  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const { isAuthenticated, organization, session, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
+  const [aiReport, setAiReport] = React.useState<ExecutiveReportResult | null>(null);
+  const [reportLoading, setReportLoading] = React.useState(false);
 
   // Live hooks
   const {
@@ -71,31 +84,53 @@ export default function ReportsPage() {
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
   const liveAuditCount = liveAuditLogs.length;
 
-  // Reconcile employee list with live assigned tasks
+  // Reconcile employee list with live assigned tasks using shared workload engine
   const employees = React.useMemo(() => {
     if (isLive) {
       return liveMembers.map((m) => {
-        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-        const load = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+        const metrics = calculateEmployeeWorkload(
+          { id: m.userId, weeklyCapacityHours: m.weeklyCapacityHours },
+          tasks
+        );
         return {
           id: m.userId,
           fullName: m.fullName,
           department: m.department || 'Engineering',
           jobTitle: m.jobTitle || 'Team Member',
-          weeklyCapacityHours: m.weeklyCapacityHours || 40,
-          currentLoadHours: load,
+          weeklyCapacityHours: metrics.weeklyCapacityHours,
+          currentLoadHours: metrics.activeAssignedHours,
+          remainingCapacityHours: metrics.remainingCapacityHours,
+          utilizationPercentage: metrics.utilizationPercentage,
+          capacityBand: metrics.capacityBand,
+          activeTaskCount: metrics.activeTaskCount,
+          overdueTaskCount: metrics.overdueTaskCount,
         };
       });
     }
-    return mockEmployees.map((e) => ({
-      id: e.id,
-      fullName: e.fullName,
-      department: e.department,
-      jobTitle: e.jobTitle,
-      weeklyCapacityHours: e.weeklyCapacityHours,
-      currentLoadHours: e.currentLoadHours,
-    }));
-  }, [isLive, liveMembers, liveTasks, mockEmployees]);
+    return mockEmployees.map((e) => {
+      const metrics = calculateEmployeeWorkload(
+        { id: e.id, weeklyCapacityHours: e.weeklyCapacityHours },
+        tasks
+      );
+      return {
+        id: e.id,
+        fullName: e.fullName,
+        department: e.department,
+        jobTitle: e.jobTitle,
+        weeklyCapacityHours: metrics.weeklyCapacityHours,
+        currentLoadHours: metrics.activeAssignedHours,
+        remainingCapacityHours: metrics.remainingCapacityHours,
+        utilizationPercentage: metrics.utilizationPercentage,
+        capacityBand: metrics.capacityBand,
+        activeTaskCount: metrics.activeTaskCount,
+        overdueTaskCount: metrics.overdueTaskCount,
+      };
+    });
+  }, [isLive, liveMembers, tasks, mockEmployees]);
+
+  const orgMetrics = React.useMemo(() => {
+    return calculateOrganizationWorkloadMetrics(employees as any, tasks);
+  }, [employees, tasks]);
 
   // Distinct departments
   const departmentList = React.useMemo(() => {
@@ -109,8 +144,55 @@ export default function ReportsPage() {
     return set.size > 0 ? Array.from(set) : ['Engineering', 'Product', 'Design'];
   }, [isLive, liveDepartments, employees]);
 
+  const handleGenerateAIReport = React.useCallback(async () => {
+    setReportLoading(true);
+    const departmentMetrics = departmentList.map((dept) => {
+      const deptEmps = employees.filter((e) => e.department === dept);
+      const activeHrs = deptEmps.reduce((sum, e) => sum + e.currentLoadHours, 0);
+      const capHrs = deptEmps.reduce((sum, e) => sum + e.weeklyCapacityHours, 0);
+      return { department: dept, active_hours: activeHrs, capacity: capHrs };
+    });
+
+    const completedCount = tasks.filter((t) => t.status === 'completed').length;
+    const completionPct = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 100;
+
+    const result = await getAIExecutiveReport(
+      {
+        project_count: projects.length,
+        active_tasks_count: tasks.filter(isTaskActive).length,
+        completed_tasks_count: completedCount,
+        completion_rate_pct: completionPct,
+        department_metrics: departmentMetrics,
+        recent_audit_count: auditEvents.length,
+      },
+      session?.access_token,
+      organization?.id
+    );
+
+    setAiReport(result);
+    setReportLoading(false);
+  }, [departmentList, employees, tasks, projects, auditEvents, session?.access_token, organization?.id]);
+
+  React.useEffect(() => {
+    if (!aiReport && employees.length > 0) {
+      handleGenerateAIReport();
+    }
+  }, [handleGenerateAIReport, aiReport, employees.length]);
+
   const handleDownloadCSV = () => {
-    const headers = ['Employee ID', 'Full Name', 'Department', 'Job Title', 'Capacity Hours', 'Allocated Hours', 'Utilization Pct'];
+    const headers = [
+      'Employee ID',
+      'Full Name',
+      'Department',
+      'Job Title',
+      'Weekly Capacity (h)',
+      'Active Assigned (h)',
+      'Remaining Capacity (h)',
+      'Utilization (%)',
+      'Capacity Status',
+      'Active Tasks',
+      'Overdue Tasks',
+    ];
     const rows = employees.map((e) => [
       e.id,
       `"${e.fullName}"`,
@@ -118,7 +200,11 @@ export default function ReportsPage() {
       `"${e.jobTitle}"`,
       e.weeklyCapacityHours,
       e.currentLoadHours,
-      `${e.weeklyCapacityHours > 0 ? Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100) : 0}%`,
+      e.remainingCapacityHours,
+      `${e.utilizationPercentage}%`,
+      e.capacityBand.toUpperCase(),
+      e.activeTaskCount,
+      e.overdueTaskCount,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -168,9 +254,20 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleGenerateAIReport}
+            disabled={reportLoading}
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <Sparkles className={`h-3.5 w-3.5 text-violet-400 ${reportLoading ? 'animate-spin' : ''}`} />
+            <span>{reportLoading ? 'Generating Briefing...' : 'Refresh AI Briefing'}</span>
+          </Button>
+
           {isLive && (
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => {
                 refetchMembers();
@@ -179,19 +276,65 @@ export default function ReportsPage() {
                 refetchAudit();
               }}
               disabled={isMembersLoading || isProjectsLoading || isTasksLoading}
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-1.5 text-xs"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
+              <span>Recalculate</span>
             </Button>
           )}
 
           <Button variant="primary" size="md" onClick={handleDownloadCSV} disabled={employees.length === 0}>
             <Download className="h-4 w-4 mr-1.5" />
-            <span>Export CSV Report</span>
+            <span>Export Verified CSV</span>
           </Button>
         </div>
       </div>
+
+      {/* AI Executive Report Briefing */}
+      {aiReport && (
+        <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-850 to-navy-900 shadow-card">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-400" />
+              <CardTitle className="text-base">Executive Intelligence Briefing</CardTitle>
+            </div>
+            <Badge variant={aiReport.is_ai_generated ? 'violet' : 'slate'} size="sm">
+              {aiReport.is_ai_generated ? 'Powered by Gemini 3.8-Flash' : 'Deterministic Telemetry'}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+              {aiReport.executive_briefing}
+            </p>
+
+            <div className="rounded-xl border border-slate-800 bg-navy-950/60 p-3.5 space-y-1">
+              <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider block">
+                Sprint Velocity &amp; Cadence Evaluation:
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {aiReport.velocity_analysis}
+              </p>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <span className="text-xs font-bold text-slate-300 block">
+                Recommended Strategic Planning Priorities:
+              </span>
+              <ul className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {aiReport.strategic_priorities.map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="rounded-xl border border-slate-800/80 bg-navy-900/60 p-2.5 text-xs text-slate-300 flex items-start gap-2"
+                  >
+                    <span className="text-violet-400 font-bold">#{idx + 1}</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Analytics Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

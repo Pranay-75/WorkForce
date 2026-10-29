@@ -36,6 +36,7 @@ export default function EmployeesDirectoryPage() {
   const { isAuthenticated, organization, role: currentUserRole, user } = useAuth();
   const isOrganizer = currentUserRole === 'organizer';
   const isAdmin = currentUserRole === 'admin' || isOrganizer;
+  const isManagerOrAdmin = currentUserRole === 'manager' || isAdmin;
 
   // Live Supabase organization members hook
   const {
@@ -298,7 +299,7 @@ export default function EmployeesDirectoryPage() {
         </div>
 
         {isLive ? (
-          isAdmin ? (
+          isManagerOrAdmin ? (
             <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
@@ -308,18 +309,25 @@ export default function EmployeesDirectoryPage() {
                 <FolderKanban className="h-4 w-4 mr-1.5 text-cyan-400" />
                 <span>Assign to Project</span>
               </Button>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  setInviteError(null);
-                  setInviteSuccess(null);
-                  setIsInviteModalOpen(true);
-                }}
-              >
-                <UserPlus className="h-4 w-4 mr-1.5" />
-                <span>Invite Member</span>
-              </Button>
+              {isAdmin ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    setInviteError(null);
+                    setInviteSuccess(null);
+                    setIsInviteModalOpen(true);
+                  }}
+                >
+                  <UserPlus className="h-4 w-4 mr-1.5" />
+                  <span>Invite Member</span>
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-navy-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                  <Lock className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Admin required to invite members</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-navy-900 border border-slate-800 px-3 py-2 rounded-xl">
@@ -624,7 +632,7 @@ export default function EmployeesDirectoryPage() {
                       {memberTasks.length} active task{memberTasks.length !== 1 ? 's' : ''}
                     </span>
                     <div className="flex items-center gap-2">
-                      {isAdmin && (
+                      {isManagerOrAdmin && (
                         <Button
                           variant="secondary"
                           size="sm"
