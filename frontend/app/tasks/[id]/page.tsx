@@ -2,16 +2,19 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
-import { TaskStatus } from '@/lib/types';
+import { PriorityLevel, TaskStatus } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Dialog } from '@/components/ui/Dialog';
+import { Input, Select } from '@/components/ui/Input';
 import {
   ArrowLeft,
   CheckSquare,
@@ -27,10 +30,14 @@ import {
   Plus,
   Minus,
   AlertCircle,
+  AlertTriangle,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 
 export default function TaskDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const taskId = params?.id as string;
 
   const { isAuthenticated, user, organization, role: authRole } = useAuth();
@@ -44,31 +51,59 @@ export default function TaskDetailPage() {
     updateTaskStatus: dbUpdateTaskStatus,
     updateTaskDetails: dbUpdateTaskDetails,
     assignTask: dbAssignTask,
+    deleteTask: dbDeleteTask,
   } = useTasks();
 
+  const { projects: dbProjects } = useProjects();
   const { members: orgMembers } = useOrganizationMembers();
 
   // Mock store fallback
   const {
     tasks: mockTasks,
+    projects: mockProjects,
     employees: mockEmployees,
     activeRole: mockRole,
     currentUserId: mockUserId,
     updateTaskStatus: mockUpdateTaskStatus,
     updateTaskDetails: mockUpdateTaskDetails,
+    deleteTask: mockDeleteTask,
   } = useMockStore();
 
   const tasks = isLive ? dbTasks : mockTasks;
+  const projects = isLive ? dbProjects : mockProjects;
   const activeRole = isLive ? authRole : mockRole;
   const currentUserId = isLive ? (user?.id || '') : mockUserId;
 
   const task = tasks.find((t) => t.id === taskId);
+  const currentProject = projects.find((p) => p.id === task?.projectId);
   const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
   const isAssignedToMe = task?.assignedTo === currentUserId;
   const canUpdateStatus = isManagerOrAdmin || isAssignedToMe;
 
+  const isOverdue =
+    task &&
+    task.status !== 'completed' &&
+    Boolean(task.dueDate) &&
+    new Date(task.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+
   const [feedback, setFeedback] = React.useState<string | null>(null);
   const [isMutating, setIsMutating] = React.useState(false);
+
+  // Edit Task Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [editTitle, setEditTitle] = React.useState('');
+  const [editDesc, setEditDesc] = React.useState('');
+  const [editPriority, setEditPriority] = React.useState<PriorityLevel>('medium');
+  const [editComplexity, setEditComplexity] = React.useState<'Low' | 'Medium' | 'High'>('Medium');
+  const [editDueDate, setEditDueDate] = React.useState('');
+  const [editHours, setEditHours] = React.useState('');
+  const [editLoading, setEditLoading] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  // Delete Task Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   const showNotification = (msg: string) => {
     setFeedback(msg);
@@ -202,6 +237,86 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleOpenEditModal = () => {
+    if (!task) return;
+    setEditTitle(task.title);
+    setEditDesc(task.description || '');
+    setEditPriority(task.priority);
+    setEditComplexity(task.complexity || 'Medium');
+    setEditDueDate(task.dueDate || '');
+    setEditHours(String(task.estimatedHours || '8'));
+    setEditError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditTaskSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!task) return;
+    if (!editTitle.trim()) {
+      setEditError('Task title is required.');
+      return;
+    }
+    const parsedHours = parseFloat(editHours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setEditError('Estimated effort must be a positive number.');
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError(null);
+
+    if (isLive) {
+      const res = await dbUpdateTaskDetails(task.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim() || undefined,
+        priority: editPriority,
+        complexity: editComplexity,
+        dueDate: editDueDate || undefined,
+        estimatedHours: parsedHours,
+      });
+
+      setEditLoading(false);
+      if (res.error) {
+        setEditError(res.error);
+        return;
+      }
+    } else {
+      mockUpdateTaskDetails(task.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        priority: editPriority,
+        complexity: editComplexity,
+        dueDate: editDueDate,
+        estimatedHours: parsedHours,
+      });
+      setEditLoading(false);
+    }
+
+    setIsEditModalOpen(false);
+    showNotification(`Task "${editTitle}" updated successfully.`);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    if (isLive) {
+      const res = await dbDeleteTask(task.id);
+      setDeleteLoading(false);
+      if (res.error) {
+        setDeleteError(res.error);
+        return;
+      }
+    } else {
+      mockDeleteTask(task.id);
+      setDeleteLoading(false);
+    }
+
+    setIsDeleteModalOpen(false);
+    router.push('/tasks');
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Navigation */}
@@ -213,13 +328,19 @@ export default function TaskDetailPage() {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
+          {isOverdue && (
+            <Badge variant="rose" size="sm" className="flex items-center gap-1 font-bold animate-pulse">
+              <AlertTriangle className="h-3 w-3" />
+              OVERDUE
+            </Badge>
+          )}
           <Badge
             variant={
               task.priority === 'critical'
                 ? 'rose'
                 : task.priority === 'high'
-                ? 'amber'
-                : 'slate'
+                  ? 'amber'
+                  : 'slate'
             }
             size="sm"
           >
@@ -228,6 +349,31 @@ export default function TaskDetailPage() {
           <Badge variant="cyan" size="sm">
             STATUS: {task.status.replace('_', ' ').toUpperCase()}
           </Badge>
+
+          {isManagerOrAdmin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleOpenEditModal}
+              className="text-xs"
+            >
+              <Edit3 className="h-3.5 w-3.5 mr-1 text-slate-300" />
+              <span>Edit Task</span>
+            </Button>
+          )}
+
+          {isManagerOrAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+              title="Delete Task"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              <span>Delete</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -295,8 +441,13 @@ export default function TaskDetailPage() {
                 Target Deadline
               </span>
               <div className="flex items-center gap-1.5 text-xs font-mono text-slate-200">
-                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-                <span>{task.dueDate || 'Unscheduled'}</span>
+                <Calendar className={`h-3.5 w-3.5 ${isOverdue ? 'text-rose-400' : 'text-cyan-400'}`} />
+                <span className={isOverdue ? 'text-rose-300 font-bold' : ''}>{task.dueDate || 'Unscheduled'}</span>
+                {isOverdue && (
+                  <span className="text-[10px] bg-rose-950/60 text-rose-400 border border-rose-500/40 rounded px-1 py-0.2">
+                    LATE
+                  </span>
+                )}
               </div>
             </div>
 
@@ -416,11 +567,14 @@ export default function TaskDetailPage() {
                       className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
                     >
                       <option value="unassigned">Unassigned (Send to AI Matching Hub)</option>
-                      {employees.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.fullName} ({e.department})
-                        </option>
-                      ))}
+                      {employees.map((e) => {
+                        const isAllocated = currentProject?.memberIds?.includes(e.id);
+                        return (
+                          <option key={e.id} value={e.id}>
+                            {e.fullName} ({e.department}){isAllocated ? ' [Project Member]' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 )}
@@ -447,11 +601,14 @@ export default function TaskDetailPage() {
                       className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
                     >
                       <option value="unassigned">Select team member...</option>
-                      {employees.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.fullName} ({e.department})
-                        </option>
-                      ))}
+                      {employees.map((e) => {
+                        const isAllocated = currentProject?.memberIds?.includes(e.id);
+                        return (
+                          <option key={e.id} value={e.id}>
+                            {e.fullName} ({e.department}){isAllocated ? ' [Project Member]' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 )}
@@ -469,6 +626,153 @@ export default function TaskDetailPage() {
           </CardContent>
         </Card>
       </div>
+      {/* Edit Task Dialog */}
+      <Dialog
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title={`Edit Task: ${task.title}`}
+        description="Update task parameters, estimated effort, technical complexity, and target deadline."
+      >
+        <form onSubmit={handleEditTaskSubmit} className="space-y-3.5 py-2">
+          {editError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{editError}</span>
+            </div>
+          )}
+
+          <Input
+            label="Task Title *"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            required
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Task Description
+            </label>
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={3}
+              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Priority Level"
+              value={editPriority}
+              onChange={(e) => setEditPriority(e.target.value as PriorityLevel)}
+              options={[
+                { label: 'Critical', value: 'critical' },
+                { label: 'High', value: 'high' },
+                { label: 'Medium', value: 'medium' },
+                { label: 'Low', value: 'low' },
+              ]}
+            />
+            <Select
+              label="Technical Complexity"
+              value={editComplexity}
+              onChange={(e) => setEditComplexity(e.target.value as 'Low' | 'Medium' | 'High')}
+              options={[
+                { label: 'Low', value: 'Low' },
+                { label: 'Medium', value: 'Medium' },
+                { label: 'High', value: 'High' },
+              ]}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Estimated Effort (Hours) *"
+              type="number"
+              value={editHours}
+              onChange={(e) => setEditHours(e.target.value)}
+              min="1"
+              max="200"
+              required
+            />
+            <Input
+              label="Target Deadline"
+              type="date"
+              value={editDueDate}
+              onChange={(e) => setEditDueDate(e.target.value)}
+            />
+          </div>
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsEditModalOpen(false)}
+              disabled={editLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={editLoading}
+            >
+              {editLoading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Delete Task Confirmation Dialog */}
+      <Dialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Task Deletion"
+        description="Are you sure you want to permanently remove this deliverable from the backlog?"
+      >
+        <div className="space-y-4 py-2">
+          {deleteError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{deleteError}</span>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3.5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-semibold text-rose-200">
+                Warning: Permanent Task Deletion
+              </p>
+              <p className="text-rose-300/80">
+                Deleting <strong>{task.title}</strong> will remove it from project <strong>{task.projectName}</strong> and recalculate assignee workload automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteTask}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Task Permanently'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

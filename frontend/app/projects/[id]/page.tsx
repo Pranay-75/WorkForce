@@ -2,17 +2,19 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
+import { PriorityLevel, ProjectStatus } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Dialog } from '@/components/ui/Dialog';
+import { Input, Select } from '@/components/ui/Input';
 import {
   FolderKanban,
   Calendar,
@@ -23,14 +25,17 @@ import {
   Clock,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   RefreshCw,
   UserPlus,
   Trash2,
+  Edit3,
 } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params?.id as string;
 
   const { isAuthenticated, organization, role: authRole } = useAuth();
@@ -42,6 +47,8 @@ export default function ProjectDetailPage() {
     isLoading: isProjectsLoading,
     addProjectMember,
     removeProjectMember,
+    updateProject: dbUpdateProject,
+    deleteProject: dbDeleteProject,
     refetch: refetchProjects,
   } = useProjects();
   const {
@@ -53,10 +60,18 @@ export default function ProjectDetailPage() {
   const { members: orgMembers, isLoading: isMembersLoading } = useOrganizationMembers();
 
   // Mock store fallback
-  const { projects: mockProjects, employees: mockEmployees, tasks: mockTasks, activeRole: mockRole } = useMockStore();
+  const {
+    projects: mockProjects,
+    employees: mockEmployees,
+    tasks: mockTasks,
+    activeRole: mockRole,
+    updateProject: mockUpdateProject,
+    deleteProject: mockDeleteProject,
+  } = useMockStore();
 
   const activeRole = isLive ? authRole : mockRole;
   const isManagerOrAdmin = activeRole === 'organizer' || activeRole === 'admin' || activeRole === 'manager';
+  const isAdminOrOrganizer = activeRole === 'organizer' || activeRole === 'admin';
 
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;
@@ -71,6 +86,22 @@ export default function ProjectDetailPage() {
   const [assignLoading, setAssignLoading] = React.useState(false);
   const [assignError, setAssignError] = React.useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
+  // Edit Project Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [editName, setEditName] = React.useState('');
+  const [editDesc, setEditDesc] = React.useState('');
+  const [editPriority, setEditPriority] = React.useState<PriorityLevel>('medium');
+  const [editStatus, setEditStatus] = React.useState<ProjectStatus>('in_progress');
+  const [editTargetEndDate, setEditTargetEndDate] = React.useState('');
+  const [editTotalHours, setEditTotalHours] = React.useState('');
+  const [editLoading, setEditLoading] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  // Delete Project Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   // Card Action feedback
   const [actionNotice, setActionNotice] = React.useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -131,8 +162,96 @@ export default function ProjectDetailPage() {
         })
     : mockEmployees.filter((e) => project.memberIds.includes(e.id));
 
+  const completedTasksHours = projectTasks
+    .filter((t) => t.status === 'completed')
+    .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+  const completedHours = isLive ? completedTasksHours : (project.completedHours || completedTasksHours);
+  const totalTaskHours = projectTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+  const totalEffortHours = Math.max(project.totalHours || 0, totalTaskHours);
   const progressPct =
-    project.totalHours > 0 ? Math.round((project.completedHours / project.totalHours) * 100) : 0;
+    totalEffortHours > 0 ? Math.min(100, Math.round((completedHours / totalEffortHours) * 100)) : 0;
+
+  const handleOpenEditModal = () => {
+    if (!project) return;
+    setEditName(project.name);
+    setEditDesc(project.description || '');
+    setEditPriority(project.priority);
+    setEditStatus(project.status);
+    setEditTargetEndDate(project.targetEndDate || '');
+    setEditTotalHours(project.totalHours ? String(project.totalHours) : '160');
+    setEditError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project) return;
+    if (!editName.trim()) {
+      setEditError('Project name is required.');
+      return;
+    }
+    const parsedHours = parseFloat(editTotalHours);
+    if (isNaN(parsedHours) || parsedHours <= 0) {
+      setEditError('Total allocated effort must be a positive number.');
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError(null);
+
+    if (isLive) {
+      const res = await dbUpdateProject(project.id, {
+        name: editName.trim(),
+        description: editDesc.trim() || undefined,
+        priority: editPriority,
+        status: editStatus,
+        targetEndDate: editTargetEndDate || undefined,
+        totalHours: parsedHours,
+      });
+
+      setEditLoading(false);
+      if (res.error) {
+        setEditError(res.error);
+        return;
+      }
+      await refetchProjects();
+    } else {
+      mockUpdateProject(project.id, {
+        name: editName.trim(),
+        description: editDesc.trim(),
+        priority: editPriority,
+        status: editStatus,
+        targetEndDate: editTargetEndDate,
+        totalHours: parsedHours,
+      });
+      setEditLoading(false);
+    }
+
+    setIsEditModalOpen(false);
+    setActionNotice({ type: 'success', text: `Project "${editName}" updated successfully.` });
+    setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    if (isLive) {
+      const res = await dbDeleteProject(project.id);
+      setDeleteLoading(false);
+      if (res.error) {
+        setDeleteError(res.error);
+        return;
+      }
+    } else {
+      mockDeleteProject(project.id);
+      setDeleteLoading(false);
+    }
+
+    setIsDeleteModalOpen(false);
+    router.push('/projects');
+  };
 
   // Handlers for Member Allocation
   const handleOpenAssignModal = () => {
@@ -231,6 +350,31 @@ export default function ProjectDetailPage() {
           <Badge variant="cyan" size="sm">
             {project.status.replace('_', ' ').toUpperCase()}
           </Badge>
+
+          {isManagerOrAdmin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleOpenEditModal}
+              className="text-xs"
+            >
+              <Edit3 className="h-3.5 w-3.5 mr-1 text-slate-300" />
+              <span>Edit Project</span>
+            </Button>
+          )}
+
+          {isAdminOrOrganizer && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+              title="Delete Project (Admin Only)"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              <span>Delete</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -264,7 +408,7 @@ export default function ProjectDetailPage() {
               Project Delivery
             </span>
             <div className="text-2xl font-bold font-mono text-white">
-              {project.completedHours}h / {project.totalHours}h ({progressPct}%)
+              {completedHours}h / {totalEffortHours}h ({progressPct}%)
             </div>
             <div className="w-full">
               <ProgressBar value={progressPct} />
@@ -551,6 +695,152 @@ export default function ProjectDetailPage() {
             </Button>
           </div>
         </form>
+      </Dialog>
+      {/* Edit Project Dialog */}
+      <Dialog
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title={`Edit Project: ${project.name}`}
+        description="Update project milestones, priority, status, and budgeted capacity."
+      >
+        <form onSubmit={handleEditProjectSubmit} className="space-y-3.5 py-2">
+          {editError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{editError}</span>
+            </div>
+          )}
+
+          <Input
+            label="Project Name *"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            required
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300">
+              Project Description
+            </label>
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={3}
+              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Priority Level"
+              value={editPriority}
+              onChange={(e) => setEditPriority(e.target.value as PriorityLevel)}
+              options={[
+                { label: 'Critical', value: 'critical' },
+                { label: 'High', value: 'high' },
+                { label: 'Medium', value: 'medium' },
+                { label: 'Low', value: 'low' },
+              ]}
+            />
+            <Select
+              label="Project Status"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as ProjectStatus)}
+              options={[
+                { label: 'Planning', value: 'planning' },
+                { label: 'In Progress', value: 'in_progress' },
+                { label: 'On Hold', value: 'on_hold' },
+                { label: 'Completed', value: 'completed' },
+              ]}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Target Deadline"
+              type="date"
+              value={editTargetEndDate}
+              onChange={(e) => setEditTargetEndDate(e.target.value)}
+            />
+            <Input
+              label="Total Budgeted Hours"
+              type="number"
+              value={editTotalHours}
+              onChange={(e) => setEditTotalHours(e.target.value)}
+              min="1"
+            />
+          </div>
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsEditModalOpen(false)}
+              disabled={editLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={editLoading}
+            >
+              {editLoading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Delete Project Confirmation Dialog */}
+      <Dialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Project Deletion"
+        description="Are you sure you want to permanently delete this project? All associated tasks will be removed."
+      >
+        <div className="space-y-4 py-2">
+          {deleteError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{deleteError}</span>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3.5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-semibold text-rose-200">
+                Warning: Irreversible Administrator Action
+              </p>
+              <p className="text-rose-300/80">
+                Deleting <strong>{project.name}</strong> will permanently remove this project and cascade-delete its {projectTasks.length} associated task{projectTasks.length !== 1 ? 's' : ''}.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteProject}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Project Permanently'}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

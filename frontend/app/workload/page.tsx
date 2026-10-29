@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useTasks } from '@/lib/hooks/useTasks';
+import { useProjects } from '@/lib/hooks/useProjects';
 import { useMockStore } from '@/lib/mockStore';
+import {
+  calculateEmployeeWorkload,
+  computeDeterministicRedistributionProposals,
+  isTaskActive,
+  isTaskOverdue,
+} from '@/lib/workloadEngine';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -49,9 +56,12 @@ export default function WorkloadCapacityPage() {
     refetch: refetchTasks,
   } = useTasks();
 
+  const { projects: liveProjects } = useProjects();
+
   // Mock store fallback for unauthenticated showcase
   const {
     employees: mockEmployees,
+    projects: mockProjects,
     tasks: mockTasks,
     redistributionProposals: mockProposals,
     activeRole: mockRole,
@@ -74,13 +84,17 @@ export default function WorkloadCapacityPage() {
   const [actionLoading, setActionLoading] = React.useState(false);
   const [actionMessage, setActionMessage] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Reconcile employees list with live assigned tasks
+  const tasks = isLive ? liveTasks : mockTasks;
+  const projects = isLive ? liveProjects : mockProjects;
+
+  // Reconcile employees list with live assigned tasks using shared workload engine
   const employees = React.useMemo(() => {
     if (isLive) {
       return liveMembers.map((m) => {
-        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-        const loadHours = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-        const capacity = m.weeklyCapacityHours || 40;
+        const metrics = calculateEmployeeWorkload(
+          { id: m.userId, weeklyCapacityHours: m.weeklyCapacityHours },
+          tasks
+        );
 
         return {
           id: m.userId,
@@ -88,38 +102,38 @@ export default function WorkloadCapacityPage() {
           email: m.email,
           jobTitle: m.jobTitle || 'Team Member',
           department: m.department || 'Engineering',
-          weeklyCapacityHours: capacity,
-          currentLoadHours: loadHours,
-          activeTaskCount: assigned.length,
+          weeklyCapacityHours: metrics.weeklyCapacityHours,
+          currentLoadHours: metrics.activeAssignedHours,
+          activeTaskCount: metrics.activeTaskCount,
+          overdueTaskCount: metrics.overdueTaskCount,
+          capacityBand: metrics.capacityBand,
         };
       });
     }
-    return mockEmployees.map((e) => ({
-      id: e.id,
-      fullName: e.fullName,
-      email: e.email,
-      jobTitle: e.jobTitle,
-      department: e.department,
-      weeklyCapacityHours: e.weeklyCapacityHours,
-      currentLoadHours: e.currentLoadHours,
-      activeTaskCount: e.activeTaskCount,
-    }));
-  }, [isLive, liveMembers, liveTasks, mockEmployees]);
-
-  const tasks = isLive ? liveTasks : mockTasks;
+    return mockEmployees.map((e) => {
+      const metrics = calculateEmployeeWorkload(
+        { id: e.id, weeklyCapacityHours: e.weeklyCapacityHours },
+        tasks
+      );
+      return {
+        id: e.id,
+        fullName: e.fullName,
+        email: e.email,
+        jobTitle: e.jobTitle,
+        department: e.department,
+        weeklyCapacityHours: metrics.weeklyCapacityHours,
+        currentLoadHours: metrics.activeAssignedHours,
+        activeTaskCount: metrics.activeTaskCount,
+        overdueTaskCount: metrics.overdueTaskCount,
+        capacityBand: metrics.capacityBand,
+      };
+    });
+  }, [isLive, liveMembers, tasks, mockEmployees]);
 
   // Capacity Bands
-  const overloadedStaff = employees.filter(
-    (e) => e.weeklyCapacityHours > 0 && e.currentLoadHours / e.weeklyCapacityHours > 1.0
-  );
-  const nearLimitStaff = employees.filter((e) => {
-    const r = e.weeklyCapacityHours > 0 ? e.currentLoadHours / e.weeklyCapacityHours : 0;
-    return r >= 0.8 && r <= 1.0;
-  });
-  const optimalStaff = employees.filter((e) => {
-    const r = e.weeklyCapacityHours > 0 ? e.currentLoadHours / e.weeklyCapacityHours : 0;
-    return r < 0.8;
-  });
+  const overloadedStaff = employees.filter((e) => e.capacityBand === 'overallocated');
+  const nearLimitStaff = employees.filter((e) => e.capacityBand === 'near_limit');
+  const optimalStaff = employees.filter((e) => e.capacityBand === 'optimal' || e.capacityBand === 'underutilized');
 
   // Extract distinct departments
   const departments = React.useMemo(() => {
@@ -130,57 +144,11 @@ export default function WorkloadCapacityPage() {
     return Array.from(set);
   }, [employees]);
 
-  // Dynamic Redistribution Proposals for real or mock data
+  // Dynamic Redistribution Proposals using shared workload engine
   const dynamicProposals = React.useMemo(() => {
     if (!isLive) return mockProposals;
-
-    const proposals: Array<{
-      id: string;
-      taskId: string;
-      taskTitle: string;
-      taskHours: number;
-      sourceEmployeeId: string;
-      sourceEmployeeName: string;
-      sourceCurrentLoad: number;
-      sourceProjectedLoad: number;
-      targetEmployeeId: string;
-      targetEmployeeName: string;
-      targetCurrentLoad: number;
-      targetProjectedLoad: number;
-      rationale: string;
-    }> = [];
-
-    // For every overloaded member, propose moving a task to an available optimal member
-    overloadedStaff.forEach((overEmp) => {
-      const assigned = tasks.filter((t) => t.assignedTo === overEmp.id && t.status !== 'completed');
-      if (assigned.length === 0) return;
-
-      const candidateTask = assigned[0];
-      const taskHours = Number(candidateTask.estimatedHours) || 0;
-
-      // Find an optimal candidate
-      const targetEmp = optimalStaff.find((opt) => opt.id !== overEmp.id);
-      if (targetEmp) {
-        proposals.push({
-          id: `prop-${candidateTask.id}`,
-          taskId: candidateTask.id,
-          taskTitle: candidateTask.title,
-          taskHours: taskHours,
-          sourceEmployeeId: overEmp.id,
-          sourceEmployeeName: overEmp.fullName,
-          sourceCurrentLoad: overEmp.currentLoadHours,
-          sourceProjectedLoad: Math.max(0, overEmp.currentLoadHours - taskHours),
-          targetEmployeeId: targetEmp.id,
-          targetEmployeeName: targetEmp.fullName,
-          targetCurrentLoad: targetEmp.currentLoadHours,
-          targetProjectedLoad: targetEmp.currentLoadHours + taskHours,
-          rationale: `Relieves ${overEmp.fullName} (+${overEmp.currentLoadHours - overEmp.weeklyCapacityHours}h overload) by shifting "${candidateTask.title}" to ${targetEmp.fullName} who has capacity available.`,
-        });
-      }
-    });
-
-    return proposals;
-  }, [isLive, mockProposals, overloadedStaff, optimalStaff, tasks]);
+    return computeDeterministicRedistributionProposals(employees as any, tasks, projects);
+  }, [isLive, mockProposals, employees, tasks, projects]);
 
   // Filter and sort roster
   const filteredEmployees = React.useMemo(() => {

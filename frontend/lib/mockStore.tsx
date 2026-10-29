@@ -289,7 +289,10 @@ interface MockStoreContextType {
   markNotificationAsRead: (notifId: string) => void;
   markAllNotificationsAsRead: () => void;
   addNewTask: (newTask: Omit<Task, 'id' | 'createdAt'>) => void;
+  deleteTask: (taskId: string) => void;
   addNewProject: (newProj: Omit<Project, 'id' | 'completedHours'>) => void;
+  updateProject: (projectId: string, updates: Partial<Project>) => void;
+  deleteProject: (projectId: string) => void;
   addNewEmployee: (
     newEmp: Omit<
       Employee,
@@ -297,6 +300,10 @@ interface MockStoreContextType {
     >
   ) => void;
   updateEmployeeWeeklyCapacity: (employeeId: string, newCapacityHours: number) => void;
+  updateEmployeeProfile: (
+    employeeId: string,
+    updates: Partial<Pick<Employee, 'fullName' | 'jobTitle' | 'department' | 'weeklyCapacityHours'>>
+  ) => void;
   resetAllSyntheticData: () => void;
   feedbackMessage: string | null;
   setFeedbackMessage: (msg: string | null) => void;
@@ -707,6 +714,24 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
     showFeedback(`Project "${created.name}" created successfully!`);
   };
 
+  const updateProject = (projectId: string, updates: Partial<Project>) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, ...updates } : p))
+    );
+    showFeedback('Project updated successfully.');
+  };
+
+  const deleteProject = (projectId: string) => {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setTasks((prev) => prev.filter((t) => t.projectId !== projectId));
+    showFeedback('Project and associated tasks deleted.');
+  };
+
+  const deleteTask = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    showFeedback('Task removed successfully.');
+  };
+
   const addNewEmployee = (
     newEmp: Omit<
       Employee,
@@ -747,6 +772,39 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
     showFeedback(`Updated weekly capacity for ${emp?.fullName || 'employee'} to ${validHours}h/week.`);
   };
 
+  const updateEmployeeProfile = (
+    employeeId: string,
+    updates: Partial<Pick<Employee, 'fullName' | 'jobTitle' | 'department' | 'weeklyCapacityHours'>>
+  ) => {
+    setRawEmployees((prev) =>
+      prev.map((e) => {
+        if (e.id !== employeeId) return e;
+        return {
+          ...e,
+          fullName: updates.fullName ? updates.fullName.trim() : e.fullName,
+          jobTitle: updates.jobTitle ? updates.jobTitle.trim() : e.jobTitle,
+          department: (updates.department as any) || e.department,
+          weeklyCapacityHours: updates.weeklyCapacityHours ? Math.max(1, Math.min(168, updates.weeklyCapacityHours)) : e.weeklyCapacityHours,
+        };
+      })
+    );
+
+    const emp = rawEmployees.find((e) => e.id === employeeId);
+    const newAudit: AuditEvent = {
+      id: `aud-${Date.now()}`,
+      actorId: currentUser.id,
+      actorName: `${currentUser.name} (${currentUser.role})`,
+      action: 'Updated Employee Profile',
+      entityType: 'Employee',
+      entityId: employeeId,
+      entityTitle: updates.fullName || emp?.fullName || employeeId,
+      details: `Profile updated: ${updates.jobTitle || emp?.jobTitle} (${updates.department || emp?.department}).`,
+      timestamp: 'Just now',
+    };
+    setAuditEvents((prev) => [newAudit, ...prev]);
+    showFeedback(`Profile updated for ${updates.fullName || emp?.fullName || 'employee'}.`);
+  };
+
   const resetAllSyntheticData = () => {
     setRawEmployees(initialEmployees);
     setProjects(initialProjects);
@@ -784,9 +842,13 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNewTask,
+        deleteTask,
         addNewProject,
+        updateProject,
+        deleteProject,
         addNewEmployee,
         updateEmployeeWeeklyCapacity,
+        updateEmployeeProfile,
         resetAllSyntheticData,
         feedbackMessage,
         setFeedbackMessage,

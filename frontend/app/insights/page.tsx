@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import Link from 'next/link';
 import {
   ShieldCheck,
   TrendingUp,
@@ -17,8 +18,21 @@ import {
   AlertTriangle,
   RefreshCw,
   Users,
+  Sparkles,
+  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { AccessDenied } from '@/components/ui/AccessDenied';
+import {
+  calculateEmployeeWorkload,
+  calculateOrganizationWorkloadMetrics,
+  isTaskActive,
+  isTaskOverdue,
+} from '@/lib/workloadEngine';
+import {
+  getAIWorkloadInsights,
+  WorkloadInsightsResult,
+} from '@/lib/aiService';
 
 interface InsightMember {
   id: string;
@@ -32,9 +46,9 @@ interface InsightMember {
 }
 
 export default function InsightsPage() {
-  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const { isAuthenticated, organization, session, role: authRole } = useAuth();
   const isLive = Boolean(isAuthenticated && organization?.id);
-  const { employees: mockEmployees, activeRole: mockRole } = useMockStore();
+  const { employees: mockEmployees, tasks: mockTasks, activeRole: mockRole } = useMockStore();
 
   const activeRole = isLive && authRole ? authRole : mockRole;
 
@@ -52,16 +66,20 @@ export default function InsightsPage() {
 
   const { auditLogs: liveLogs } = useAuditLogs();
 
+  const [aiInsights, setAiInsights] = React.useState<WorkloadInsightsResult | null>(null);
+  const [aiLoading, setAiLoading] = React.useState(false);
+
+  const tasks = isLive ? liveTasks : mockTasks;
+
   const employees = React.useMemo(() => {
     if (isLive) {
       return liveMembers.map((m) => {
-        const assigned = liveTasks.filter((t) => t.assignedTo === m.userId && t.status !== 'completed');
-        const load = assigned.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-        const cap = m.weeklyCapacityHours || 40;
-        const util = cap > 0 ? (load / cap) : 0;
-        const riskScore = Math.min(Math.round(util * 100) / 100, 1.0);
+        const metrics = calculateEmployeeWorkload(
+          { id: m.userId, weeklyCapacityHours: m.weeklyCapacityHours },
+          tasks
+        );
 
-        const memberTasks = liveTasks.filter((t) => t.assignedTo === m.userId);
+        const memberTasks = tasks.filter((t) => t.assignedTo === m.userId);
         const memberCompleted = memberTasks.filter((t) => t.status === 'completed');
         const onTimeRate = memberTasks.length > 0
           ? Math.round((memberCompleted.length / memberTasks.length) * 100)
@@ -72,24 +90,74 @@ export default function InsightsPage() {
           fullName: m.fullName,
           department: m.department || 'Engineering',
           jobTitle: m.jobTitle || 'Team Member',
-          weeklyCapacityHours: cap,
-          currentLoadHours: load,
-          burnoutRiskScore: riskScore,
+          weeklyCapacityHours: metrics.weeklyCapacityHours,
+          currentLoadHours: metrics.activeAssignedHours,
+          burnoutRiskScore: metrics.burnoutRiskScore,
           onTimeCompletionRate: onTimeRate,
         };
       });
     }
-    return mockEmployees.map((e) => ({
-      id: e.id,
-      fullName: e.fullName,
-      department: e.department,
-      jobTitle: e.jobTitle,
-      weeklyCapacityHours: e.weeklyCapacityHours,
-      currentLoadHours: e.currentLoadHours,
-      burnoutRiskScore: e.burnoutRiskScore,
-      onTimeCompletionRate: e.onTimeCompletionRate as number | null,
-    }));
-  }, [isLive, liveMembers, liveTasks, mockEmployees]);
+    return mockEmployees.map((e) => {
+      const metrics = calculateEmployeeWorkload(
+        { id: e.id, weeklyCapacityHours: e.weeklyCapacityHours },
+        tasks
+      );
+      return {
+        id: e.id,
+        fullName: e.fullName,
+        department: e.department,
+        jobTitle: e.jobTitle,
+        weeklyCapacityHours: metrics.weeklyCapacityHours,
+        currentLoadHours: metrics.activeAssignedHours,
+        burnoutRiskScore: metrics.burnoutRiskScore,
+        onTimeCompletionRate: e.onTimeCompletionRate as number | null,
+      };
+    });
+  }, [isLive, liveMembers, tasks, mockEmployees]);
+
+  // Aggregate telemetry
+  const orgMetrics = React.useMemo(() => {
+    return calculateOrganizationWorkloadMetrics(employees as any, tasks);
+  }, [employees, tasks]);
+
+  // Fetch AI Insights
+  const handleFetchAIInsights = React.useCallback(async () => {
+    setAiLoading(true);
+    const overallocatedMembers = employees
+      .filter((e) => e.weeklyCapacityHours > 0 && e.currentLoadHours > e.weeklyCapacityHours)
+      .map((e) => ({
+        name: e.fullName,
+        hours: e.currentLoadHours,
+        capacity: e.weeklyCapacityHours,
+        utilization: Math.round((e.currentLoadHours / e.weeklyCapacityHours) * 100),
+      }));
+
+    const result = await getAIWorkloadInsights(
+      {
+        total_capacity_hours: orgMetrics.totalCapacityHours,
+        total_active_hours: orgMetrics.totalActiveHours,
+        average_utilization_pct: orgMetrics.averageUtilizationPercentage,
+        overallocated_count: orgMetrics.overallocatedCount,
+        near_limit_count: orgMetrics.nearLimitCount,
+        optimal_count: orgMetrics.optimalCount,
+        underutilized_count: orgMetrics.underutilizedCount,
+        overdue_tasks_count: orgMetrics.totalOverdueTasksCount,
+        unassigned_tasks_count: orgMetrics.unassignedTasksCount,
+        overallocated_members: overallocatedMembers,
+      },
+      session?.access_token,
+      organization?.id
+    );
+
+    setAiInsights(result);
+    setAiLoading(false);
+  }, [orgMetrics, employees, session?.access_token, organization?.id]);
+
+  React.useEffect(() => {
+    if (!aiInsights && employees.length > 0) {
+      handleFetchAIInsights();
+    }
+  }, [handleFetchAIInsights, aiInsights, employees.length]);
 
   const sortedByRisk = React.useMemo(() => {
     return [...employees].sort((a, b) => b.burnoutRiskScore - a.burnoutRiskScore);
@@ -142,21 +210,34 @@ export default function InsightsPage() {
           </p>
         </div>
 
-        {isLive && (
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => {
-              refetchMembers();
-              refetchTasks();
-            }}
-            disabled={isMembersLoading || isTasksLoading}
-            className="flex items-center gap-1.5 self-start sm:self-auto"
+            onClick={handleFetchAIInsights}
+            disabled={aiLoading}
+            className="flex items-center gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
-            <span>Recalculate Metrics</span>
+            <Sparkles className={`h-3.5 w-3.5 text-violet-400 ${aiLoading ? 'animate-spin' : ''}`} />
+            <span>{aiLoading ? 'Generating AI...' : 'Refresh AI Insights'}</span>
           </Button>
-        )}
+
+          {isLive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                refetchMembers();
+                refetchTasks();
+              }}
+              disabled={isMembersLoading || isTasksLoading}
+              className="flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isMembersLoading || isTasksLoading ? 'animate-spin' : ''}`} />
+              <span>Recalculate</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Ethical Framework Disclaimer Alert */}
@@ -173,6 +254,67 @@ export default function InsightsPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Executive Insights Card */}
+      {aiInsights && (
+        <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-850 to-navy-900 shadow-card">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-400" />
+              <CardTitle className="text-base">Executive Operational Synthesis</CardTitle>
+            </div>
+            <Badge variant={aiInsights.is_ai_generated ? 'violet' : 'slate'} size="sm">
+              {aiInsights.is_ai_generated ? 'Powered by Gemini 3.8-Flash' : 'Deterministic Telemetry'}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+              {aiInsights.executive_summary}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                  Identified Operational Bottlenecks
+                </span>
+                <ul className="space-y-1.5 text-xs text-slate-300">
+                  {aiInsights.identified_risks.map((risk, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-rose-400 font-bold">•</span>
+                      <span>{risk}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400" />
+                  Actionable Mitigation Strategies
+                </span>
+                <ul className="space-y-1.5 text-xs text-slate-300">
+                  {aiInsights.actionable_recommendations.map((rec, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-cyan-400 font-bold">→</span>
+                      <span>{rec}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Link href="/workload">
+                <Button variant="secondary" size="sm" className="text-xs">
+                  <span>Open Workload Balancing Hub</span>
+                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Velocity and Performance Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -257,7 +399,9 @@ export default function InsightsPage() {
                   return (
                     <tr key={emp.id} className="hover:bg-navy-800/50 transition-colors">
                       <td className="px-4 py-3 font-semibold text-white">
-                        {emp.fullName}
+                        <Link href={`/employees/${emp.id}`} className="hover:text-violet-300 transition-colors">
+                          {emp.fullName}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-slate-400">{emp.department}</td>
                       <td className="px-4 py-3 font-mono">
