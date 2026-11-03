@@ -690,14 +690,25 @@ export default function RegisterPage() {
             </form>
           )}
 
-          <div className="mt-6 text-center text-xs text-slate-400">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="font-semibold text-violet-400 hover:text-violet-300"
-            >
-              Sign in to your workspace
-            </Link>
+          <div className="mt-6 text-center text-xs text-slate-400 space-y-1.5">
+            <div>
+              Already have an account?{' '}
+              <Link
+                href="/login"
+                className="font-semibold text-violet-400 hover:text-violet-300"
+              >
+                Sign in to your workspace
+              </Link>
+            </div>
+            <div>
+              Added to an organization by your team?{' '}
+              <Link
+                href="/login?tab=setup"
+                className="font-semibold text-cyan-400 hover:text-cyan-300"
+              >
+                Complete First-Time Member Setup
+              </Link>
+            </div>
           </div>
         </Card>
       </div>

@@ -2,7 +2,7 @@ export type UserRole = 'organizer' | 'admin' | 'manager' | 'employee' | 'hr';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type ProjectStatus = 'planning' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
 export type PriorityLevel = 'low' | 'medium' | 'high' | 'critical';
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'completed' | 'blocked';
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'completed';
 export type RecommendationStatus = 'pending' | 'accepted' | 'rejected' | 'overridden';
 export type NotificationType = 'task_assigned' | 'recommendation_ready' | 'capacity_alert' | 'deadline_warning';
 
@@ -162,6 +162,8 @@ export interface OrganizationMember {
   organizationId: string;
   role: UserRole;
   status: 'active' | 'invited' | 'suspended';
+  accountStatus?: 'active' | 'pending_setup';
+  isPending?: boolean;
   fullName: string;
   email: string;
   avatarUrl?: string | null;
@@ -170,6 +172,14 @@ export interface OrganizationMember {
   jobTitle: string;
   weeklyCapacityHours: number;
   joinedAt: string;
+}
+
+export interface PendingMember {
+  id: string;
+  email: string;
+  role: UserRole;
+  accountStatus: 'pending_setup';
+  createdAt: string;
 }
 
 export interface DepartmentSummary {

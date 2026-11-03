@@ -189,6 +189,19 @@ export function useTasks(): UseTasksResult {
     };
   }, [fetchTasks, authLoading, isAuthenticated, verifiedOrgId]);
 
+  // Listen to member removal events to invalidate and refresh task assignments
+  React.useEffect(() => {
+    const handleMemberRemoved = () => {
+      fetchTasks();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('workforce:member-removed', handleMemberRemoved);
+      return () => {
+        window.removeEventListener('workforce:member-removed', handleMemberRemoved);
+      };
+    }
+  }, [fetchTasks]);
+
   const createTask = React.useCallback(
     async (input: CreateTaskInput): Promise<{ task?: Task; error?: string }> => {
       if (!verifiedOrgId) {

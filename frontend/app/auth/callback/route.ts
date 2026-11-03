@@ -282,36 +282,62 @@ export async function GET(request: Request) {
   // making it 100% reliable when clicking confirmation links on mobile devices.
   if (token_hash && type) {
     const redirectResponse = NextResponse.redirect(`${redirectBase}${next}`);
-    const supabase = await createClient(redirectResponse);
-    const { data, error } = await supabase.auth.verifyOtp({
-      type,
-      token_hash,
-    });
+    try {
+      const supabase = await createClient(redirectResponse);
+      const { data, error } = await supabase.auth.verifyOtp({
+        type,
+        token_hash,
+      });
 
-    if (!error && data?.session) {
-      return redirectResponse;
+      if (!error && data?.session) {
+        return redirectResponse;
+      }
+
+      const isExpired =
+        error?.message?.toLowerCase().includes('expired') ||
+        error?.message?.toLowerCase().includes('invalid') ||
+        error?.message?.toLowerCase().includes('already') ||
+        error?.code === 'otp_expired';
+      const errorKey = isExpired ? 'token_expired' : 'auth_verification_failed';
+      const reason = encodeURIComponent(
+        isExpired
+          ? 'Verification link is invalid, expired, or has already been used.'
+          : (error?.message || 'Verification link is invalid, expired, or has already been used.')
+      );
+      return NextResponse.redirect(`${redirectBase}/login?error=${errorKey}&reason=${reason}`);
+    } catch {
+      // Catch network drops, malformed/non-JSON responses (e.g. empty body SyntaxError from consumed tokens)
+      const reason = encodeURIComponent('Verification link is invalid, expired, or has already been used.');
+      return NextResponse.redirect(`${redirectBase}/login?error=token_expired&reason=${reason}`);
     }
-
-    const isExpired = error?.message?.toLowerCase().includes('expired') || error?.code === 'otp_expired';
-    const errorKey = isExpired ? 'token_expired' : 'auth_verification_failed';
-    const reason = encodeURIComponent(error?.message || 'Verification token is invalid or expired.');
-    return NextResponse.redirect(`${redirectBase}/login?error=${errorKey}&reason=${reason}`);
   }
 
   // 2. PKCE code exchange flow: single browser context
   if (code) {
     const redirectResponse = NextResponse.redirect(`${redirectBase}${next}`);
-    const supabase = await createClient(redirectResponse);
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    try {
+      const supabase = await createClient(redirectResponse);
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data?.session) {
-      return redirectResponse;
+      if (!error && data?.session) {
+        return redirectResponse;
+      }
+
+      const isExpired =
+        error?.message?.toLowerCase().includes('expired') ||
+        error?.message?.toLowerCase().includes('invalid') ||
+        error?.message?.toLowerCase().includes('already') ||
+        error?.code === 'otp_expired';
+      const errorKey = isExpired ? 'token_expired' : 'auth_code_error';
+      const reason = encodeURIComponent(
+        error?.message || 'Authentication code is invalid, expired, or has already been used.'
+      );
+      return NextResponse.redirect(`${redirectBase}/login?error=${errorKey}&reason=${reason}`);
+    } catch {
+      // Catch network drops, malformed/non-JSON responses, or PKCE verifier missing errors
+      const reason = encodeURIComponent('Authentication link or code is invalid, expired, or has already been used.');
+      return NextResponse.redirect(`${redirectBase}/login?error=auth_code_error&reason=${reason}`);
     }
-
-    const reason = encodeURIComponent(
-      error?.message || 'Authentication code exchange failed. Please sign in directly or request a fresh link.'
-    );
-    return NextResponse.redirect(`${redirectBase}/login?error=auth_code_error&reason=${reason}`);
   }
 
   // 3. Client-side fallback for implicit hash flow (#access_token=...):
@@ -380,10 +406,13 @@ export async function GET(request: Request) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken })
           });
-          var data = await res.json();
-          if (res.ok && data.success) {
-            window.location.replace(getSafeNextPath());
-            return;
+          var contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.indexOf('application/json') !== -1) {
+            var data = await res.json();
+            if (data && data.success) {
+              window.location.replace(getSafeNextPath());
+              return;
+            }
           }
         } catch (_) {
           // session transfer network or unexpected failure handled below

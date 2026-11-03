@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   RefreshCw,
   AlertCircle,
+  Edit3,
 } from 'lucide-react';
 
 const kanbanColumns: { status: TaskStatus; label: string; color: string }[] = [
@@ -48,6 +49,8 @@ export default function TasksPage() {
     refetch: refetchTasks,
     createTask,
     updateTaskStatus: dbUpdateTaskStatus,
+    updateTaskDetails: dbUpdateTaskDetails,
+    assignTask: dbAssignTask,
   } = useTasks();
 
   const { projects: dbProjects } = useProjects();
@@ -61,6 +64,7 @@ export default function TasksPage() {
     activeRole: mockRole,
     currentUserId: mockUserId,
     updateTaskStatus: mockUpdateTaskStatus,
+    updateTaskDetails: mockUpdateTaskDetails,
     addNewTask: mockAddNewTask,
   } = useMockStore();
 
@@ -97,6 +101,19 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+
+  // Edit Task Modal State
+  const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [editingTask, setEditingTask] = React.useState<Task | null>(null);
+  const [editTitle, setEditTitle] = React.useState('');
+  const [editDesc, setEditDesc] = React.useState('');
+  const [editPriority, setEditPriority] = React.useState<PriorityLevel>('medium');
+  const [editStatus, setEditStatus] = React.useState<TaskStatus>('todo');
+  const [editEstimatedHours, setEditEstimatedHours] = React.useState('8');
+  const [editDueDate, setEditDueDate] = React.useState('');
+  const [editAssigneeId, setEditAssigneeId] = React.useState('unassigned');
+  const [editError, setEditError] = React.useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = React.useState(false);
 
   const [newTitle, setNewTitle] = React.useState('');
   const [newDesc, setNewDesc] = React.useState('');
@@ -207,10 +224,12 @@ export default function TasksPage() {
 
   const advanceTaskStatus = async (t: Task) => {
     setActionError(null);
-    const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
-    const currIdx = sequence.indexOf(t.status);
-    if (currIdx < sequence.length - 1) {
-      const nextStatus = sequence[currIdx + 1];
+    let nextStatus: TaskStatus | null = null;
+    if (t.status === 'todo') nextStatus = 'in_progress';
+    else if (t.status === 'in_progress') nextStatus = 'in_review';
+    else if (t.status === 'in_review') nextStatus = 'completed';
+
+    if (nextStatus) {
       if (isLive) {
         const res = await dbUpdateTaskStatus(t.id, nextStatus);
         if (res.error) {
@@ -224,10 +243,12 @@ export default function TasksPage() {
 
   const regressTaskStatus = async (t: Task) => {
     setActionError(null);
-    const sequence: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'completed'];
-    const currIdx = sequence.indexOf(t.status);
-    if (currIdx > 0) {
-      const prevStatus = sequence[currIdx - 1];
+    let prevStatus: TaskStatus | null = null;
+    if (t.status === 'completed') prevStatus = 'in_review';
+    else if (t.status === 'in_review') prevStatus = 'in_progress';
+    else if (t.status === 'in_progress') prevStatus = 'todo';
+
+    if (prevStatus) {
       if (isLive) {
         const res = await dbUpdateTaskStatus(t.id, prevStatus);
         if (res.error) {
@@ -237,6 +258,96 @@ export default function TasksPage() {
         mockUpdateTaskStatus(t.id, prevStatus);
       }
     }
+  };
+
+  const handleOpenEditModal = (t: Task) => {
+    setEditingTask(t);
+    setEditTitle(t.title);
+    setEditDesc(t.description || '');
+    setEditPriority(t.priority);
+    setEditStatus(t.status);
+    setEditEstimatedHours(String(t.estimatedHours || 8));
+    setEditDueDate(t.dueDate || '');
+    setEditAssigneeId(t.assignedTo || 'unassigned');
+    setEditError(null);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveTaskEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+    if (!editTitle.trim()) {
+      setEditError('Task title is required.');
+      return;
+    }
+    const hours = parseFloat(editEstimatedHours);
+    if (isNaN(hours) || hours <= 0) {
+      setEditError('Estimated hours must be a positive number.');
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError(null);
+
+    const targetAssigneeId = editAssigneeId === 'unassigned' ? null : editAssigneeId;
+    const targetAssignee = employees.find((e) => e.id === targetAssigneeId);
+
+    if (isLive) {
+      // 1. Update task details
+      const detailRes = await dbUpdateTaskDetails(editingTask.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim() || undefined,
+        priority: editPriority,
+        estimatedHours: hours,
+        dueDate: editDueDate || undefined,
+      });
+
+      if (detailRes.error) {
+        setEditError(detailRes.error);
+        setEditSubmitting(false);
+        return;
+      }
+
+      // 2. Update status if changed
+      if (editStatus !== editingTask.status) {
+        const statusRes = await dbUpdateTaskStatus(editingTask.id, editStatus);
+        if (statusRes.error) {
+          setEditError(statusRes.error);
+          setEditSubmitting(false);
+          return;
+        }
+      }
+
+      // 3. Update assignee if changed
+      if (targetAssigneeId !== (editingTask.assignedTo || null)) {
+        const assignRes = await dbAssignTask(editingTask.id, targetAssigneeId);
+        if (assignRes.error) {
+          setEditError(assignRes.error);
+          setEditSubmitting(false);
+          return;
+        }
+      }
+
+      await refetchTasks();
+    } else {
+      mockUpdateTaskDetails(editingTask.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        priority: editPriority,
+        estimatedHours: hours,
+        dueDate: editDueDate,
+        assignedTo: targetAssigneeId || undefined,
+        assignedEmployeeName: targetAssignee ? targetAssignee.fullName : undefined,
+      });
+
+      if (editStatus !== editingTask.status) {
+        mockUpdateTaskStatus(editingTask.id, editStatus);
+      }
+    }
+
+    setEditSubmitting(false);
+    setIsEditOpen(false);
+    setEditingTask(null);
   };
 
   return (
@@ -374,7 +485,7 @@ export default function TasksPage() {
 
       {/* Kanban Board Mode */}
       {!isTasksLoading && viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 items-start">
           {kanbanColumns.map((col) => {
             const columnTasks = filteredTasks.filter((t) => t.status === col.status);
             return (
@@ -600,11 +711,24 @@ export default function TasksPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/tasks/${t.id}`}>
-                        <Button variant="ghost" size="sm" className="text-xs">
-                          Inspect
-                        </Button>
-                      </Link>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {activeRole !== 'employee' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenEditModal(t)}
+                            className="text-xs"
+                          >
+                            <Edit3 className="h-3 w-3 mr-1" />
+                            <span>Edit</span>
+                          </Button>
+                        )}
+                        <Link href={`/tasks/${t.id}`}>
+                          <Button variant="ghost" size="sm" className="text-xs">
+                            Inspect
+                          </Button>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -713,6 +837,125 @@ export default function TasksPage() {
                 </>
               ) : (
                 <span>Create Task</span>
+              )}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        title="Edit Task Deliverable"
+        description="Update task scope, priority, schedule, status, or assignee."
+      >
+        <form onSubmit={handleSaveTaskEdit} className="space-y-3.5 py-2">
+          {editError && (
+            <div className="rounded-lg border border-rose-500/40 bg-rose-950/20 p-2.5 text-xs text-rose-300">
+              {editError}
+            </div>
+          )}
+
+          <Input
+            label="Task Title *"
+            placeholder="e.g. Implement OAuth token revocation"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            required
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-300">
+              Description & Requirements
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Outline deliverables and technical acceptance criteria..."
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              className="w-full rounded-lg border border-slate-700/80 bg-navy-850 p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Status"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
+              options={[
+                { label: 'Todo / Backlog', value: 'todo' },
+                { label: 'In Progress', value: 'in_progress' },
+                { label: 'In Review', value: 'in_review' },
+                { label: 'Completed', value: 'completed' },
+              ]}
+            />
+            <Select
+              label="Priority"
+              value={editPriority}
+              onChange={(e) => setEditPriority(e.target.value as PriorityLevel)}
+              options={[
+                { label: 'Medium Priority', value: 'medium' },
+                { label: 'High Priority', value: 'high' },
+                { label: 'Critical Priority', value: 'critical' },
+                { label: 'Low Priority', value: 'low' },
+              ]}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Estimated Effort (Hours) *"
+              type="number"
+              value={editEstimatedHours}
+              onChange={(e) => setEditEstimatedHours(e.target.value)}
+              min="1"
+              max="160"
+              required
+            />
+            <Input
+              label="Target Due Date"
+              type="date"
+              value={editDueDate}
+              onChange={(e) => setEditDueDate(e.target.value)}
+            />
+          </div>
+
+          <Select
+            label="Assigned Team Member"
+            value={editAssigneeId}
+            onChange={(e) => setEditAssigneeId(e.target.value)}
+            options={[
+              { label: '-- Unassigned --', value: 'unassigned' },
+              ...employees.map((emp) => {
+                const targetProj = projects.find((p) => p.id === editingTask?.projectId);
+                const isAllocated = targetProj?.memberIds.includes(emp.id);
+                return {
+                  label: `${emp.fullName} (${emp.department})${isAllocated ? ' [Project Member]' : ''}`,
+                  value: emp.id,
+                };
+              }),
+            ]}
+          />
+
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsEditOpen(false)}
+              disabled={editSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm" disabled={editSubmitting}>
+              {editSubmitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
               )}
             </Button>
           </div>

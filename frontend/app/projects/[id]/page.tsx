@@ -95,7 +95,15 @@ export default function ProjectDetailPage() {
   const [editStatus, setEditStatus] = React.useState<ProjectStatus>('in_progress');
   const [editTargetEndDate, setEditTargetEndDate] = React.useState('');
   const [editTotalHours, setEditTotalHours] = React.useState('');
+  const [editManagerId, setEditManagerId] = React.useState('');
   const [editLoading, setEditLoading] = React.useState(false);
+
+  const eligibleManagers = React.useMemo(() => {
+    if (isLive) {
+      return orgMembers.filter((m) => m.role === 'manager');
+    }
+    return mockEmployees.filter((e) => e.role === 'manager');
+  }, [isLive, orgMembers, mockEmployees]);
   const [editError, setEditError] = React.useState<string | null>(null);
 
   // Delete Project Modal State
@@ -179,6 +187,7 @@ export default function ProjectDetailPage() {
     setEditStatus(project.status);
     setEditTargetEndDate(project.targetEndDate || '');
     setEditTotalHours(project.totalHours ? String(project.totalHours) : '160');
+    setEditManagerId(project.managerId || '');
     setEditError(null);
     setIsEditModalOpen(true);
   };
@@ -199,6 +208,11 @@ export default function ProjectDetailPage() {
     setEditLoading(true);
     setEditError(null);
 
+    const chosenManagerId = editManagerId.trim() || undefined;
+    const chosenManager = eligibleManagers.find(
+      (m: any) => (m.userId || m.id) === (chosenManagerId || '')
+    );
+
     if (isLive) {
       const res = await dbUpdateProject(project.id, {
         name: editName.trim(),
@@ -207,6 +221,7 @@ export default function ProjectDetailPage() {
         status: editStatus,
         targetEndDate: editTargetEndDate || undefined,
         totalHours: parsedHours,
+        managerId: chosenManagerId,
       });
 
       setEditLoading(false);
@@ -223,6 +238,8 @@ export default function ProjectDetailPage() {
         status: editStatus,
         targetEndDate: editTargetEndDate,
         totalHours: parsedHours,
+        managerId: chosenManagerId,
+        managerName: chosenManager ? chosenManager.fullName : (chosenManagerId ? 'Assigned Manager' : 'Unassigned'),
       });
       setEditLoading(false);
     }
@@ -728,6 +745,26 @@ export default function ProjectDetailPage() {
               rows={3}
               className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Select
+              label="Designated Project Manager (Manager Role Only)"
+              value={editManagerId}
+              onChange={(e) => setEditManagerId(e.target.value)}
+              options={[
+                { label: '-- Unassigned / Select Manager --', value: '' },
+                ...eligibleManagers.map((m: any) => ({
+                  label: `${m.fullName} (${m.role.toUpperCase()} • ${m.department || 'Engineering'})`,
+                  value: m.userId || m.id,
+                })),
+              ]}
+            />
+            {eligibleManagers.length === 0 && (
+              <p className="text-[11px] text-amber-400">
+                Notice: No members with the Manager role exist in this organization. You can invite or assign a Manager under Employee Management.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

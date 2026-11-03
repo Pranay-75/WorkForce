@@ -170,6 +170,19 @@ export function useProjects(): UseProjectsResult {
     };
   }, [fetchProjects, authLoading, isAuthenticated, verifiedOrgId]);
 
+  // Listen to member removal events to invalidate and refresh project allocations & managerships
+  React.useEffect(() => {
+    const handleMemberRemoved = () => {
+      fetchProjects();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('workforce:member-removed', handleMemberRemoved);
+      return () => {
+        window.removeEventListener('workforce:member-removed', handleMemberRemoved);
+      };
+    }
+  }, [fetchProjects]);
+
   const createProject = React.useCallback(
     async (input: CreateProjectInput): Promise<{ project?: Project; error?: string }> => {
       if (!verifiedOrgId) {

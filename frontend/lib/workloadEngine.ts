@@ -9,14 +9,14 @@
  *
  * Directives:
  * - Deterministic arithmetic only: never let an LLM override capacity bounds or eligibility.
- * - Active tasks are strictly defined as: 'todo', 'in_progress', 'in_review', 'blocked'.
+ * - Active tasks are strictly defined as workable deliverables: 'todo', 'in_progress', 'in_review'.
  * - 'completed' and 'cancelled' tasks are strictly excluded from active workload.
  * - Zero or negative capacity is handled safely without division by zero.
  */
 
 import { Task, Employee, AIRecommendation, WorkloadRedistributionProposal, Project, RecommendationStatus } from '@/lib/types';
 
-export const ACTIVE_TASK_STATUSES = ['todo', 'in_progress', 'in_review', 'blocked'] as const;
+export const ACTIVE_TASK_STATUSES = ['todo', 'in_progress', 'in_review'] as const;
 
 export type CapacityBand = 'overallocated' | 'near_limit' | 'optimal' | 'underutilized';
 
@@ -54,16 +54,35 @@ export function isTaskActive(task: { status: string }): boolean {
 }
 
 /**
- * Checks if a task is overdue relative to midnight today.
+ * Checks if a task is overdue relative to the current local calendar date.
+ * Calendar-date strings (YYYY-MM-DD) are compared strictly by calendar day,
+ * ensuring tasks due today are not flagged as overdue before the day elapses,
+ * while eliminating negative UTC timezone parsing offset artifacts.
  */
 export function isTaskOverdue(task: { status: string; dueDate?: string | null }): boolean {
   if (task.status === 'completed' || task.status === 'cancelled') return false;
   if (!task.dueDate) return false;
-  const due = new Date(task.dueDate);
-  if (isNaN(due.getTime())) return false;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  return due < startOfToday;
+
+  const raw = task.dueDate.trim();
+  if (!raw) return false;
+
+  const now = new Date();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const todayStr = `${todayYear}-${String(todayMonth).padStart(2, '0')}-${String(todayDay).padStart(2, '0')}`;
+
+  // Date-only format: YYYY-MM-DD
+  const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateOnlyRegex.test(raw)) {
+    // Strictly overdue if the calendar date is prior to today's calendar date
+    return raw < todayStr;
+  }
+
+  // Full ISO datetime format with explicit time component
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < now.getTime();
 }
 
 /**
@@ -74,18 +93,38 @@ export function calculateEmployeeWorkload(
   tasks: Task[]
 ): EmployeeWorkloadMetrics {
   const empId = employee.id;
-  const weeklyCap = Math.max(0, Number(employee.weeklyCapacityHours) || 40);
+  const rawCap = employee.weeklyCapacityHours;
+  let weeklyCap: number;
+  if (rawCap === undefined || rawCap === null || rawCap === ('' as any)) {
+    weeklyCap = 40;
+  } else {
+    const num = Number(rawCap);
+    weeklyCap = !Number.isFinite(num) || num < 0 ? 0 : num;
+  }
 
   const empTasks = tasks.filter((t) => t.assignedTo === empId && isTaskActive(t));
   const activeHours = empTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   const remainingHours = Math.max(0, weeklyCap - activeHours);
 
-  const utilPct = weeklyCap > 0 ? Math.round((activeHours / weeklyCap) * 100) : (activeHours > 0 ? 999 : 0);
+  // Safe utilization calculation: avoid NaN or division by zero
+  let utilPct: number;
+  if (weeklyCap > 0) {
+    utilPct = Math.round((activeHours / weeklyCap) * 100);
+  } else {
+    utilPct = activeHours > 0 ? 100 : 0;
+  }
 
-  const overdueCount = empTasks.filter(isTaskOverdue).length;
+  // Count overdue tasks among all open deliverables assigned to this employee
+  const openTasks = tasks.filter(
+    (t) => t.assignedTo === empId && t.status !== 'completed'
+  );
+  const overdueCount = openTasks.filter(isTaskOverdue).length;
 
   let capacityBand: CapacityBand = 'optimal';
-  if (weeklyCap === 0 || utilPct > 100) {
+  if (weeklyCap === 0) {
+    // Zero capacity: only overallocated if actively assigned work
+    capacityBand = activeHours > 0 ? 'overallocated' : 'underutilized';
+  } else if (utilPct > 100) {
     capacityBand = 'overallocated';
   } else if (utilPct >= 80) {
     capacityBand = 'near_limit';
@@ -96,7 +135,7 @@ export function calculateEmployeeWorkload(
   }
 
   // Operational congestion index (0.0 to 1.0)
-  const baseUtilRatio = weeklyCap > 0 ? activeHours / weeklyCap : 1.0;
+  const baseUtilRatio = weeklyCap > 0 ? activeHours / weeklyCap : (activeHours > 0 ? 1.0 : 0.0);
   const overduePenalty = overdueCount * 0.05;
   const rawCongestion = baseUtilRatio * 0.75 + overduePenalty;
   const burnoutRiskScore = Math.min(1.0, Math.max(0.05, Math.round(rawCongestion * 100) / 100));
@@ -207,13 +246,13 @@ export function computeDeterministicRedistributionProposals(
       const proj = projects.find((p) => p.id === task.projectId);
       const projectMemberIds = proj?.memberIds || [];
 
-      // Find candidates with enough simulated bandwidth
+      // Find candidates with enough simulated bandwidth (must not exceed 100% capacity)
       const eligibleTargets = employees
         .filter((target) => {
           if (target.id === srcEmp.id) return false;
           const targetCap = Math.max(1, Number(target.weeklyCapacityHours) || 40);
           const currentTargetLoad = simulatedLoads.get(target.id) || 0;
-          return currentTargetLoad + taskHours <= targetCap * 0.95; // Must not exceed 95% capacity
+          return currentTargetLoad + taskHours <= targetCap; // Absorb without exceeding 100%
         })
         .sort((a, b) => {
           // Priority 1: Belonging to the project
@@ -260,6 +299,87 @@ export function computeDeterministicRedistributionProposals(
           targetProjectedLoad: targetNewLoad,
           rationale: `Reallocating "${task.title}" (${taskHours}h) relieves ${srcEmp.fullName} from ${srcOldUtil}% overload down to ${srcNewUtil}%, safely absorbed by ${targetEmp.fullName} up to ${targetNewUtil}% capacity.`,
         });
+      }
+    }
+  }
+
+  // 2. Proactive load smoothing: If no members are overloaded, smooth near-limit members (>= 80%)
+  if (proposals.length === 0) {
+    const nearLimitStaff = employees
+      .filter((emp) => {
+        const m = currentMetrics.get(emp.id);
+        return m && m.capacityBand === 'near_limit';
+      })
+      .sort((a, b) => {
+        const mA = currentMetrics.get(a.id)!;
+        const mB = currentMetrics.get(b.id)!;
+        return mB.utilizationPercentage - mA.utilizationPercentage;
+      });
+
+    for (const srcEmp of nearLimitStaff) {
+      const srcMetric = currentMetrics.get(srcEmp.id)!;
+      const srcTasks = tasks
+        .filter((t) => t.assignedTo === srcEmp.id && isTaskActive(t))
+        .sort((a, b) => (Number(b.estimatedHours) || 0) - (Number(a.estimatedHours) || 0));
+
+      for (const task of srcTasks) {
+        const taskHours = Number(task.estimatedHours) || 0;
+        if (taskHours <= 0) continue;
+
+        const srcSimLoad = simulatedLoads.get(srcEmp.id) || 0;
+        if (srcSimLoad < srcMetric.weeklyCapacityHours * 0.8) break;
+
+        const proj = projects.find((p) => p.id === task.projectId);
+        const projectMemberIds = proj?.memberIds || [];
+
+        const eligibleTargets = employees
+          .filter((target) => {
+            if (target.id === srcEmp.id) return false;
+            const targetCap = Math.max(1, Number(target.weeklyCapacityHours) || 40);
+            const currentTargetLoad = simulatedLoads.get(target.id) || 0;
+            return currentTargetLoad + taskHours <= targetCap * 0.85; // Keep target in safe zone (<85%)
+          })
+          .sort((a, b) => {
+            const aInProj = projectMemberIds.includes(a.id) ? 1 : 0;
+            const bInProj = projectMemberIds.includes(b.id) ? 1 : 0;
+            if (aInProj !== bInProj) return bInProj - aInProj;
+            const capA = Math.max(1, Number(a.weeklyCapacityHours) || 40);
+            const capB = Math.max(1, Number(b.weeklyCapacityHours) || 40);
+            return (simulatedLoads.get(a.id) || 0) / capA - (simulatedLoads.get(b.id) || 0) / capB;
+          });
+
+        if (eligibleTargets.length > 0) {
+          const targetEmp = eligibleTargets[0];
+          const targetCap = Math.max(1, Number(targetEmp.weeklyCapacityHours) || 40);
+          const targetOldLoad = simulatedLoads.get(targetEmp.id) || 0;
+          const targetNewLoad = targetOldLoad + taskHours;
+          const srcOldLoad = simulatedLoads.get(srcEmp.id) || 0;
+          const srcNewLoad = Math.max(0, srcOldLoad - taskHours);
+
+          simulatedLoads.set(srcEmp.id, srcNewLoad);
+          simulatedLoads.set(targetEmp.id, targetNewLoad);
+
+          const srcOldUtil = Math.round((srcOldLoad / srcMetric.weeklyCapacityHours) * 100);
+          const srcNewUtil = Math.round((srcNewLoad / srcMetric.weeklyCapacityHours) * 100);
+          const targetNewUtil = Math.round((targetNewLoad / targetCap) * 100);
+
+          proposals.push({
+            id: `prop-smooth-${srcEmp.id}-${task.id}`,
+            taskId: task.id,
+            taskTitle: task.title,
+            taskHours: taskHours,
+            sourceEmployeeId: srcEmp.id,
+            sourceEmployeeName: srcEmp.fullName,
+            sourceCurrentLoad: srcOldLoad,
+            sourceProjectedLoad: srcNewLoad,
+            targetEmployeeId: targetEmp.id,
+            targetEmployeeName: targetEmp.fullName,
+            targetCurrentLoad: targetOldLoad,
+            targetProjectedLoad: targetNewLoad,
+            rationale: `Proactive load smoothing: Transferring "${task.title}" (${taskHours}h) reduces ${srcEmp.fullName} from ${srcOldUtil}% down to ${srcNewUtil}%, safely absorbed by ${targetEmp.fullName} at ${targetNewUtil}%.`,
+          });
+          break;
+        }
       }
     }
   }

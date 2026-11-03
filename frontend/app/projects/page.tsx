@@ -152,6 +152,15 @@ export default function ProjectsPage() {
   const [targetEndDate, setTargetEndDate] = React.useState('2026-12-31');
   const [totalHours, setTotalHours] = React.useState('200');
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
+  const [selectedManagerId, setSelectedManagerId] = React.useState<string>('');
+
+  // Eligible Managers filter (strictly role === 'manager')
+  const eligibleManagers = React.useMemo(() => {
+    if (isLive) {
+      return orgMembers.filter((m) => m.role === 'manager');
+    }
+    return mockEmployees.filter((e) => e.role === 'manager');
+  }, [isLive, orgMembers, mockEmployees]);
 
   // Initialize selected member to current user if available
   React.useEffect(() => {
@@ -193,6 +202,11 @@ export default function ProjectsPage() {
     setSubmitting(true);
     setFormError(null);
 
+    const chosenManagerId = selectedManagerId.trim() || null;
+    const chosenManager = eligibleManagers.find(
+      (m: any) => (m.userId || m.id) === chosenManagerId
+    );
+
     if (isLive) {
       const res = await createProject({
         name: projectName.trim(),
@@ -201,7 +215,7 @@ export default function ProjectsPage() {
         status,
         startDate: startDate || undefined,
         targetEndDate: targetEndDate || undefined,
-        managerId: user?.id || null,
+        managerId: chosenManagerId,
         totalHours: parseFloat(totalHours) || 160,
         memberIds: selectedMemberIds,
       });
@@ -220,8 +234,8 @@ export default function ProjectsPage() {
         status,
         startDate,
         targetEndDate,
-        managerId: mockUser.id,
-        managerName: mockUser.name,
+        managerId: chosenManagerId || mockUser.id,
+        managerName: chosenManager ? chosenManager.fullName : (chosenManagerId ? 'Assigned Manager' : mockUser.name),
         memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [mockUser.id],
         totalHours: parseFloat(totalHours) || 160,
       });
@@ -231,6 +245,7 @@ export default function ProjectsPage() {
     setIsCreateModalOpen(false);
     setProjectName('');
     setProjectDesc('');
+    setSelectedManagerId('');
     setFormError(null);
   };
 
@@ -491,6 +506,26 @@ export default function ProjectsPage() {
               onChange={(e) => setProjectDesc(e.target.value)}
               className="w-full rounded-lg border border-slate-700/80 bg-navy-850 p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Select
+              label="Project Manager (Manager Role Only)"
+              value={selectedManagerId}
+              onChange={(e) => setSelectedManagerId(e.target.value)}
+              options={[
+                { label: '-- Select a Project Manager (Manager Role Required) --', value: '' },
+                ...eligibleManagers.map((m: any) => ({
+                  label: `${m.fullName} (${m.role.toUpperCase()} • ${m.department || 'Engineering'})`,
+                  value: m.userId || m.id,
+                })),
+              ]}
+            />
+            {eligibleManagers.length === 0 && (
+              <p className="text-[11px] text-amber-400">
+                Notice: No members with the Manager role exist in this organization. You can invite or assign a Manager under Employee Management.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

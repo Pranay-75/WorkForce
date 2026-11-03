@@ -41,8 +41,10 @@ export default function EmployeesDirectoryPage() {
   // Live Supabase organization members hook
   const {
     members: liveMembers,
+    pendingInvitations: livePendingInvitations,
     isLoading: isLiveLoading,
     error: liveError,
+    addMember,
     inviteMember,
     updateMemberRole,
     removeMember,
@@ -88,7 +90,7 @@ export default function EmployeesDirectoryPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedDept, setSelectedDept] = React.useState<string>('all');
   const [selectedRoleFilter, setSelectedRoleFilter] = React.useState<string>('all');
-  const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
 
   // Project Assignment Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
@@ -99,12 +101,15 @@ export default function EmployeesDirectoryPage() {
   const [assignError, setAssignError] = React.useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
 
-  // Invite Modal Form State
-  const [inviteEmail, setInviteEmail] = React.useState('');
-  const [inviteRole, setInviteRole] = React.useState<UserRole>('employee');
-  const [inviteLoading, setInviteLoading] = React.useState(false);
-  const [inviteError, setInviteError] = React.useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = React.useState<string | null>(null);
+  // Add Member Modal Form State
+  const [addMemberEmail, setAddMemberEmail] = React.useState('');
+  const [addMemberRole, setAddMemberRole] = React.useState<UserRole>('employee');
+  const [addMemberLoading, setAddMemberLoading] = React.useState(false);
+  const [addMemberError, setAddMemberError] = React.useState<string | null>(null);
+  const [addMemberSuccess, setAddMemberSuccess] = React.useState<string | null>(null);
+  const [pendingDemoMembers, setPendingDemoMembers] = React.useState<
+    Array<{ id: string; email: string; role: UserRole; createdAt: string }>
+  >([]);
 
   // Card operation status
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -185,36 +190,114 @@ export default function EmployeesDirectoryPage() {
     });
   }, [mockEmployees, searchQuery, selectedDept, selectedRoleFilter]);
 
-  const handleInviteSubmit = async (e: React.FormEvent) => {
+  const handleAddMemberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (isLive && !isAdmin) {
+      setAddMemberError('Only organization administrators or organizers can add members.');
+      return;
+    }
+    if (addMemberRole === 'admin' && !isOrganizer) {
+      setAddMemberError('Only the organization organizer can add or invite an administrator.');
+      return;
+    }
+    const email = addMemberEmail.trim().toLowerCase();
+    if (!email) return;
 
-    setInviteLoading(true);
-    setInviteError(null);
-    setInviteSuccess(null);
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setAddMemberError('Please enter a valid work email address (e.g. colleague@acme.corp).');
+      return;
+    }
 
-    const { error: invErr, data } = await inviteMember(inviteEmail.trim(), inviteRole);
+    setAddMemberLoading(true);
+    setAddMemberError(null);
+    setAddMemberSuccess(null);
 
-    setInviteLoading(false);
-    if (invErr) {
-      setInviteError(invErr);
-    } else {
-      setInviteSuccess(
-        data?.status === 'member_added'
-          ? `User ${inviteEmail.trim()} was added directly as ${inviteRole}.`
-          : `Invitation created for ${inviteEmail.trim()} as ${inviteRole}.`
-      );
-      setInviteEmail('');
+    // DEMO MODE: Simulate adding member in-memory without altering Supabase
+    if (!isLive) {
+      const existingMember = mockEmployees.find((emp) => emp.email.toLowerCase() === email);
+      if (existingMember) {
+        setAddMemberLoading(false);
+        setAddMemberError(`A team member with email "${email}" is already enrolled as ${existingMember.fullName} (${existingMember.role.toUpperCase()}).`);
+        return;
+      }
+
+      const existingPending = pendingDemoMembers.find((inv) => inv.email.toLowerCase() === email);
+      if (existingPending) {
+        setAddMemberLoading(false);
+        setAddMemberError(`A member with email "${email}" has already been added as ${existingPending.role.toUpperCase()} (Pending Setup).`);
+        return;
+      }
+
+      const newPending = {
+        id: `demo-member-${Date.now()}`,
+        email,
+        role: addMemberRole as UserRole,
+        createdAt: 'Just now',
+      };
+      setPendingDemoMembers((prev) => [newPending, ...prev]);
+
+      setAddMemberLoading(false);
+      setAddMemberSuccess(`Member ${email} added successfully as ${addMemberRole.toUpperCase()} (Pending Setup).`);
+      setAddMemberEmail('');
       setTimeout(() => {
-        setIsInviteModalOpen(false);
-        setInviteSuccess(null);
+        setIsAddModalOpen(false);
+        setAddMemberSuccess(null);
+      }, 1500);
+      return;
+    }
+
+    // LIVE MODE: Authenticated Supabase add member RPC
+    const { error: addErr, data } = await addMember(email, addMemberRole);
+
+    setAddMemberLoading(false);
+    if (addErr) {
+      setAddMemberError(addErr);
+    } else {
+      setAddMemberSuccess(
+        data?.status === 'member_added'
+          ? `Member ${email} was added directly as ${addMemberRole.toUpperCase()} (Active).`
+          : `Member ${email} added successfully as ${addMemberRole.toUpperCase()} (Pending Setup).`
+      );
+      setAddMemberEmail('');
+      setTimeout(() => {
+        setIsAddModalOpen(false);
+        setAddMemberSuccess(null);
       }, 1500);
     }
   };
 
   const handleRoleChange = async (targetUserId: string, newRole: UserRole) => {
+    if (isLive && !isAdmin) {
+      setActionError('Only organization administrators or organizers can update member roles.');
+      return;
+    }
+    const allowedRoles: UserRole[] = ['admin', 'hr', 'manager', 'employee'];
+    if (!allowedRoles.includes(newRole)) {
+      setActionError('Invalid role. Allowed roles are: Administrator, HR, Manager, or Employee.');
+      return;
+    }
+    if (newRole === 'admin' && !isOrganizer) {
+      setActionError('Only the organization organizer can assign the administrator role.');
+      return;
+    }
+    const targetMember = liveMembers.find((m) => m.userId === targetUserId);
+    if (targetMember?.role === 'admin' && !isOrganizer) {
+      setActionError('Only the organization organizer can modify an administrator role.');
+      return;
+    }
+    if (targetMember?.role === 'organizer') {
+      setActionError('Cannot demote the organization organizer. Ownership must be transferred.');
+      return;
+    }
     setActionError(null);
     setActionSuccess(null);
+    if (!isLive) {
+      setActionSuccess(`Member role updated to ${newRole} (Demo).`);
+      setTimeout(() => setActionSuccess(null), 3000);
+      return;
+    }
     const { error } = await updateMemberRole(targetUserId, newRole);
     if (error) {
       setActionError(error);
@@ -224,16 +307,28 @@ export default function EmployeesDirectoryPage() {
     }
   };
 
-  const handleRemoveMember = async (targetUserId: string, targetName: string) => {
+  const handleRemoveMember = async (targetId: string, targetName: string, isPending?: boolean) => {
+    const trimmedId = (targetId || '').trim();
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!trimmedId || !UUID_REGEX.test(trimmedId)) {
+      setActionError(`Cannot remove ${targetName}: Missing or invalid member identifier.`);
+      return;
+    }
+
     if (!confirm(`Are you sure you want to remove ${targetName} from the organization?`)) {
       return;
     }
     setActionError(null);
     setActionSuccess(null);
-    const { error } = await removeMember(targetUserId);
+    const { error } = await removeMember(trimmedId, { isPending });
     if (error) {
       setActionError(error);
     } else {
+      // Invalidate and refresh tasks & projects so load hours and project allocations update immediately
+      await Promise.all([
+        refetchTasks(),
+        refetchProjects(),
+      ]);
       setActionSuccess(`${targetName} removed from workspace.`);
       setTimeout(() => setActionSuccess(null), 3000);
     }
@@ -285,11 +380,6 @@ export default function EmployeesDirectoryPage() {
             <Badge variant="cyan" size="sm">
               {displayCount} {isLive ? 'Live Members' : 'Demo Members'}
             </Badge>
-            {isLive && (
-              <Badge variant="emerald" size="sm">
-                Connected to Supabase
-              </Badge>
-            )}
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
             {isLive
@@ -309,36 +399,42 @@ export default function EmployeesDirectoryPage() {
                 <FolderKanban className="h-4 w-4 mr-1.5 text-cyan-400" />
                 <span>Assign to Project</span>
               </Button>
-              {isAdmin ? (
+              {(isOrganizer || isAdmin) ? (
                 <Button
                   variant="primary"
                   size="md"
                   onClick={() => {
-                    setInviteError(null);
-                    setInviteSuccess(null);
-                    setIsInviteModalOpen(true);
+                    setAddMemberError(null);
+                    setAddMemberSuccess(null);
+                    setAddMemberRole('employee');
+                    setIsAddModalOpen(true);
                   }}
                 >
                   <UserPlus className="h-4 w-4 mr-1.5" />
-                  <span>Invite Member</span>
+                  <span>Add Member</span>
                 </Button>
               ) : (
                 <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-navy-900 border border-slate-800 px-3 py-1.5 rounded-xl">
                   <Lock className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Admin required to invite members</span>
+                  <span>Admin or Organizer required to add members</span>
                 </div>
               )}
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-navy-900 border border-slate-800 px-3 py-2 rounded-xl">
               <Lock className="h-3.5 w-3.5 text-slate-500" />
-              <span>Only organization admins can invite or assign roles</span>
+              <span>Admin or Organizer required to add members or modify roles</span>
             </div>
           )
         ) : (
-          <Button variant="primary" size="md" onClick={() => setIsInviteModalOpen(true)}>
+          <Button variant="primary" size="md" onClick={() => {
+            setAddMemberError(null);
+            setAddMemberSuccess(null);
+            setAddMemberRole('employee');
+            setIsAddModalOpen(true);
+          }}>
             <UserPlus className="h-4 w-4 mr-1.5" />
-            <span>Add Employee (Demo)</span>
+            <span>Add Member (Demo)</span>
           </Button>
         )}
       </div>
@@ -450,7 +546,71 @@ export default function EmployeesDirectoryPage() {
           ))}
         </section>
       )}
-{/* Filter and Search Bar */}
+{/* Pending Live Members Banner */}
+      {isLive && livePendingInvitations && livePendingInvitations.length > 0 && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-4 space-y-2 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Members Pending Account Setup ({livePendingInvitations.length})
+              </span>
+            </div>
+            <span className="text-[11px] text-zinc-400">Added to workspace; awaiting first-time login &amp; password setup</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+            {livePendingInvitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex items-center justify-between p-2.5 rounded-lg border border-amber-500/20 bg-zinc-950/60 text-xs"
+              >
+                <div className="min-w-0 pr-2">
+                  <p className="font-semibold text-white truncate">{inv.email}</p>
+                  <p className="text-[10px] text-zinc-400">
+                    Assigned Role: <span className="text-violet-300 font-mono">{inv.role.toUpperCase()}</span>
+                  </p>
+                </div>
+                <Badge variant="amber" size="sm">
+                  Pending Setup
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Demo Members Banner */}
+      {!isLive && pendingDemoMembers.length > 0 && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-4 space-y-2 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Members Pending Account Setup ({pendingDemoMembers.length})
+              </span>
+            </div>
+            <span className="text-[11px] text-zinc-400">Simulated in-memory demo state</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+            {pendingDemoMembers.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex items-center justify-between p-2.5 rounded-lg border border-amber-500/20 bg-zinc-950/60 text-xs"
+              >
+                <div className="truncate pr-2">
+                  <span className="font-semibold text-white block truncate">{inv.email}</span>
+                  <span className="text-[10px] text-zinc-400">Added {inv.createdAt}</span>
+                </div>
+                <Badge variant="amber" size="sm" className="text-[9px] shrink-0 font-mono">
+                  {inv.role.toUpperCase()} • PENDING SETUP
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-slate-800 bg-navy-900/80 p-4 backdrop-blur-sm">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -491,12 +651,12 @@ export default function EmployeesDirectoryPage() {
         </select>
       </div>
 
-      {/* LIVE SUPABASE MEMBERS RENDERING */}
+      {/* LIVE MEMBERS RENDERING */}
       {isLive ? (
         isLiveLoading ? (
           <div className="py-16 text-center space-y-3">
             <div className="h-8 w-8 mx-auto rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
-            <p className="text-xs text-slate-400">Loading organization members from Supabase...</p>
+            <p className="text-xs text-slate-400">Loading organization members...</p>
           </div>
         ) : liveError ? (
           <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-6 text-center space-y-2">
@@ -552,9 +712,14 @@ export default function EmployeesDirectoryPage() {
                           <p className="text-[11px] text-slate-500 font-mono truncate">{m.email}</p>
                         </div>
                       </div>
-                      <Badge variant={roleInfo.badge} size="sm">
-                        {roleInfo.label}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant={m.accountStatus === 'pending_setup' ? 'amber' : 'emerald'} size="sm">
+                          {m.accountStatus === 'pending_setup' ? 'Pending Setup' : 'Active'}
+                        </Badge>
+                        <Badge variant={roleInfo.badge} size="sm">
+                          {roleInfo.label}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
 
@@ -597,24 +762,25 @@ export default function EmployeesDirectoryPage() {
                       )}
                     </div>
 
-                    {/* Role Administration Controls for Organization Admin / Organizer */}
-                    {isAdmin && m.role !== 'organizer' && (
+                    {/* Role Administration Controls strictly for Workspace Organizer & Admin */}
+                    {(isOrganizer || (isAdmin && m.role !== 'admin')) && m.role !== 'organizer' && (
                       <div className="space-y-2 pt-1 border-t border-slate-800/60">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                             Assign Role
                           </label>
-                          <span className="text-[10px] text-slate-500">Database Enforced</span>
+                          <span className="text-[10px] text-slate-500">
+                            {isOrganizer ? 'Organizer' : 'Admin'}
+                          </span>
                         </div>
                         <select
                           value={m.role}
                           onChange={(e) => handleRoleChange(m.userId, e.target.value as UserRole)}
-                          disabled={!isOrganizer && m.role === 'admin'}
-                          className="w-full rounded-lg border border-slate-700/80 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                          className="w-full rounded-lg border border-slate-700/80 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
                         >
-                          {isOrganizer && <option value="admin">Administrator (Full Access)</option>}
+                          {isOrganizer && <option value="admin">Administrator</option>}
+                          <option value="hr">HR</option>
                           <option value="manager">Manager (Planning &amp; Team Lead)</option>
-                          <option value="hr">HR (People &amp; Capacity)</option>
                           <option value="employee">Employee (Contributor)</option>
                         </select>
                       </div>
@@ -632,20 +798,9 @@ export default function EmployeesDirectoryPage() {
                       {memberTasks.length} active task{memberTasks.length !== 1 ? 's' : ''}
                     </span>
                     <div className="flex items-center gap-2">
-                      {isManagerOrAdmin && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleOpenAssignModal({ userId: m.userId, fullName: m.fullName })}
-                          className="text-xs"
-                        >
-                          <FolderKanban className="h-3.5 w-3.5 mr-1 text-cyan-400" />
-                          <span>Assign Project</span>
-                        </Button>
-                      )}
                       <Link href={`/employees/${m.userId}`}>
                         <Button variant="ghost" size="sm" className="text-xs">
-                          <span>Profile</span>
+                          <span>View Profile</span>
                           <ArrowRight className="h-3.5 w-3.5 ml-1" />
                         </Button>
                       </Link>
@@ -653,11 +808,23 @@ export default function EmployeesDirectoryPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleRemoveMember(m.userId, m.fullName)}
+                          onClick={() => {
+                            const isPendingMember = Boolean(m.isPending || m.accountStatus === 'pending_setup');
+                            const memberActualId = isPendingMember
+                              ? (m.membershipId || (m.id && m.id.startsWith('pending-') ? m.id.replace('pending-', '') : m.id))
+                              : m.userId;
+
+                            if (!isPendingMember && (!m.userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.userId))) {
+                              setActionError(`Cannot remove ${m.fullName}: Active member user identifier is missing or invalid.`);
+                              return;
+                            }
+                            handleRemoveMember(memberActualId, m.fullName, isPendingMember);
+                          }}
                           className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
-                          title="Remove member"
+                          title="Remove Profile"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          <span>Remove Profile</span>
                         </Button>
                       )}
                     </div>
@@ -671,7 +838,7 @@ export default function EmployeesDirectoryPage() {
             <Users className="mx-auto h-10 w-10 text-slate-500 mb-3" />
             <h4 className="text-base font-bold text-white">No members matching criteria</h4>
             <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
-              Try adjusting your search criteria or invite team members.
+              Try adjusting your search criteria or add new team members.
             </p>
           </div>
         )
@@ -775,29 +942,29 @@ export default function EmployeesDirectoryPage() {
         </div>
       )}
 
-      {/* Admin Invite Member Dialog */}
+      {/* Admin Add Member Dialog */}
       <Dialog
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-        title={isLive ? 'Invite Organization Member' : 'Add Simulated Team Member'}
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title={isLive ? 'Add Organization Member' : 'Add Simulated Team Member'}
         description={
           isLive
-            ? 'Only organization administrators can invite members and assign roles. Invitations are verified and enforced in PostgreSQL.'
-            : 'Simulated profile creation for demo exploration.'
+            ? 'Add a member to your organization workspace. Details are immediately saved, and the member is enrolled with Pending Setup status until their first login.'
+            : 'Simulated member addition for demo exploration.'
         }
       >
-        <form onSubmit={handleInviteSubmit} className="space-y-4 py-2">
-          {inviteError && (
+        <form onSubmit={handleAddMemberSubmit} className="space-y-4 py-2">
+          {addMemberError && (
             <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-              <span>{inviteError}</span>
+              <span>{addMemberError}</span>
             </div>
           )}
 
-          {inviteSuccess && (
+          {addMemberSuccess && (
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>{inviteSuccess}</span>
+              <span>{addMemberSuccess}</span>
             </div>
           )}
 
@@ -805,8 +972,8 @@ export default function EmployeesDirectoryPage() {
             label="Recipient Work Email *"
             type="email"
             placeholder="colleague@company.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
+            value={addMemberEmail}
+            onChange={(e) => setAddMemberEmail(e.target.value)}
             required
           />
 
@@ -815,20 +982,17 @@ export default function EmployeesDirectoryPage() {
               Assigned Role *
             </label>
             <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as UserRole)}
+              value={addMemberRole}
+              onChange={(e) => setAddMemberRole(e.target.value as UserRole)}
               className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
             >
-              <option value="employee">Employee — Direct contributor, tasks &amp; schedule</option>
+              {isOrganizer && <option value="admin">Administrator — Workspace management &amp; settings</option>}
+              <option value="hr">HR — Talent management, rosters &amp; capacity oversight</option>
               <option value="manager">Manager — Team lead, allocations &amp; task management</option>
-              {isOrganizer && (
-                <option value="admin">Administrator — Workspace management &amp; project admin</option>
-              )}
+              <option value="employee">Employee — Direct contributor, tasks &amp; schedule</option>
             </select>
             <p className="text-[11px] text-slate-400">
-              {isOrganizer
-                ? 'As Founding Organizer, you can invite Administrators, Managers, and Employees directly.'
-                : 'Assigned role is saved to the database. Administrator invitations require Organizer authority.'}
+              Assigned role is saved immediately. When the member logs in for the first time, they verify their email and set their password.
             </p>
           </div>
 
@@ -837,7 +1001,7 @@ export default function EmployeesDirectoryPage() {
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => setIsInviteModalOpen(false)}
+              onClick={() => setIsAddModalOpen(false)}
             >
               Cancel
             </Button>
@@ -845,9 +1009,9 @@ export default function EmployeesDirectoryPage() {
               type="submit"
               variant="primary"
               size="sm"
-              disabled={inviteLoading || !inviteEmail.trim()}
+              disabled={addMemberLoading || !addMemberEmail.trim()}
             >
-              {inviteLoading ? 'Sending Invitation...' : 'Send Secure Invitation'}
+              {addMemberLoading ? 'Adding Member...' : 'Add Member'}
             </Button>
           </div>
         </form>

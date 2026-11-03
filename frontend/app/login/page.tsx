@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
+import { createClient } from '@/lib/supabase/client';
 import { useMockStore, SYNTHETIC_DEMO_METRICS } from '@/lib/mockStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -116,10 +117,28 @@ const LOGIN_ROLES: {
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithPassword, isAuthenticated, organization, isLoading: isAuthLoading } = useAuth();
+  const { signInWithPassword, signUpWithPassword, isAuthenticated, organization, isLoading: isAuthLoading } = useAuth();
   const { switchDemoRole, enterDemoMode, isDemoMode, currentUser, exitDemoMode } = useMockStore();
 
   const isDev = process.env.NODE_ENV === 'development';
+  const supabase = React.useMemo(() => createClient(), []);
+
+  // Mode: Sign In vs First-Time Member Setup
+  const initialTab = searchParams.get('tab') === 'setup' || searchParams.get('setup') === 'true' ? 'setup' : 'signin';
+  const [activeTab, setActiveTab] = React.useState<'signin' | 'setup'>(initialTab);
+
+  // First-Time Member Setup States
+  const [setupStep, setSetupStep] = React.useState<1 | 2 | 3>(1); // 1: Verify Email, 2: Set Password, 3: Email Sent
+  const [setupEmail, setSetupEmail] = React.useState('');
+  const [setupFullName, setSetupFullName] = React.useState('');
+  const [setupPassword, setSetupPassword] = React.useState('');
+  const [setupConfirmPassword, setSetupConfirmPassword] = React.useState('');
+  const [showSetupPassword, setShowSetupPassword] = React.useState(false);
+  const [verifiedRole, setVerifiedRole] = React.useState<string | null>(null);
+  const [verifiedOrgName, setVerifiedOrgName] = React.useState<string | null>(null);
+  const [setupLoading, setSetupLoading] = React.useState(false);
+  const [setupError, setSetupError] = React.useState<string | null>(null);
+  const [setupSuccess, setSetupSuccess] = React.useState<string | null>(null);
 
   const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
   const [email, setEmail] = React.useState('');
@@ -248,17 +267,125 @@ function LoginFormContent() {
   // Quick-fill credentials for demo testing and active role selection (development only)
   const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
     setSelectedRole(opt.id);
-    setEmail(opt.demoEmail);
-    setPassword('Password123!');
-    setFieldErrors({});
-    setTouched({});
-    setErrorMessage(null);
-    switchDemoRole(opt.demoId);
+    if (isDev) {
+      setEmail(opt.demoEmail);
+      setPassword('Password123!');
+      setFieldErrors({});
+      setTouched({});
+      setErrorMessage(null);
+      switchDemoRole(opt.demoId);
+    }
   };
 
   const handleExploreDemo = (roleId: UserRole) => {
     enterDemoMode(roleId);
     router.push('/dashboard');
+  };
+
+  // Verify if email has a pending organization membership
+  const handleVerifyMembership = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = setupEmail.trim().toLowerCase();
+    setSetupError(null);
+    setSetupSuccess(null);
+
+    const emailErr = validateEmail(cleanEmail);
+    if (emailErr) {
+      setSetupError(emailErr);
+      return;
+    }
+
+    setSetupLoading(true);
+
+    // DEMO MODE: Check synthetic mock employees or pending demo members
+    if (isDemoMode) {
+      const mockMatch = LOGIN_ROLES.find((r) => r.demoEmail.toLowerCase() === cleanEmail);
+      if (mockMatch) {
+        setVerifiedRole(mockMatch.id);
+        setVerifiedOrgName('Acme Systems Engineering');
+        setSetupStep(2);
+        setSetupLoading(false);
+        return;
+      }
+      setVerifiedRole('employee');
+      setVerifiedOrgName('Acme Systems Engineering');
+      setSetupStep(2);
+      setSetupLoading(false);
+      return;
+    }
+
+    // LIVE MODE: Call protected check_pending_setup RPC (generic non-disclosing response)
+    // Never reveals whether email exists in pending invitations or active memberships
+    try {
+      await supabase.rpc('check_pending_setup', {
+        p_email: cleanEmail,
+      });
+      // Advance to step 2 for password creation without leaking membership status
+      setVerifiedRole(null);
+      setVerifiedOrgName(null);
+      setSetupStep(2);
+    } catch (err: any) {
+      // Advance to step 2 so unauthenticated callers cannot infer existence from error state
+      setVerifiedRole(null);
+      setVerifiedOrgName(null);
+      setSetupStep(2);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  // Complete account setup: creates password and links auth.users to membership
+  const handleCompleteSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetupError(null);
+    setSetupSuccess(null);
+
+    const cleanEmail = setupEmail.trim().toLowerCase();
+    if (setupPassword.length < 8) {
+      setSetupError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    if (setupPassword !== setupConfirmPassword) {
+      setSetupError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setSetupLoading(true);
+
+    if (isDemoMode) {
+      enterDemoMode((verifiedRole as UserRole) || 'employee');
+      router.push('/dashboard');
+      return;
+    }
+
+    const nameToUse = setupFullName.trim() || cleanEmail.split('@')[0];
+    const { error: signUpErr, requiresConfirmation } = await signUpWithPassword(
+      cleanEmail,
+      setupPassword,
+      nameToUse
+    );
+
+    setSetupLoading(false);
+
+    if (signUpErr) {
+      const lowerErr = signUpErr.toLowerCase();
+      if (lowerErr.includes('already registered') || lowerErr.includes('already taken')) {
+        setSetupError(
+          'An account with this email is already registered. Please switch to the Sign In tab and log in with your existing password.'
+        );
+      } else {
+        setSetupError(signUpErr);
+      }
+      return;
+    }
+
+    if (requiresConfirmation) {
+      setSetupStep(3);
+    } else {
+      exitDemoMode();
+      router.push('/dashboard');
+    }
   };
 
   return (
@@ -282,6 +409,39 @@ function LoginFormContent() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
         <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-4">
+          {/* Mode Switcher: Sign In vs First-Time Member Setup */}
+          <div className="flex rounded-xl bg-navy-950 p-1 border border-slate-800 mb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('signin');
+                setErrorMessage(null);
+              }}
+              className={cn(
+                'flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-center',
+                activeTab === 'signin'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('setup');
+                setErrorMessage(null);
+              }}
+              className={cn(
+                'flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-center',
+                activeTab === 'setup'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              First-Time Member Setup
+            </button>
+          </div>
           {/* Active Demo Session Banner */}
           {isDemoMode && !isAuthenticated && (
             <div className="rounded-xl border border-violet-500/40 bg-violet-950/40 p-3 text-xs text-violet-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
@@ -328,6 +488,7 @@ function LoginFormContent() {
             </div>
           )}
 
+          {activeTab === 'signin' ? (
           <form onSubmit={handleSignIn} className="space-y-4">
             {errorMessage && (
               <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex flex-col gap-1.5">
@@ -526,7 +687,201 @@ function LoginFormContent() {
             >
               {isLoading ? 'Signing In...' : 'Sign In to Workspace'}
             </Button>
+
+            <div className="pt-2 text-center text-xs text-slate-400">
+              Added by an Organizer?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('setup');
+                  if (email) setSetupEmail(email);
+                }}
+                className="font-semibold text-violet-400 hover:text-violet-300 underline"
+              >
+                Set up your member account
+              </button>
+            </div>
           </form>
+        ) : (
+          /* First-Time Member Setup Workflow */
+          <div className="space-y-4">
+            <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-3.5 space-y-1">
+              <span className="text-xs font-bold text-white block">
+                First-Time Member Setup
+              </span>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                If your organization Organizer has added your email address, verify your membership below and set your account password.
+              </p>
+            </div>
+
+            {setupError && (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                <span>{setupError}</span>
+              </div>
+            )}
+
+            {setupSuccess && (
+              <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>{setupSuccess}</span>
+              </div>
+            )}
+
+            {setupStep === 1 && (
+              <form onSubmit={handleVerifyMembership} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Your Work Email Address *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="name@company.com"
+                      value={setupEmail}
+                      onChange={(e) => setSetupEmail(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Enter the exact email address your Organizer used when adding you to WorkForce.
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  disabled={setupLoading || !setupEmail.trim()}
+                  className="w-full justify-center"
+                >
+                  {setupLoading ? 'Validating Membership...' : 'Verify Workspace Membership'}
+                </Button>
+              </form>
+            )}
+
+            {setupStep === 2 && (
+              <form onSubmit={handleCompleteSetup} className="space-y-4 animate-in fade-in">
+                <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-3 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-violet-300 font-semibold">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Member Account Setup</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Set up your account password for <strong>{setupEmail}</strong>. If your email was added by a workspace Organizer, your organization access will be activated upon email verification.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Alex Chen"
+                      value={setupFullName}
+                      onChange={(e) => setSetupFullName(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Create Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type={showSetupPassword ? 'text' : 'password'}
+                      required
+                      placeholder="At least 8 characters"
+                      value={setupPassword}
+                      onChange={(e) => setSetupPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSetupPassword(!showSetupPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                    >
+                      {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Re-enter password"
+                      value={setupConfirmPassword}
+                      onChange={(e) => setSetupConfirmPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={() => setSetupStep(1)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    disabled={setupLoading || !setupPassword || !setupConfirmPassword}
+                    className="flex-1 justify-center"
+                  >
+                    {setupLoading ? 'Activating Account...' : 'Activate Account & Sign In'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {setupStep === 3 && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3 text-center animate-in fade-in">
+                <div className="h-10 w-10 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Verification Link Sent</h4>
+                  <p className="text-xs text-slate-300 mt-1">
+                    A confirmation link has been sent to <strong>{setupEmail}</strong>. Please check your inbox and click the link to confirm your email address.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setActiveTab('signin');
+                      setEmail(setupEmail);
+                      setSetupStep(1);
+                    }}
+                    className="w-full justify-center"
+                  >
+                    Return to Sign In
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
           {/* Polished Interactive Demo Showcase Section */}
           <div className="mt-6 pt-5 border-t border-slate-800/90 space-y-3.5">

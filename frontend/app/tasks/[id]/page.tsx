@@ -477,7 +477,6 @@ export default function TaskDetailPage() {
                 <option value="in_progress">In Progress</option>
                 <option value="in_review">In Review</option>
                 <option value="completed">Completed</option>
-                <option value="blocked">Blocked</option>
               </select>
             </div>
           </div>

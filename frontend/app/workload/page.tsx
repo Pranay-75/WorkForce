@@ -146,8 +146,10 @@ export default function WorkloadCapacityPage() {
 
   // Dynamic Redistribution Proposals using shared workload engine
   const dynamicProposals = React.useMemo(() => {
-    if (!isLive) return mockProposals;
-    return computeDeterministicRedistributionProposals(employees as any, tasks, projects);
+    const computed = computeDeterministicRedistributionProposals(employees as any, tasks, projects);
+    if (computed.length > 0) return computed;
+    if (!isLive && mockProposals.length > 0) return mockProposals;
+    return computed;
   }, [isLive, mockProposals, employees, tasks, projects]);
 
   // Filter and sort roster
@@ -505,6 +507,29 @@ export default function WorkloadCapacityPage() {
                 </Card>
               );
             })}
+          </div>
+        ) : overloadedStaff.length > 0 ? (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-950/20 p-6 text-center text-slate-300 space-y-3">
+            <AlertTriangle className="mx-auto h-8 w-8 text-amber-400" />
+            <h4 className="text-base font-bold text-white">
+              Overload Detected — Automated Reallocation Constrained
+            </h4>
+            <p className="text-xs text-amber-200/80 max-w-lg mx-auto">
+              {overloadedStaff.length} team member{overloadedStaff.length > 1 ? 's are' : ' is'} currently overallocated ({overloadedStaff.map(e => `${e.fullName}: ${e.currentLoadHours}h/${e.weeklyCapacityHours}h`).join(', ')}), but automated 1-to-1 task redistribution cannot safely transfer individual deliverables without pushing other team members past 100% capacity.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-1 text-xs">
+              <span className="rounded-lg bg-navy-900/80 border border-slate-700 px-3 py-1 text-slate-300">
+                Action: Break down large deliverables into smaller sub-tasks or expand team capacity.
+              </span>
+            </div>
+          </div>
+        ) : nearLimitStaff.length > 0 ? (
+          <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-6 text-center text-slate-400 space-y-2">
+            <Clock className="mx-auto h-7 w-7 text-cyan-400 mb-1" />
+            <h4 className="text-sm font-bold text-white">Safe Operating Range</h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              {nearLimitStaff.length} team member{nearLimitStaff.length > 1 ? 's are' : ' is'} operating near capacity limit (80-100%), and no immediate transfers are required.
+            </p>
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400 space-y-2">

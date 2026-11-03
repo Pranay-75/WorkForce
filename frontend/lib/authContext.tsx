@@ -99,17 +99,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Immediately query and set active organization & admin role
         const { data: membershipData } = await supabase
           .from('organization_memberships')
-          .select('role, organization_id, organizations(id, name, slug)')
+          .select('role, organization_id, organizations(id, name, slug, created_by)')
           .eq('user_id', currentSession.user.id)
           .eq('status', 'active')
           .limit(1)
           .maybeSingle();
 
         if (membershipData?.role) {
-          // The creator who bootstrapped this organization is the initial Organizer
-          setRole('organizer');
+          const org = membershipData.organizations as any;
+          const isCreator = org?.created_by && org.created_by === currentSession.user.id;
+          const effectiveRole: UserRole = membershipData.role === 'organizer' || isCreator
+            ? 'organizer'
+            : (membershipData.role as UserRole) || 'employee';
+          setRole(effectiveRole);
           if (membershipData.organizations) {
-            const org = membershipData.organizations as any;
             const orgObj = {
               id: org.id,
               name: org.name,
@@ -160,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 2. Fetch all active memberships deterministically (ordered by created_at DESC)
         const { data: allMemberships, error: memberErr } = await supabase
           .from('organization_memberships')
-          .select('role, organization_id, created_at, organizations(id, name, slug)')
+          .select('role, organization_id, created_at, organizations(id, name, slug, created_by)')
           .eq('user_id', currentUser.id)
           .eq('status', 'active')
           .order('created_at', { ascending: false });
@@ -187,27 +190,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }));
           setAvailableOrganizations(orgsList);
 
-          // Helper to distinguish Organizer (first active member/creator) from delegated Admins
-          const resolveMemberRole = async (rawRole: string, orgId: string, currentUid: string, orgCreatedBy?: string): Promise<UserRole> => {
+          // Helper to resolve Organizer authority: requires explicit role = 'organizer' or designated created_by
+          // Implicit or earliest-member fallback is strictly excluded.
+          const resolveMemberRole = (rawRole: string, orgCreatedBy?: string, currentUid?: string): UserRole => {
             if (rawRole === 'organizer') return 'organizer';
             if (rawRole === 'admin') {
-              if (orgCreatedBy && orgCreatedBy === currentUid) {
+              if (orgCreatedBy && currentUid && orgCreatedBy === currentUid) {
                 return 'organizer';
-              }
-              try {
-                const { data: firstMember } = await supabase
-                  .from('organization_memberships')
-                  .select('user_id')
-                  .eq('organization_id', orgId)
-                  .order('created_at', { ascending: true })
-                  .limit(1)
-                  .maybeSingle();
-
-                if (firstMember && firstMember.user_id === currentUid) {
-                  return 'organizer';
-                }
-              } catch {
-                // Fail-safe to admin
               }
               return 'admin';
             }
@@ -219,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Exactly 1 membership: deterministically select it
             const m = allMemberships[0];
             const org = m.organizations as any;
-            const resolved = await resolveMemberRole(m.role, org.id, currentUser.id);
+            const resolved = resolveMemberRole(m.role, org?.created_by, currentUser.id);
             setRole(resolved);
             setOrganization({
               id: org.id,
@@ -239,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (matched && matched.organizations) {
               const org = matched.organizations as any;
-              const resolved = await resolveMemberRole(matched.role, org.id, currentUser.id);
+              const resolved = resolveMemberRole(matched.role, org?.created_by, currentUser.id);
               setRole(resolved);
               setOrganization({
                 id: org.id,
@@ -276,20 +265,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const org = matched.organizations as any;
       let determinedRole: UserRole = (matched.role as UserRole) || 'employee';
       if (matched.role === 'admin') {
-        try {
-          const { data: firstMember } = await supabase
-            .from('organization_memberships')
-            .select('user_id')
-            .eq('organization_id', targetOrgId)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (firstMember && firstMember.user_id === user?.id) {
-            determinedRole = 'organizer';
-          }
-        } catch {
-          determinedRole = 'admin';
-        }
+        const isCreator = org?.created_by && user?.id && org.created_by === user.id;
+        determinedRole = isCreator ? 'organizer' : 'admin';
       }
       setRole(determinedRole);
       setOrganization({
@@ -299,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setHasAmbiguousMembership(false);
     },
-    [supabase, user]
+    [user]
   );
 
   const refreshUserData = React.useCallback(async () => {

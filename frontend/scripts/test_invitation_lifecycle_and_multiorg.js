@@ -68,7 +68,7 @@ async function runHardeningTests() {
     const testRecipientEmail = `inv_dedup_${Date.now()}@test.corp`;
 
     // Step 1A: Invite recipient as 'employee'
-    const { data: firstInvite, error: err1 } = await chloeAdmin.rpc('invite_organization_member', {
+    const { data: firstInvite, error: err1 } = await chloeAdmin.rpc('add_organization_member', {
       p_organization_id: ACME_ORG_ID,
       p_email: testRecipientEmail,
       p_role: 'employee'
@@ -85,7 +85,7 @@ async function runHardeningTests() {
     }
 
     // Step 1B: Admin changes mind and re-invites same recipient as 'manager'
-    const { data: secondInvite, error: err2 } = await chloeAdmin.rpc('invite_organization_member', {
+    const { data: secondInvite, error: err2 } = await chloeAdmin.rpc('add_organization_member', {
       p_organization_id: ACME_ORG_ID,
       p_email: testRecipientEmail,
       p_role: 'manager'
@@ -504,17 +504,17 @@ async function runHardeningTests() {
       SELECT status FROM public.organization_invitations WHERE id = '${activeInvId}';
     `);
 
-    if (roleAfterClaimAttempt === 'employee' && invStatusAfterAttempt === 'pending') {
+    if (roleAfterClaimAttempt === 'employee' && invStatusAfterAttempt === 'superseded') {
       recordResult(
         'Existing Active Role Not Overwritten by Invitation',
         'PASS',
-        `Membership role remained strictly '${roleAfterClaimAttempt}'; invitation left as '${invStatusAfterAttempt}'.`
+        `Membership role remained strictly '${roleAfterClaimAttempt}'; invitation marked '${invStatusAfterAttempt}'.`
       );
     } else {
       recordResult(
         'Existing Active Role Not Overwritten by Invitation',
         'FAIL',
-        `Expected role 'employee' and status 'pending', got role '${roleAfterClaimAttempt}', status '${invStatusAfterAttempt}'`
+        `Expected role 'employee' and status 'superseded', got role '${roleAfterClaimAttempt}', status '${invStatusAfterAttempt}'`
       );
     }
 

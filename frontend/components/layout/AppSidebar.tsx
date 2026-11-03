@@ -49,7 +49,7 @@ const masterNavigationGroups: NavGroup[] = [
         allowedRoles: ['organizer', 'admin', 'manager', 'hr', 'employee'],
       },
       {
-        name: 'Employees',
+        name: 'Staff',
         href: '/employees',
         icon: Users,
         allowedRoles: ['organizer', 'admin', 'manager', 'hr'],
