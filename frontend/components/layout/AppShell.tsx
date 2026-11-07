@@ -18,7 +18,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { feedbackMessage, setFeedbackMessage, isDemoMode, currentUser, exitDemoMode } = useMockStore();
   const { isAuthenticated, organization, isLoading } = useAuth();
 
-  const isAuthOrOnboardingRoute =
+  const isStandalonePublicRoute =
+    pathname === '/' ||
     pathname.startsWith('/presentation') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
@@ -30,16 +31,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Enforce zero-trust authentication & onboarding routing guards
   React.useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated && !isDemoMode && !isAuthOrOnboardingRoute) {
+      if (!isAuthenticated && !isDemoMode && !isStandalonePublicRoute) {
         router.push('/login');
-      } else if (isAuthenticated && !organization && !isAuthOrOnboardingRoute) {
+      } else if (isAuthenticated && !organization && !isStandalonePublicRoute) {
         router.push('/onboarding');
       }
     }
-  }, [isLoading, isAuthenticated, isDemoMode, organization, isAuthOrOnboardingRoute, router]);
+  }, [isLoading, isAuthenticated, isDemoMode, organization, isStandalonePublicRoute, router]);
 
-  // Auth and Onboarding pages render cleanly as standalone full-screen pages
-  if (isAuthOrOnboardingRoute) {
+  // Auth, public landing, and onboarding pages render cleanly as standalone full-screen pages
+  if (isStandalonePublicRoute) {
     return <div className="min-h-screen bg-zinc-950 text-zinc-100">{children}</div>;
   }
 
