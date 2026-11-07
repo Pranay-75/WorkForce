@@ -35,6 +35,7 @@ class AuthenticatedUser(BaseModel):
     organization_name: str
     role: UserRoleEnum
     profile: Optional[UserProfileSchema] = None
+    is_demo_user: bool = False
 
 class TokenPayload(BaseModel):
     sub: str

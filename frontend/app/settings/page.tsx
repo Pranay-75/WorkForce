@@ -117,8 +117,8 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!isOrganizerOrAdmin) {
-      setSaveErrorMsg('Only verified Organization Administrators and Organizers can modify workspace settings.');
+    if (!isOrganizer) {
+      setSaveErrorMsg('Only verified Organization Organizers can modify workspace settings.');
       return;
     }
 
@@ -308,7 +308,7 @@ export default function SettingsPage() {
             label="Organization Legal Name"
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
-            disabled={!isOrganizerOrAdmin || isSavingOrg}
+            disabled={!isOrganizer || isSavingOrg}
           />
           {isLive && (
             <div className="space-y-1 text-xs text-slate-400">
@@ -318,7 +318,7 @@ export default function SettingsPage() {
               </code>
             </div>
           )}
-          {isOrganizerOrAdmin ? (
+          {isOrganizer ? (
             <div className="pt-1">
               <Button
                 variant="primary"
@@ -338,7 +338,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <p className="text-xs text-slate-400 italic">
-              Organization name can only be edited by an Organizer or Administrator.
+              Organization workspace settings can only be edited by an Organizer.
             </p>
           )}
         </CardContent>

@@ -80,7 +80,7 @@ async def get_current_user(
             # Fetch all active memberships for this user
             res = (
                 admin_client.table("organization_memberships")
-                .select("role, organization_id, organizations(id, name, slug)")
+                .select("role, organization_id, organizations(id, name, slug, created_by)")
                 .eq("user_id", user_id)
                 .eq("status", "active")
                 .execute()
@@ -204,6 +204,7 @@ async def get_current_user(
                     job_title=m["job_title"],
                     weekly_capacity_hours=40.0,
                 ),
+                is_demo_user=True,
             )
 
     # 3. Missing or unauthorized credentials -> Reject by default

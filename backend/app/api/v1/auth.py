@@ -2,12 +2,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.models.schemas import AuthenticatedUser, OrganizationSchema, UserRoleEnum
+import app.api.deps as deps
 from app.api.deps import (
     get_current_user,
     require_employee,
     require_manager,
     require_admin,
     require_organizer,
+    DEV_ROLE_MAPPING,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication & Access Control"])
@@ -141,19 +143,102 @@ async def update_member_role_endpoint(
     - Admin can assign HR, Manager, and Staff (employee).
     - Only an Organizer can assign or promote anyone to Admin.
     - Admin cannot promote or demote an Admin.
+    - Target's current role is verified authoritatively from database records;
+      client-supplied role claims are strictly untrusted and discarded.
     """
-    target_role = payload.new_role if payload else "employee"
+    target_role = (payload.new_role if payload and payload.new_role else "employee").lower()
     if target_role not in ALLOWED_TARGET_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid role. Allowed roles are: {', '.join(ALLOWED_TARGET_ROLES)}.",
         )
 
-    # Privilege escalation guard: Only Organizer can assign or promote anyone to Admin
+    target_current_role: Optional[str] = None
+    target_status: Optional[str] = None
+    target_found = False
+
+    # 1. Authoritative Database Lookup (strictly enforced for all token-based/authenticated users)
+    if not current_user.is_demo_user:
+        try:
+            admin_client = deps.get_supabase_admin()
+            res = (
+                admin_client.table("organization_memberships")
+                .select("role, organization_id, status, user_id")
+                .eq("user_id", member_id)
+                .execute()
+            )
+            rows = res.data or []
+            if rows:
+                target_found = True
+                # Find membership record in caller's organization
+                matching_org_rows = [
+                    r for r in rows
+                    if str(r.get("organization_id")) == str(current_user.organization_id)
+                ]
+                if matching_org_rows:
+                    target_row = matching_org_rows[0]
+                    target_current_role = (target_row.get("role") or "").lower()
+                    target_status = (target_row.get("status") or "active").lower()
+                else:
+                    # Target exists in database but strictly under a different organization
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Access denied: Target member '{member_id}' belongs to another organization.",
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            # Database failure, timeout, or network error: fail closed immediately across all environments.
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database authorization verification unavailable.",
+            )
+    else:
+        # 2. Offline Development Mock Fallback (strictly reachable ONLY in offline demo auth mode)
+        if (
+            getattr(deps.settings, "ENVIRONMENT", "") != "production"
+            and getattr(deps.settings, "ENABLE_DEMO_AUTH_HEADER", False)
+            and member_id in DEV_ROLE_MAPPING
+        ):
+            dev_entry = DEV_ROLE_MAPPING[member_id]
+            dev_role = dev_entry["role"]
+            target_current_role = (dev_role.value if hasattr(dev_role, "value") else str(dev_role)).lower()
+            target_status = "active"
+            target_found = True
+
+    # 3. Reject missing target membership
+    if not target_found or not target_current_role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target member '{member_id}' not found in organization '{current_user.organization_id}'.",
+        )
+
+    # 4. Reject inactive or suspended target membership
+    if target_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Target member '{member_id}' has non-active status '{target_status}'. Only active members can be modified.",
+        )
+
+    # 5. Organizer role immutability: organizer cannot be altered via this endpoint
+    if target_current_role == "organizer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The organizer role cannot be reassigned via this endpoint. Use transfer ownership.",
+        )
+
+    # 6. Privilege escalation guard: Only Organizer can assign or promote anyone to Admin
     if target_role == "admin" and current_user.role != UserRoleEnum.ORGANIZER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the organization organizer can assign or promote anyone to the administrator role.",
+        )
+
+    # 7. Demotion & governance guard: Admin cannot demote or change an existing Admin
+    if target_current_role == "admin" and current_user.role != UserRoleEnum.ORGANIZER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the organization organizer can manage or demote an administrator.",
         )
 
     return {

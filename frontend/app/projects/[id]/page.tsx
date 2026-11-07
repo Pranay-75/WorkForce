@@ -100,9 +100,13 @@ export default function ProjectDetailPage() {
 
   const eligibleManagers = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.filter((m) => m.role === 'manager');
+      return orgMembers.filter(
+        (m) => m.role === 'manager' || m.role === 'admin' || m.role === 'organizer'
+      );
     }
-    return mockEmployees.filter((e) => e.role === 'manager');
+    return mockEmployees.filter(
+      (e) => e.role === 'manager' || e.role === 'admin' || e.role === 'organizer'
+    );
   }, [isLive, orgMembers, mockEmployees]);
   const [editError, setEditError] = React.useState<string | null>(null);
 
