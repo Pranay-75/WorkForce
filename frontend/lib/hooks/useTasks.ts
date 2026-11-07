@@ -7,6 +7,7 @@ import {
   Task,
   TaskStatus,
   PriorityLevel,
+  UserRole,
   TaskSkillPrerequisite,
   CreateTaskInput,
   UpdateTaskDetailsInput,
@@ -93,6 +94,7 @@ export function useTasks(): UseTasksResult {
             name
           ),
           organization_memberships!fk_tasks_org_assignee (
+            role,
             user_profiles (
               full_name,
               avatar_url
@@ -149,6 +151,7 @@ export function useTasks(): UseTasksResult {
           assignedTo: row.assigned_to || undefined,
           assignedEmployeeName: assignedName,
           assignedEmployeeAvatar: assignedAvatar,
+          assignedEmployeeRole: (membership?.role as UserRole) || undefined,
           requiredSkills: Array.isArray(row.required_skills) ? row.required_skills : [],
           createdAt: row.created_at,
         };

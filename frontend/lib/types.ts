@@ -79,6 +79,7 @@ export interface Task {
   assignedTo?: string; // employeeId
   assignedEmployeeName?: string;
   assignedEmployeeAvatar?: string;
+  assignedEmployeeRole?: UserRole;
   requiredSkills: TaskSkillPrerequisite[];
   createdAt: string;
 }
