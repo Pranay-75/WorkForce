@@ -720,11 +720,22 @@ def test_rbac_organizer_with_verified_token(monkeypatch):
     organizer_uid = "b0000000-0000-0000-0000-000000000099"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "organizer",
-            "organization_id": org_id,
-            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
-        }],
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            {
+                "user_id": "user-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            }
+        ],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
 
@@ -876,11 +887,22 @@ def test_organizer_can_add_members_and_change_roles(monkeypatch):
     organizer_uid = "b0000000-0000-0000-0000-000000000099"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "organizer",
-            "organization_id": org_id,
-            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
-        }],
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            {
+                "user_id": "user-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            }
+        ],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
 
@@ -906,11 +928,22 @@ def test_admin_forbidden_from_adding_members_or_changing_roles(monkeypatch):
     admin_uid = "b0000000-0000-0000-0000-000000000008"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "admin",
-            "organization_id": org_id,
-            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
-        }],
+        memberships_data=[
+            {
+                "user_id": admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+            },
+            {
+                "user_id": "user-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+            }
+        ],
         earliest_member_data=[{"user_id": founder_uid}],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
@@ -1009,16 +1042,32 @@ def test_earliest_admin_does_not_become_organizer(monkeypatch):
     first_admin_uid = "b0000000-0000-0000-0000-000000000001"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "admin",
-            "organization_id": org_id,
-            "organizations": {
-                "id": org_id,
-                "name": "Acme Systems",
-                "slug": "acme-systems",
-                "created_by": "different-creator-uid-000"
+        memberships_data=[
+            {
+                "user_id": first_admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {
+                    "id": org_id,
+                    "name": "Acme Systems",
+                    "slug": "acme-systems",
+                    "created_by": "different-creator-uid-000"
+                }
+            },
+            {
+                "user_id": "target-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {
+                    "id": org_id,
+                    "name": "Acme Systems",
+                    "slug": "acme-systems",
+                    "created_by": "different-creator-uid-000"
+                }
             }
-        }],
+        ],
         earliest_member_data=[{"user_id": first_admin_uid}],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
@@ -1064,11 +1113,22 @@ def test_organizer_and_admin_role_governance_rules(monkeypatch):
     organizer_uid = "b0000000-0000-0000-0000-000000000099"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "organizer",
-            "organization_id": org_id,
-            "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
-        }],
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            {
+                "user_id": "target-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            }
+        ],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
 
@@ -1180,17 +1240,32 @@ def test_active_authors_demo_organizer_access(monkeypatch):
     demo_user_id = "3d8fdf6f-9d1f-44cf-bce7-36ab6a4540f7"
 
     mock_db = MockSupabaseAdmin(
-        memberships_data=[{
-            "role": "organizer",
-            "status": "active",
-            "organization_id": authors_org_id,
-            "organizations": {
-                "id": authors_org_id,
-                "name": "Authors",
-                "slug": "authors",
-                "created_by": demo_user_id
+        memberships_data=[
+            {
+                "user_id": demo_user_id,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": authors_org_id,
+                "organizations": {
+                    "id": authors_org_id,
+                    "name": "Authors",
+                    "slug": "authors",
+                    "created_by": demo_user_id
+                }
+            },
+            {
+                "user_id": "new-member-123",
+                "role": "employee",
+                "status": "active",
+                "organization_id": authors_org_id,
+                "organizations": {
+                    "id": authors_org_id,
+                    "name": "Authors",
+                    "slug": "authors",
+                    "created_by": demo_user_id
+                }
             }
-        }],
+        ],
     )
     monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
 
@@ -1219,3 +1294,397 @@ def test_active_authors_demo_organizer_access(monkeypatch):
     )
     assert res_role.status_code == 200
     assert res_role.json()["status"] == "role_updated"
+
+
+# =============================================================================
+# 12. ADMIN GOVERNANCE & LEGACY FALLBACK HARDENING TESTS
+# =============================================================================
+
+def test_admin_cannot_demote_admin_via_db_lookup(monkeypatch):
+    """
+    Verify an Administrator cannot demote or change the role of an existing Administrator,
+    whether resolved via database membership lookup or via request payload.
+    """
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    admin_caller_uid = "b0000000-0000-0000-0000-000000000010"
+    target_admin_uid = "b0000000-0000-0000-0000-000000000020"
+    target_emp_uid = "b0000000-0000-0000-0000-000000000030"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": admin_caller_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_emp_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    admin_token = generate_custom_jwt(sub=admin_caller_uid, email="admin.caller@acme.corp")
+    organizer_token = generate_custom_jwt(sub=organizer_uid, email="organizer@acme.corp")
+
+    # 1. Admin attempts to demote target Admin to employee -> 403 Forbidden
+    res_demote_emp = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "employee"},
+    )
+    assert res_demote_emp.status_code == 403
+    assert "Only the organization organizer can manage or demote an administrator." in res_demote_emp.json()["detail"]
+
+    # 2. Admin attempts to change target Admin to manager -> 403 Forbidden
+    res_demote_mgr = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_demote_mgr.status_code == 403
+    assert "Only the organization organizer can manage or demote an administrator." in res_demote_mgr.json()["detail"]
+
+    # 3. Admin attempts to demote target Admin with explicit current_role in payload -> 403 Forbidden
+    res_demote_payload = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "employee", "current_role": "admin"},
+    )
+    assert res_demote_payload.status_code == 403
+
+    # 4. Admin changes regular employee to manager -> 200 OK
+    res_promote_emp = client.put(
+        f"/api/v1/auth/members/{target_emp_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_promote_emp.status_code == 200
+    assert res_promote_emp.json()["new_role"] == "manager"
+
+    # 5. Organizer changes target Admin to manager -> 200 OK (Allowed for Organizer)
+    res_org_demote = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {organizer_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_org_demote.status_code == 200
+    assert res_org_demote.json()["new_role"] == "manager"
+
+
+def test_legacy_organization_fallback_created_by_resolves_organizer(monkeypatch):
+    """
+    Verify that an active member whose membership role is 'admin' but whose user_id
+    matches organizations.created_by is deterministically resolved to UserRoleEnum.ORGANIZER.
+    """
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    creator_admin_uid = "b0000000-0000-0000-0000-000000000055"
+    regular_admin_uid = "b0000000-0000-0000-0000-000000000066"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": creator_admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {
+                    "id": org_id,
+                    "name": "Legacy Systems Corp",
+                    "slug": "legacy-systems",
+                    "created_by": creator_admin_uid,
+                },
+            },
+            {
+                "user_id": regular_admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {
+                    "id": org_id,
+                    "name": "Legacy Systems Corp",
+                    "slug": "legacy-systems",
+                    "created_by": creator_admin_uid,
+                },
+            },
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    # 1. Creator Admin resolves to Organizer
+    creator_token = generate_custom_jwt(sub=creator_admin_uid, email="creator.admin@legacy.corp")
+    res_creator_me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {creator_token}"})
+    assert res_creator_me.status_code == 200
+    assert res_creator_me.json()["role"] == "organizer"
+
+    res_creator_org_area = client.get(
+        "/api/v1/auth/organizer-area",
+        headers={"Authorization": f"Bearer {creator_token}"},
+    )
+    assert res_creator_org_area.status_code == 200
+
+    # 2. Regular Admin (not created_by) remains Admin and is forbidden from organizer area
+    regular_token = generate_custom_jwt(sub=regular_admin_uid, email="regular.admin@legacy.corp")
+    res_regular_me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {regular_token}"})
+    assert res_regular_me.status_code == 200
+    assert res_regular_me.json()["role"] == "admin"
+
+    res_regular_org_area = client.get(
+        "/api/v1/auth/organizer-area",
+        headers={"Authorization": f"Bearer {regular_token}"},
+    )
+    assert res_regular_org_area.status_code == 403
+
+
+def test_update_member_role_authoritative_resolution_and_governance(monkeypatch):
+    """
+    Comprehensive verification of authoritative target role resolution and governance:
+    1. Admin attempts to demote Admin while spoofing current_role: employee -> 403
+    2. Admin attempts to modify Admin while omitting current_role -> 403
+    3. Admin modifies ordinary Employee -> 200 (permitted to promote to manager/hr)
+    4. Organizer manages Admin -> 200
+    5. Cross-organization target ID -> 403 (target in different org)
+    6. Missing target ID -> 404 (target does not exist)
+    7. Inactive target membership -> 403 (suspended/inactive status)
+    """
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    other_org_id = "a0000000-0000-0000-0000-000000000999"
+    admin_caller_uid = "b0000000-0000-0000-0000-000000000010"
+    target_admin_uid = "b0000000-0000-0000-0000-000000000020"
+    target_emp_uid = "b0000000-0000-0000-0000-000000000030"
+    target_inactive_uid = "b0000000-0000-0000-0000-000000000040"
+    target_cross_org_uid = "b0000000-0000-0000-0000-000000000050"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": admin_caller_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_admin_uid,
+                "role": "admin",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_emp_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_inactive_uid,
+                "role": "employee",
+                "status": "suspended",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+            {
+                "user_id": target_cross_org_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": other_org_id,
+                "organizations": {"id": other_org_id, "name": "Other Corp", "slug": "other", "created_by": "other-creator"},
+            },
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            },
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    admin_token = generate_custom_jwt(sub=admin_caller_uid, email="admin.caller@acme.corp")
+    organizer_token = generate_custom_jwt(sub=organizer_uid, email="organizer@acme.corp")
+
+    # 1. Admin attempts to demote Admin while spoofing current_role: employee -> 403 Forbidden
+    res_spoof = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "employee", "current_role": "employee"},
+    )
+    assert res_spoof.status_code == 403
+    assert "Only the organization organizer can manage or demote an administrator." in res_spoof.json()["detail"]
+
+    # 2. Admin attempts to modify Admin while omitting current_role -> 403 Forbidden
+    res_omit = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_omit.status_code == 403
+    assert "Only the organization organizer can manage or demote an administrator." in res_omit.json()["detail"]
+
+    # 3. Admin modifies ordinary Employee -> 200 OK (permitted to promote to manager/hr)
+    res_emp_to_mgr = client.put(
+        f"/api/v1/auth/members/{target_emp_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_emp_to_mgr.status_code == 200
+    assert res_emp_to_mgr.json()["new_role"] == "manager"
+
+    res_emp_to_hr = client.put(
+        f"/api/v1/auth/members/{target_emp_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "hr"},
+    )
+    assert res_emp_to_hr.status_code == 200
+    assert res_emp_to_hr.json()["new_role"] == "hr"
+
+    # 4. Organizer manages Admin -> 200 OK
+    res_org_manages_admin = client.put(
+        f"/api/v1/auth/members/{target_admin_uid}/role",
+        headers={"Authorization": f"Bearer {organizer_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_org_manages_admin.status_code == 200
+    assert res_org_manages_admin.json()["new_role"] == "manager"
+
+    # 5. Cross-organization target ID -> denied 403
+    res_cross_org = client.put(
+        f"/api/v1/auth/members/{target_cross_org_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_cross_org.status_code == 403
+    assert "belongs to another organization" in res_cross_org.json()["detail"]
+
+    # 6. Missing target -> 404
+    res_missing = client.put(
+        "/api/v1/auth/members/missing-uid-9999/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_missing.status_code == 404
+    assert "not found in organization" in res_missing.json()["detail"]
+
+    # 7. Inactive membership -> 403
+    res_inactive = client.put(
+        f"/api/v1/auth/members/{target_inactive_uid}/role",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_inactive.status_code == 403
+    assert "has non-active status 'suspended'" in res_inactive.json()["detail"]
+
+
+def test_dev_fallback_strict_isolation_and_fail_closed(monkeypatch):
+    """
+    Verify security guarantees of the development fallback:
+    1. Database-backed authenticated requests NEVER fall back to DEV_ROLE_MAPPING (returns 404).
+    2. Database failure or timeout fails closed with 500 across all environments.
+    3. The fallback is reachable ONLY in explicitly configured offline/demo authentication mode.
+    4. Production environment strictly rejects demo authentication and fallback.
+    """
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    # Target present in DEV_ROLE_MAPPING (Chloe Dubois, VP Ops, admin)
+    dev_target_uid = "b0000000-0000-0000-0000-000000000008"
+
+    # Database only has the Organizer caller, NOT dev_target_uid
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[{
+            "user_id": organizer_uid,
+            "role": "organizer",
+            "status": "active",
+            "organization_id": org_id,
+            "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+        }]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "ENABLE_DEMO_AUTH_HEADER", True)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="organizer@acme.corp")
+
+    # 1. Database-backed authenticated request querying dev_target_uid (missing from DB) -> must NOT use DEV_ROLE_MAPPING -> 404
+    res_db_missing = client.put(
+        f"/api/v1/auth/members/{dev_target_uid}/role",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_db_missing.status_code == 404
+    assert "not found in organization" in res_db_missing.json()["detail"]
+
+    # 2. Database lookup throws an unexpected error/timeout during target lookup -> must fail closed with 500
+    class TargetFailingSupabaseAdmin:
+        def table(self, name):
+            class Builder:
+                def select(self, *a, **kw):
+                    return self
+                def eq(self, col, val):
+                    if col == "user_id" and val == dev_target_uid:
+                        class ExecFailing:
+                            def execute(self):
+                                raise ConnectionError("Database network timeout")
+                        return ExecFailing()
+                    return mock_db.table(name).select().eq(col, val)
+            return Builder()
+
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: TargetFailingSupabaseAdmin())
+    res_db_err = client.put(
+        f"/api/v1/auth/members/{dev_target_uid}/role",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_db_err.status_code == 500
+    assert "Database authorization verification unavailable" in res_db_err.json()["detail"]
+
+    # 3. Offline demo auth mode (no Bearer token, X-Demo-User-Id header) in development -> fallback resolves DEV_ROLE_MAPPING
+    # Using Chloe Dubois (admin in DEV_ROLE_MAPPING) as demo caller
+    demo_admin_uid = "b0000000-0000-0000-0000-000000000008"
+    # Target Alex Chen (employee in DEV_ROLE_MAPPING)
+    demo_emp_target_uid = "b0000000-0000-0000-0000-000000000002"
+
+    res_demo = client.put(
+        f"/api/v1/auth/members/{demo_emp_target_uid}/role",
+        headers={"X-Demo-User-Id": demo_admin_uid},
+        json={"new_role": "manager"},
+    )
+    assert res_demo.status_code == 200
+    assert res_demo.json()["new_role"] == "manager"
+
+    # 4. Production environment strictly rejects demo auth even if ENABLE_DEMO_AUTH_HEADER is attempted
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    res_prod_demo = client.put(
+        f"/api/v1/auth/members/{demo_emp_target_uid}/role",
+        headers={"X-Demo-User-Id": demo_admin_uid},
+        json={"new_role": "manager"},
+    )
+    assert res_prod_demo.status_code == 401

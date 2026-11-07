@@ -105,6 +105,24 @@ async function run() {
     'AccessDenied component blocks employees and managers from accessing workspace settings'
   );
 
+  recordTest(
+    'Organization Legal Name input is read-only for non-organizers',
+    settingsCode.includes('disabled={!isOrganizer || isSavingOrg}'),
+    'Input is disabled for all roles other than Organizer'
+  );
+
+  recordTest(
+    'Organization Settings Save button is strictly gated to Organizer',
+    settingsCode.includes('{isOrganizer ? (') && settingsCode.includes('Save Organization Name'),
+    'Save button is only mounted in the DOM for Organizer'
+  );
+
+  recordTest(
+    'handleSaveOrgProfile strictly checks isOrganizer',
+    settingsCode.includes('if (!isOrganizer)') && settingsCode.includes('Only verified Organization Organizers can modify workspace settings.'),
+    'Save handler aligns with database RLS and rejects non-organizers'
+  );
+
   // ---------------------------------------------------------------------------
   // Category 3: Self-Transfer Exclusion & Member Filtering (Requirement 2)
   // ---------------------------------------------------------------------------
