@@ -24,7 +24,8 @@ interface AuthContextType {
     password: string,
     fullName: string,
     organizationName?: string,
-    customSlug?: string
+    customSlug?: string,
+    department?: string
   ) => Promise<SignUpResult>;
   bootstrapOrganization: (
     organizationName: string,
@@ -149,6 +150,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
 
         if (profileData && !profileErr) {
+          // If metadata or pending invited department exists, ensure user_profiles is synchronized
+          const metaDept = currentUser.user_metadata?.department;
+          const pendingDept = typeof window !== 'undefined'
+            ? localStorage.getItem('workforce_pending_dept_' + (currentUser.email || '').toLowerCase())
+            : null;
+          const targetDept = (metaDept || pendingDept)?.trim();
+
+          if (targetDept && profileData.department !== targetDept) {
+            try {
+              await supabase
+                .from('user_profiles')
+                .update({ department: targetDept })
+                .eq('id', currentUser.id);
+              profileData.department = targetDept;
+            } catch (syncErr) {
+              console.warn('Could not sync user profile department:', syncErr);
+            }
+          }
+
+          if (typeof window !== 'undefined' && pendingDept) {
+            try {
+              localStorage.removeItem('workforce_pending_dept_' + (currentUser.email || '').toLowerCase());
+            } catch (_) {}
+          }
+
           setProfile({
             id: profileData.id,
             email: profileData.email,
@@ -362,7 +388,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     fullName: string,
     organizationName?: string,
-    customSlug?: string
+    customSlug?: string,
+    department?: string
   ): Promise<SignUpResult> => {
     try {
       const trimmedName = fullName.trim();
@@ -387,7 +414,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // - Creating an organization bootstraps the creator as administrator via secure DB function.
       // - Joining without organization creation defaults metadata role strictly to employee.
       // - Users cannot pick or self-elevate their role during registration.
-      const userDepartment = trimmedOrg ? 'Administration' : 'Engineering';
+      const userDepartment = department?.trim() || (trimmedOrg ? 'Administration' : 'Engineering');
       const userJobTitle = trimmedOrg ? 'Workspace Administrator' : 'Software Engineer';
       const defaultRole: UserRole = trimmedOrg ? 'admin' : 'employee';
 
@@ -417,6 +444,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { error: bootstrapErr } = await bootstrapOrganization(trimmedOrg, slug);
           if (bootstrapErr) {
             return { error: bootstrapErr };
+          }
+        }
+        if (userDepartment) {
+          try {
+            await supabase.from('user_profiles').update({ department: userDepartment }).eq('id', data.user.id);
+          } catch (deptErr) {
+            console.warn('Could not sync user_profiles department on sign-up:', deptErr);
           }
         }
         await fetchUserData(data.user);

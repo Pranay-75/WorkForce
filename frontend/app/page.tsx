@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
-import { useMockStore } from '@/lib/mockStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -26,7 +25,6 @@ import {
 
 export default function LandingPage() {
   const { isAuthenticated, organization } = useAuth();
-  const { isDemoMode } = useMockStore();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   // Determine destination for authenticated users
@@ -80,7 +78,7 @@ export default function LandingPage() {
 
           {/* Desktop CTAs */}
           <div className="hidden sm:flex items-center gap-3">
-            {isAuthenticated || isDemoMode ? (
+            {isAuthenticated ? (
               <Link href={workspaceHref}>
                 <Button variant="primary" size="sm" className="gap-1.5">
                   <span>Go to Workspace</span>
@@ -145,7 +143,7 @@ export default function LandingPage() {
               </a>
             </nav>
             <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
-              {isAuthenticated || isDemoMode ? (
+              {isAuthenticated ? (
                 <Link href={workspaceHref} onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="primary" size="md" className="w-full gap-2">
                     <span>Go to Workspace</span>

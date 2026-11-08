@@ -16,9 +16,9 @@ import {
   Lock,
   Mail,
   ShieldCheck,
+  User,
   Briefcase,
   Users,
-  User,
   AlertCircle,
   CheckCircle2,
   HelpCircle,
@@ -118,10 +118,38 @@ function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signInWithPassword, signUpWithPassword, isAuthenticated, organization, isLoading: isAuthLoading } = useAuth();
-  const { switchDemoRole, enterDemoMode, isDemoMode, currentUser, exitDemoMode } = useMockStore();
+  const { enterDemoMode, isDemoMode, exitDemoMode } = useMockStore();
+  const isEnteringDemoRef = React.useRef(false);
+
+  // Clear stale demo mode only on initial mount of the login page for unauthenticated visitors
+  React.useEffect(() => {
+    if (!isAuthenticated && !isEnteringDemoRef.current) {
+      exitDemoMode();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isDev = process.env.NODE_ENV === 'development';
   const supabase = React.useMemo(() => createClient(), []);
+  const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
+
+  // Quick-fill credentials for demo testing and active role selection (development only)
+  const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
+    setSelectedRole(opt.id);
+    if (isDev) {
+      setEmail(opt.demoEmail);
+      setPassword('Password123!');
+      setFieldErrors({});
+      setTouched({});
+      setErrorMessage(null);
+    }
+  };
+
+  const handleExploreDemo = (roleId: UserRole) => {
+    isEnteringDemoRef.current = true;
+    enterDemoMode(roleId);
+    router.push('/dashboard');
+  };
 
   // Mode: Sign In vs First-Time Member Setup
   const initialTab = searchParams.get('tab') === 'setup' || searchParams.get('setup') === 'true' ? 'setup' : 'signin';
@@ -131,6 +159,7 @@ function LoginFormContent() {
   const [setupStep, setSetupStep] = React.useState<1 | 2 | 3>(1); // 1: Verify Email, 2: Set Password, 3: Email Sent
   const [setupEmail, setSetupEmail] = React.useState('');
   const [setupFullName, setSetupFullName] = React.useState('');
+  const [setupDepartment, setSetupDepartment] = React.useState('Engineering');
   const [setupPassword, setSetupPassword] = React.useState('');
   const [setupConfirmPassword, setSetupConfirmPassword] = React.useState('');
   const [showSetupPassword, setShowSetupPassword] = React.useState(false);
@@ -140,7 +169,6 @@ function LoginFormContent() {
   const [setupError, setSetupError] = React.useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = React.useState<string | null>(null);
 
-  const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -264,24 +292,7 @@ function LoginFormContent() {
     }
   };
 
-  // Quick-fill credentials for demo testing and active role selection (development only)
-  const fillRoleAccount = (opt: typeof LOGIN_ROLES[number]) => {
-    setSelectedRole(opt.id);
-    if (isDev) {
-      setEmail(opt.demoEmail);
-      setPassword('Password123!');
-      setFieldErrors({});
-      setTouched({});
-      setErrorMessage(null);
-      switchDemoRole(opt.demoId);
-    }
-  };
-
-  const handleExploreDemo = (roleId: UserRole) => {
-    enterDemoMode(roleId);
-    router.push('/dashboard');
-  };
-
+  
   // Verify if email has a pending organization membership
   const handleVerifyMembership = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -297,16 +308,16 @@ function LoginFormContent() {
 
     setSetupLoading(true);
 
+    // Check if a pending department was set when this user was invited
+    if (typeof window !== 'undefined') {
+      const savedDept = localStorage.getItem('workforce_pending_dept_' + cleanEmail);
+      if (savedDept) {
+        setSetupDepartment(savedDept);
+      }
+    }
+
     // DEMO MODE: Check synthetic mock employees or pending demo members
     if (isDemoMode) {
-      const mockMatch = LOGIN_ROLES.find((r) => r.demoEmail.toLowerCase() === cleanEmail);
-      if (mockMatch) {
-        setVerifiedRole(mockMatch.id);
-        setVerifiedOrgName('Acme Systems Engineering');
-        setSetupStep(2);
-        setSetupLoading(false);
-        return;
-      }
       setVerifiedRole('employee');
       setVerifiedOrgName('Acme Systems Engineering');
       setSetupStep(2);
@@ -363,7 +374,10 @@ function LoginFormContent() {
     const { error: signUpErr, requiresConfirmation } = await signUpWithPassword(
       cleanEmail,
       setupPassword,
-      nameToUse
+      nameToUse,
+      undefined,
+      undefined,
+      setupDepartment
     );
 
     setSetupLoading(false);
@@ -442,36 +456,7 @@ function LoginFormContent() {
               First-Time Member Setup
             </button>
           </div>
-          {/* Active Demo Session Banner */}
-          {isDemoMode && !isAuthenticated && (
-            <div className="rounded-xl border border-violet-500/40 bg-violet-950/40 p-3 text-xs text-violet-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-violet-400 shrink-0" />
-                <span>
-                  Demo session active as <strong className="text-white">{currentUser.name}</strong> ({currentUser.role.toUpperCase()}).
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => router.push('/dashboard')}
-                  className="text-xs h-7 py-0 px-2.5"
-                >
-                  <span>Open Dashboard</span>
-                  <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => exitDemoMode()}
-                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded transition-colors"
-                >
-                  Exit Demo
-                </button>
-              </div>
-            </div>
-          )}
-
+          
           {callbackNotice && (
             <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 p-3.5 text-xs text-amber-200 space-y-1.5 animate-in fade-in">
               <div className="flex items-center gap-2 font-semibold text-amber-300">
@@ -519,77 +504,7 @@ function LoginFormContent() {
               </div>
             )}
 
-            {/* Select Role Option (Development only) */}
-            {isDev && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Select Your Role
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Admin • Manager • HR • Employee
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  {LOGIN_ROLES.map((opt) => {
-                    const isSelected = selectedRole === opt.id;
-                    const Icon = opt.icon;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => fillRoleAccount(opt)}
-                        className={cn(
-                          'flex flex-col text-left p-3 rounded-xl border transition-all relative overflow-hidden group focus:outline-none',
-                          isSelected
-                            ? `${opt.activeBorder} ${opt.activeBg}`
-                            : 'border-slate-800 bg-navy-950/70 hover:border-slate-700 hover:bg-navy-900/60'
-                        )}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1.5">
-                          <div
-                            className={cn(
-                              'p-1.5 rounded-lg border flex items-center justify-center shrink-0 transition-colors',
-                              isSelected
-                                ? opt.iconBg
-                                : 'border-slate-800 bg-slate-900/80 text-slate-400 group-hover:text-slate-300'
-                            )}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </div>
-
-                          <div
-                            className={cn(
-                              'h-4 w-4 rounded-full border flex items-center justify-center transition-colors',
-                              isSelected
-                                ? 'border-violet-500 bg-violet-600'
-                                : 'border-slate-700 bg-navy-950 group-hover:border-slate-600'
-                            )}
-                          >
-                            {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                          </div>
-                        </div>
-
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-xs font-bold text-white">
-                            {opt.title}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400">
-                            ({opt.badge})
-                          </span>
-                        </div>
-
-                        <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
-                          {opt.description}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
+            
             <div className="space-y-1.5 pt-1">
               <label htmlFor="login-email-input" className="block text-xs font-semibold text-slate-300">
                 Email Address
@@ -792,6 +707,25 @@ function LoginFormContent() {
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
+                    Department
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Engineering, Marketing, Product"
+                      value={setupDepartment}
+                      onChange={(e) => setSetupDepartment(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Assigned department for your workspace profile. Confirm or adjust if needed.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
                     Create Password *
                   </label>
                   <div className="relative">
@@ -883,15 +817,15 @@ function LoginFormContent() {
           </div>
         )}
 
-          {/* Polished Interactive Demo Showcase Section */}
-          <div className="mt-6 pt-5 border-t border-slate-800/90 space-y-3.5">
+          {/* Explore Interactive Demo Showcase */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                  <Sparkles className="h-3.5 w-3.5" />
+                <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                  <Sparkles className="h-4 w-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-white tracking-wide block">
+                  <span className="text-xs font-bold text-white block">
                     Explore Interactive Demo
                   </span>
                   <span className="text-[10px] text-slate-400">

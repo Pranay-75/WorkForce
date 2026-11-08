@@ -98,14 +98,15 @@ export default function ProjectDetailPage() {
   const [editManagerId, setEditManagerId] = React.useState('');
   const [editLoading, setEditLoading] = React.useState(false);
 
+  // Eligible Managers filter: strictly 'manager' and 'admin' roles only (prohibiting organizer, hr, employee)
   const eligibleManagers = React.useMemo(() => {
     if (isLive) {
       return orgMembers.filter(
-        (m) => m.role === 'manager' || m.role === 'admin' || m.role === 'organizer'
+        (m) => m.role === 'manager' || m.role === 'admin'
       );
     }
     return mockEmployees.filter(
-      (e) => e.role === 'manager' || e.role === 'admin' || e.role === 'organizer'
+      (e) => e.role === 'manager' || e.role === 'admin'
     );
   }, [isLive, orgMembers, mockEmployees]);
   const [editError, setEditError] = React.useState<string | null>(null);

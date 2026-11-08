@@ -33,8 +33,8 @@ export interface UseOrganizationMembersResult {
   totalMembers: number;
   totalCapacityHours: number;
   departments: DepartmentSummary[];
-  addMember: (email: string, role?: UserRole) => Promise<{ error: string | null; data?: any }>;
-  inviteMember: (email: string, role?: UserRole) => Promise<{ error: string | null; data?: any }>;
+  addMember: (email: string, role?: UserRole, department?: string) => Promise<{ error: string | null; data?: any }>;
+  inviteMember: (email: string, role?: UserRole, department?: string) => Promise<{ error: string | null; data?: any }>;
   updateMemberRole: (targetUserId: string, newRole: UserRole) => Promise<{ error: string | null; data?: any }>;
   removeMember: (targetId: string, options?: { isPending?: boolean }) => Promise<{ error: string | null; data?: any }>;
   revokeInvitation: (invitationId: string) => Promise<{ error: string | null; data?: any }>;
@@ -285,7 +285,7 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
    * Details are immediately persisted in Supabase with status 'pending_setup'.
    */
   const addMember = React.useCallback(
-    async (email: string, role: UserRole = 'employee') => {
+    async (email: string, role: UserRole = 'employee', department?: string) => {
       if (!verifiedOrgId) return { error: 'No active organization found.' };
       const cleanEmail = email.trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -317,6 +317,23 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
           return { error: rpcError.message };
         }
 
+        if (department) {
+          const cleanDept = department.trim();
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('workforce_pending_dept_' + cleanEmail, cleanDept);
+            } catch (storageErr) {
+              console.warn('Could not cache pending member department in localStorage:', storageErr);
+            }
+          }
+          if (data?.user_id) {
+            try {
+              await supabase.from('user_profiles').update({ department: cleanDept }).eq('id', data.user_id);
+            } catch (deptErr) {
+              console.warn('Could not update user_profiles department:', deptErr);
+            }
+          }
+        }
         await fetchMembers();
         return { error: null, data };
       } catch (err: any) {
@@ -330,8 +347,8 @@ export function useOrganizationMembers(): UseOrganizationMembersResult {
    * Backwards-compatible alias for addMember.
    */
   const inviteMember = React.useCallback(
-    async (email: string, role: UserRole = 'employee') => {
-      return addMember(email, role);
+    async (email: string, role: UserRole = 'employee', department?: string) => {
+      return addMember(email, role, department);
     },
     [addMember]
   );

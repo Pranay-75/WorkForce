@@ -35,6 +35,7 @@ import {
   X,
   SlidersHorizontal,
   Check,
+  Trash2,
 } from 'lucide-react';
 
 const kanbanColumns: { status: TaskStatus; label: string; badgeVariant: 'slate' | 'cyan' | 'amber' | 'emerald' }[] = [
@@ -58,6 +59,7 @@ export default function TasksPage() {
     updateTaskStatus: dbUpdateTaskStatus,
     updateTaskDetails: dbUpdateTaskDetails,
     assignTask: dbAssignTask,
+    deleteTask: dbDeleteTask,
   } = useTasks();
 
   const { projects: dbProjects } = useProjects();
@@ -73,12 +75,14 @@ export default function TasksPage() {
     updateTaskStatus: mockUpdateTaskStatus,
     updateTaskDetails: mockUpdateTaskDetails,
     addNewTask: mockAddNewTask,
+    deleteTask: mockDeleteTask,
   } = useMockStore();
 
   const tasks = isLive ? dbTasks : mockTasks;
   const projects = isLive ? dbProjects : mockProjects;
   const activeRole = isLive ? authRole : mockRole;
   const currentUserId = isLive ? (user?.id || '') : mockUserId;
+  const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
 
   const employees = React.useMemo(() => {
     if (isLive) {
@@ -358,6 +362,26 @@ export default function TasksPage() {
     setEditAssigneeId(t.assignedTo || 'unassigned');
     setEditError(null);
     setIsEditOpen(true);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!editingTask) return;
+    if (!confirm(`Are you sure you want to permanently delete task "${editingTask.title}"?`)) return;
+    setEditSubmitting(true);
+    if (isLive) {
+      const res = await dbDeleteTask(editingTask.id);
+      if (res.error) {
+        setEditError(res.error);
+        setEditSubmitting(false);
+        return;
+      }
+      await refetchTasks();
+    } else {
+      mockDeleteTask(editingTask.id);
+    }
+    setEditSubmitting(false);
+    setIsEditOpen(false);
+    setEditingTask(null);
   };
 
   const handleSaveTaskEdit = async (e: React.FormEvent) => {
@@ -1501,19 +1525,36 @@ export default function TasksPage() {
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditOpen(false)}
-              disabled={editSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" isLoading={editSubmitting}>
-              Save Changes
-            </Button>
+          <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+            {isManagerOrAdmin ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteTask}
+                disabled={editSubmitting}
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditOpen(false)}
+                disabled={editSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" isLoading={editSubmitting}>
+                Save Changes
+              </Button>
+            </div>
           </div>
         </form>
       </Dialog>

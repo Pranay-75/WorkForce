@@ -63,6 +63,7 @@ export default function EmployeeDetailPage() {
     tasks: mockTasks,
     projects: mockProjects,
     activeRole: mockRole,
+    currentUserId: mockUserId,
     updateEmployeeProfile,
   } = useMockStore();
 
@@ -92,14 +93,18 @@ export default function EmployeeDetailPage() {
   const [roleChangeError, setRoleChangeError] = React.useState<string | null>(null);
   const [roleChangeSuccess, setRoleChangeSuccess] = React.useState<string | null>(null);
 
+  const isSelf = isLive
+    ? Boolean(user?.id && (user.id === employeeId || liveMembers.some((m) => m.userId === user.id && (m.id === employeeId || m.userId === employeeId))))
+    : (mockUserId === employeeId);
+
   // Mandatory role access guard (all React hooks must be declared above)
-  if (activeRole === 'employee') {
+  if (activeRole === 'employee' && !isSelf) {
     return (
       <AccessDenied
         resourceName="Employee Profile & Allocation Detail"
         currentRole={activeRole}
         requiredRoles={['manager', 'admin', 'hr', 'organizer']}
-        description="Viewing individual employee profiles, performance insights, and allocation histories is restricted to management and administrative personnel."
+        description="Viewing other employee profiles, performance insights, and allocation histories is restricted to management and administrative personnel."
       />
     );
   }
@@ -183,7 +188,7 @@ export default function EmployeeDetailPage() {
     phone,
   };
 
-  const isSelf = isLive ? (user?.id === targetUid) : true;
+  // isSelf already defined above
 
   // Handle opening Project Assignment Modal
   const handleOpenAssignModal = () => {

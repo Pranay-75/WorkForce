@@ -44,6 +44,7 @@ export default function EmployeesDirectoryPage() {
     pendingInvitations: livePendingInvitations,
     isLoading: isLiveLoading,
     error: liveError,
+    departments,
     addMember,
     inviteMember,
     updateMemberRole,
@@ -103,6 +104,8 @@ export default function EmployeesDirectoryPage() {
 
   // Add Member Modal Form State
   const [addMemberEmail, setAddMemberEmail] = React.useState('');
+  const [addMemberDepartment, setAddMemberDepartment] = React.useState('Engineering');
+  const [addMemberCustomDept, setAddMemberCustomDept] = React.useState('');
   const [addMemberRole, setAddMemberRole] = React.useState<UserRole>('employee');
   const [addMemberLoading, setAddMemberLoading] = React.useState(false);
   const [addMemberError, setAddMemberError] = React.useState<string | null>(null);
@@ -190,6 +193,16 @@ export default function EmployeesDirectoryPage() {
     });
   }, [mockEmployees, searchQuery, selectedDept, selectedRoleFilter]);
 
+  // Available Department options dynamically aggregated from existing organization departments
+  const availableDepartments = React.useMemo(() => {
+    const deptSet = new Set<string>();
+    departments.forEach((d) => {
+      if (d.department && d.department.trim()) deptSet.add(d.department.trim());
+    });
+    ['Engineering', 'Product', 'Design', 'Operations', 'HR', 'Quality Assurance', 'Marketing', 'Sales'].forEach((d) => deptSet.add(d));
+    return Array.from(deptSet);
+  }, [departments]);
+
   const handleAddMemberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLive && !isAdmin) {
@@ -207,6 +220,12 @@ export default function EmployeesDirectoryPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setAddMemberError('Please enter a valid work email address (e.g. colleague@acme.corp).');
+      return;
+    }
+
+    const effectiveDept = (addMemberDepartment === 'Other' ? addMemberCustomDept : addMemberDepartment).trim();
+    if (!effectiveDept) {
+      setAddMemberError('Please specify a department for this member.');
       return;
     }
 
@@ -234,13 +253,20 @@ export default function EmployeesDirectoryPage() {
         id: `demo-member-${Date.now()}`,
         email,
         role: addMemberRole as UserRole,
+        department: effectiveDept,
         createdAt: 'Just now',
       };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('workforce_pending_dept_' + email, effectiveDept);
+        } catch (_) {}
+      }
       setPendingDemoMembers((prev) => [newPending, ...prev]);
 
       setAddMemberLoading(false);
-      setAddMemberSuccess(`Member ${email} added successfully as ${addMemberRole.toUpperCase()} (Pending Setup).`);
+      setAddMemberSuccess(`Member ${email} added successfully to ${effectiveDept} as ${addMemberRole.toUpperCase()} (Pending Setup).`);
       setAddMemberEmail('');
+      setAddMemberCustomDept('');
       setTimeout(() => {
         setIsAddModalOpen(false);
         setAddMemberSuccess(null);
@@ -248,8 +274,8 @@ export default function EmployeesDirectoryPage() {
       return;
     }
 
-    // LIVE MODE: Authenticated Supabase add member RPC
-    const { error: addErr, data } = await addMember(email, addMemberRole);
+    // LIVE MODE: Authenticated Supabase add member RPC with department
+    const { error: addErr, data } = await addMember(email, addMemberRole, effectiveDept);
 
     setAddMemberLoading(false);
     if (addErr) {
@@ -257,10 +283,11 @@ export default function EmployeesDirectoryPage() {
     } else {
       setAddMemberSuccess(
         data?.status === 'member_added'
-          ? `Member ${email} was added directly as ${addMemberRole.toUpperCase()} (Active).`
-          : `Member ${email} added successfully as ${addMemberRole.toUpperCase()} (Pending Setup).`
+          ? `Member ${email} was added directly to ${effectiveDept} as ${addMemberRole.toUpperCase()} (Active).`
+          : `Member ${email} added successfully to ${effectiveDept} as ${addMemberRole.toUpperCase()} (Pending Setup).`
       );
       setAddMemberEmail('');
+      setAddMemberCustomDept('');
       setTimeout(() => {
         setIsAddModalOpen(false);
         setAddMemberSuccess(null);
@@ -407,6 +434,8 @@ export default function EmployeesDirectoryPage() {
                     setAddMemberError(null);
                     setAddMemberSuccess(null);
                     setAddMemberRole('employee');
+                    setAddMemberDepartment('Engineering');
+                    setAddMemberCustomDept('');
                     setIsAddModalOpen(true);
                   }}
                 >
@@ -431,6 +460,8 @@ export default function EmployeesDirectoryPage() {
             setAddMemberError(null);
             setAddMemberSuccess(null);
             setAddMemberRole('employee');
+            setAddMemberDepartment('Engineering');
+            setAddMemberCustomDept('');
             setIsAddModalOpen(true);
           }}>
             <UserPlus className="h-4 w-4 mr-1.5" />
@@ -976,6 +1007,36 @@ export default function EmployeesDirectoryPage() {
             onChange={(e) => setAddMemberEmail(e.target.value)}
             required
           />
+
+          <div className="space-y-1.5">
+            <label htmlFor="add-member-dept-select" className="block text-xs font-semibold text-slate-300">
+              Department *
+            </label>
+            <select
+              id="add-member-dept-select"
+              value={addMemberDepartment}
+              onChange={(e) => setAddMemberDepartment(e.target.value)}
+              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              required
+            >
+              {availableDepartments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+              <option value="Other">Other (Specify Custom Department)</option>
+            </select>
+            {addMemberDepartment === 'Other' && (
+              <Input
+                label="Custom Department Name *"
+                placeholder="e.g. Legal, Data Science"
+                value={addMemberCustomDept}
+                onChange={(e) => setAddMemberCustomDept(e.target.value)}
+                required
+                className="mt-2"
+              />
+            )}
+          </div>
 
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-300">

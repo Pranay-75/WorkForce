@@ -10,6 +10,23 @@ export async function createClient(customResponse?: NextResponse) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
+  // In staging server runtime, strictly forbid production reference and require staging reference
+  const isStaging =
+    process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' ||
+    process.env.APP_ENV === 'staging';
+  if (isStaging) {
+    if (supabaseUrl?.includes('wxkjygctdonpeypgrcnf')) {
+      throw new Error(
+        'CRITICAL SAFETY VIOLATION: Staging server runtime attempted to connect to PRODUCTION Supabase project (wxkjygctdonpeypgrcnf)!'
+      );
+    }
+    if (supabaseUrl && !supabaseUrl.includes('biejxkrhypkkcvpbzjhh')) {
+      throw new Error(
+        `STAGING MISCONFIGURATION: Staging server runtime must target project 'biejxkrhypkkcvpbzjhh'. Current URL: ${supabaseUrl}`
+      );
+    }
+  }
+
   // In production server runtime, missing configuration must fail clearly
   // instead of silently attempting to connect to localhost.
   if (process.env.NODE_ENV === 'production') {

@@ -154,28 +154,19 @@ export default function ProjectsPage() {
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
   const [selectedManagerId, setSelectedManagerId] = React.useState<string>('');
 
-  // Eligible Managers filter (role === 'manager' | 'admin' | 'organizer')
+  // Eligible Managers filter: strictly 'manager' and 'admin' roles only (prohibiting organizer, hr, employee)
   const eligibleManagers = React.useMemo(() => {
     if (isLive) {
       return orgMembers.filter(
-        (m) => m.role === 'manager' || m.role === 'admin' || m.role === 'organizer'
+        (m) => m.role === 'manager' || m.role === 'admin'
       );
     }
     return mockEmployees.filter(
-      (e) => e.role === 'manager' || e.role === 'admin' || e.role === 'organizer'
+      (e) => e.role === 'manager' || e.role === 'admin'
     );
   }, [isLive, orgMembers, mockEmployees]);
 
-  // Initialize selected member to current user if available
-  React.useEffect(() => {
-    if (isLive && user?.id) {
-      setSelectedMemberIds([user.id]);
-    } else if (mockUser?.id) {
-      setSelectedMemberIds([mockUser.id]);
-    }
-  }, [isLive, user?.id, mockUser?.id]);
-
-  const filteredProjects = projects.filter((p) =>
+    const filteredProjects = projects.filter((p) =>
     selectedStatus === 'all' ? true : p.status === selectedStatus
   );
 
@@ -238,9 +229,9 @@ export default function ProjectsPage() {
         status,
         startDate,
         targetEndDate,
-        managerId: chosenManagerId || mockUser.id,
-        managerName: chosenManager ? chosenManager.fullName : (chosenManagerId ? 'Assigned Manager' : mockUser.name),
-        memberIds: selectedMemberIds.length > 0 ? selectedMemberIds : [mockUser.id],
+        managerId: chosenManagerId || '',
+        managerName: chosenManager ? chosenManager.fullName : (chosenManagerId ? 'Assigned Manager' : 'Unassigned'),
+        memberIds: selectedMemberIds,
         totalHours: parseFloat(totalHours) || 160,
       });
       setSubmitting(false);

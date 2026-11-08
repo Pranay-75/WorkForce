@@ -9,7 +9,12 @@ import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
-import { isTaskActive, isTaskOverdue, calculateEmployeeWorkload } from '@/lib/workloadEngine';
+import {
+  isTaskActive,
+  isTaskOverdue,
+  calculateEmployeeWorkload,
+  computeDeterministicMatchScores,
+} from '@/lib/workloadEngine';
 import { getAIWorkloadInsights, WorkloadInsightsResult } from '@/lib/aiService';
 import { AuditEvent } from '@/lib/types';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -1149,6 +1154,7 @@ export default function DashboardPage() {
     error: tasksError,
     refetch: refetchTasks,
     updateTaskStatus: dbUpdateTaskStatus,
+    assignTask: dbAssignTask,
   } = useTasks();
 
   const {
@@ -1171,13 +1177,95 @@ export default function DashboardPage() {
     isDemoMode,
   } = useMockStore();
 
+  const [approvingRecId, setApprovingRecId] = React.useState<string | null>(null);
+  const [approveFeedback, setApproveFeedback] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const liveRecommendations = React.useMemo(() => {
+    if (!isLive || !members.length || !dbTasks.length) return [];
+
+    const unassignedTasks = dbTasks.filter((t) => !t.assignedTo && isTaskActive(t));
+    if (unassignedTasks.length === 0) return [];
+
+    const candidatesList = members.map((m) => ({
+      id: m.userId,
+      fullName: m.fullName,
+      jobTitle: m.jobTitle || 'Team Member',
+      department: m.department || 'Engineering',
+      weeklyCapacityHours: m.weeklyCapacityHours || 40,
+      skills: [],
+    }));
+
+    const recsList: typeof mockRecommendations = [];
+
+    for (const task of unassignedTasks.slice(0, 5)) {
+      const proj = dbProjects.find((p) => p.id === task.projectId);
+      const projMemberIds = proj?.memberIds || [];
+      const computed = computeDeterministicMatchScores(
+        task,
+        candidatesList as any,
+        dbTasks,
+        projMemberIds
+      );
+      if (computed.length > 0) {
+        const topCandidate = computed.sort((a, b) => b.matchScore - a.matchScore)[0];
+        recsList.push({
+          ...topCandidate,
+          id: `live-rec-${task.id}-${topCandidate.candidateId}`,
+          candidateAvatar: topCandidate.candidateName
+            ? topCandidate.candidateName
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()
+            : 'U',
+          status: 'pending',
+        });
+      }
+    }
+
+    return recsList;
+  }, [isLive, members, dbTasks, dbProjects]);
+
   const projects = isLive ? dbProjects : mockProjects;
   const tasks = isLive ? dbTasks : mockTasks;
   const auditEvents = isLive ? liveAuditLogs : mockAuditEvents;
-  const recommendations = isLive ? [] : mockRecommendations;
+  const recommendations = isLive ? liveRecommendations : mockRecommendations;
   const activeRole = isLive ? authRole : mockRole;
   const effectiveRole = activeRole;
   const updateTaskStatus = isLive ? dbUpdateTaskStatus : mockUpdateTaskStatus;
+
+  const handleApproveRecommendation = async (rec: (typeof recommendations)[0]) => {
+    setApprovingRecId(rec.id);
+    setApproveFeedback(null);
+    try {
+      if (isLive) {
+        const res = await dbAssignTask(rec.taskId, rec.candidateId);
+        if (res.error) {
+          setApproveFeedback({ text: res.error, type: 'error' });
+        } else {
+          setApproveFeedback({
+            text: `Assigned "${rec.taskTitle}" to ${rec.candidateName} successfully.`,
+            type: 'success',
+          });
+          await refetchTasks();
+        }
+      } else {
+        approveRecommendation(rec.id);
+        setApproveFeedback({
+          text: `Assigned to ${rec.candidateName} (Demo).`,
+          type: 'success',
+        });
+      }
+    } catch (err: any) {
+      setApproveFeedback({
+        text: err?.message || 'Failed to approve recommendation.',
+        type: 'error',
+      });
+    } finally {
+      setApprovingRecId(null);
+    }
+  };
 
   React.useEffect(() => {
     if (!authLoading && !isAuthenticated && !isDemoMode) {
@@ -2134,23 +2222,32 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="flex-1 space-y-3.5">
-            {isLive ? (
-              <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
-                <Sparkles className="h-8 w-8 text-violet-400 mb-2" />
-                <p className="text-xs font-medium text-slate-200">
-                  Live AI Matching Hub
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
-                  Generate and inspect explainable, human-in-the-loop candidate rankings for your unassigned organization tasks.
-                </p>
-                <Link href="/matching" className="mt-4">
-                  <Button variant="primary" size="sm" className="text-xs">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    Open Matching Hub
-                  </Button>
-                </Link>
+            {approveFeedback && (
+              <div
+                className={cn(
+                  'rounded-lg p-2.5 text-xs font-medium border flex items-center justify-between',
+                  approveFeedback.type === 'success'
+                    ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+                )}
+              >
+                <span>{approveFeedback.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setApproveFeedback(null)}
+                  className="text-slate-400 hover:text-white text-[10px] ml-2"
+                >
+                  ✕
+                </button>
               </div>
-            ) : (
+            )}
+
+            {isLive && isTasksLoading ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                <RefreshCw className="h-6 w-6 text-violet-400 animate-spin mb-2" />
+                <p className="text-xs font-medium text-slate-300">Evaluating workload matches...</p>
+              </div>
+            ) : pendingRecommendations.length > 0 ? (
               <>
                 {pendingRecommendations.slice(0, 2).map((rec) => (
                   <div
@@ -2196,10 +2293,20 @@ export default function DashboardPage() {
                         variant="primary"
                         size="sm"
                         className="flex-1 text-xs"
-                        onClick={() => approveRecommendation(rec.id)}
+                        disabled={approvingRecId === rec.id}
+                        onClick={() => handleApproveRecommendation(rec)}
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        Approve
+                        {approvingRecId === rec.id ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            Approving...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                            Approve
+                          </>
+                        )}
                       </Button>
                       <Link href="/matching">
                         <Button variant="outline" size="sm" className="text-xs">
@@ -2209,19 +2316,27 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-
-                {pendingRecommendations.length === 0 && (
-                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
-                    <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
-                    <p className="text-xs font-medium text-slate-200">
-                      All recommendations reviewed!
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Create new unassigned tasks to generate candidate rankings.
-                    </p>
-                  </div>
-                )}
               </>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                <p className="text-xs font-medium text-slate-200">
+                  {isLive ? 'All active tasks assigned!' : 'All recommendations reviewed!'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  {isLive
+                    ? 'No unassigned tasks pending candidate recommendations. New tasks will automatically appear here with AI match previews.'
+                    : 'Create new unassigned tasks to generate candidate rankings.'}
+                </p>
+                {isLive && (
+                  <Link href="/matching" className="mt-3">
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Open Matching Hub
+                    </Button>
+                  </Link>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

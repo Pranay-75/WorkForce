@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:staging": "node scripts/run_with_env.js .env.staging next dev",
     "build": "next build",
+    "build:staging": "node scripts/run_with_env.js .env.staging next build",
     "vercel-build": "next build",
     "start": "next start",
+    "start:staging": "node scripts/run_with_env.js .env.staging next start",
     "lint": "next lint"
   },
   "dependencies": {

@@ -29,6 +29,8 @@ env/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.staging
+.env.staging.local
 .env*
 !.env.example
 !.env.*.example
@@ -47,5 +49,11 @@ backups/
 # Supabase CLI temporary files
 .temp/
 .branches/
+
+# Deployment workspaces and scratch
+.staging_deploy/
+.production_deploy/
+scratch/
+*_REVIEW_COPY.txt
 
 .vercel
