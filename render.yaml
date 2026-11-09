@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: workforce-api
+    runtime: python
+    rootDir: backend
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOW_PRODUCTION_SUPABASE
+        value: "true"
+      - key: SUPABASE_URL
+        value: https://wxkjygctdonpeypgrcnf.supabase.co
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "https://workforce-platform.vercel.app,http://localhost:3000"
+

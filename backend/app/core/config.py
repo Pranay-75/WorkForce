@@ -60,6 +60,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
+        "https://workforce-platform.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -69,6 +70,7 @@ class Settings(BaseSettings):
             "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://localhost:8000",
+            "https://workforce-platform.vercel.app",
         ]
         if v is None:
             return default_origins
