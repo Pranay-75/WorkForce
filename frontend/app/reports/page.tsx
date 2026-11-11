@@ -238,17 +238,17 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Reports &amp; Operational Analytics
             </h2>
-            <Badge variant="violet" size="sm">
+            <Badge variant="burgundy" size="sm">
               {isLive ? 'PostgreSQL Live Analytics' : 'Demo Analytics Suite'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Executive workforce capacity summaries, project velocity, and immutable compliance audit logs
           </p>
         </div>

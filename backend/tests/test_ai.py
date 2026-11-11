@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 from app.models.schemas import AuthenticatedUser, UserRoleEnum, UserProfileSchema
 from app.api.deps import get_current_user
 
@@ -151,7 +152,10 @@ def test_explain_matching_manager_mocked_gemini(mock_get_client):
         assert "75%" in data["capacity_assessment"]
         assert isinstance(data["trade_offs"], list)
         assert data["is_ai_generated"] is True
-        assert data["model_used"] == "gemini-3.8-flash"
+        assert data["model_used"] == settings.GEMINI_MODEL
+        mock_client.models.generate_content.assert_called_once()
+        _, call_kwargs = mock_client.models.generate_content.call_args
+        assert call_kwargs.get("model") == settings.GEMINI_MODEL
     finally:
         app.dependency_overrides.clear()
 

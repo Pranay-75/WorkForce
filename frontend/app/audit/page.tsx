@@ -75,18 +75,18 @@ export default function AuditPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Compliance &amp; System Audit Trail
             </h2>
-            <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
+            <Badge variant={isLive ? 'cyan' : 'burgundy'} size="sm">
               <ShieldCheck className="h-3 w-3 mr-1" />
               {isLive ? 'PostgreSQL Immutable Log' : 'Demo Memory Log'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Complete chronological record of all administrative actions, task assignments, role changes, and compliance events
           </p>
         </div>

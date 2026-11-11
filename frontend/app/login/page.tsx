@@ -9,6 +9,7 @@ import { useMockStore, SYNTHETIC_DEMO_METRICS } from '@/lib/mockStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { cn } from '@/lib/utils';
 import { UserRole } from '@/lib/types';
 import {
@@ -26,7 +27,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { validateEmail, validateLoginPassword } from '@/lib/validation';
+import { validateEmail, validateLoginPassword, sanitizeNextDestination } from '@/lib/validation';
 
 const LOGIN_ROLES: {
   id: UserRole;
@@ -216,17 +217,22 @@ function LoginFormContent() {
     };
   }, [urlError, urlReason]);
 
+  // Preserve redirect destination after login (hardened against backslash & protocol-relative redirects)
+  const nextDestination = React.useMemo(() => {
+    return sanitizeNextDestination(searchParams.get('next'), '/dashboard');
+  }, [searchParams]);
+
   // If already authenticated and session load finished, redirect to dashboard or onboarding
   // Guard: do NOT auto-redirect if an error parameter is present in the URL (e.g. failed/expired confirmation callback)
   React.useEffect(() => {
     if (!isAuthLoading && isAuthenticated && !urlError) {
       if (organization) {
-        router.push('/dashboard');
+        router.push(nextDestination);
       } else {
         router.push('/onboarding');
       }
     }
-  }, [isAuthenticated, organization, isAuthLoading, router, urlError]);
+  }, [isAuthenticated, organization, isAuthLoading, router, urlError, nextDestination]);
 
   const handleBlur = (field: 'email' | 'password') => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -403,28 +409,29 @@ function LoginFormContent() {
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-wf-canvas text-wf-text-primary flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20"><ThemeToggle variant="compact" /></div>
       {/* Background glow highlights */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-80 h-80 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-lg text-center space-y-3 z-10">
-        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 shadow-glow mb-2">
+        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr bg-wf-brand-burgundy text-white shadow-sm mb-2">
           <Sparkles className="h-7 w-7 text-white" />
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+        <h1 className="text-3xl font-extrabold text-wf-text-primary tracking-tight">
           WorkForce
         </h1>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-wf-text-secondary">
           AI-Powered Capacity Management & Task Balancing Platform
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
-        <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-4">
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-elevated p-6 sm:p-8 backdrop-blur-xl space-y-4 text-wf-text-primary">
           {/* Mode Switcher: Sign In vs First-Time Member Setup */}
-          <div className="flex rounded-xl bg-navy-950 p-1 border border-slate-800 mb-2">
+          <div className="flex rounded-xl bg-wf-surface-subtle p-1 border border-wf-border-default mb-2">
             <button
               type="button"
               onClick={() => {
@@ -435,7 +442,7 @@ function LoginFormContent() {
                 'flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-center',
                 activeTab === 'signin'
                   ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-wf-text-secondary hover:text-slate-200'
               )}
             >
               Sign In
@@ -450,7 +457,7 @@ function LoginFormContent() {
                 'flex-1 py-2 text-xs font-semibold rounded-lg transition-all text-center',
                 activeTab === 'setup'
                   ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-wf-text-secondary hover:text-slate-200'
               )}
             >
               First-Time Member Setup
@@ -463,7 +470,7 @@ function LoginFormContent() {
                 <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
                 <span>{callbackNotice.title}</span>
               </div>
-              <p className="text-slate-300 leading-relaxed text-[11px]">{callbackNotice.message}</p>
+              <p className="text-wf-text-secondary leading-relaxed text-[11px]">{callbackNotice.message}</p>
               {callbackNotice.tip && (
                 <div className="flex items-center gap-1.5 text-[10px] text-amber-300/90 font-medium pt-0.5">
                   <HelpCircle className="h-3 w-3 shrink-0" />
@@ -482,7 +489,7 @@ function LoginFormContent() {
                   <span className="font-semibold">{errorMessage}</span>
                 </div>
                 {errorMessage.toLowerCase().includes('not confirmed') && (
-                  <p className="text-[11px] text-slate-300 pl-6 leading-relaxed">
+                  <p className="text-[11px] text-wf-text-secondary pl-6 leading-relaxed">
                     Your email address has not been confirmed yet. Please click the verification link in your email
                     {isDev ? (
                       <>
@@ -506,14 +513,14 @@ function LoginFormContent() {
 
             
             <div className="space-y-1.5 pt-1">
-              <label htmlFor="login-email-input" className="block text-xs font-semibold text-slate-300">
+              <label htmlFor="login-email-input" className="block text-xs font-semibold text-wf-text-secondary">
                 Email Address
               </label>
               <div className="relative">
                 <Mail
                   className={cn(
                     'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                    touched.email && fieldErrors.email ? 'text-rose-400' : 'text-slate-500'
+                    touched.email && fieldErrors.email ? 'text-rose-400' : 'text-wf-text-tertiary'
                   )}
                 />
                 <input
@@ -526,10 +533,10 @@ function LoginFormContent() {
                   onBlur={() => handleBlur('email')}
                   aria-invalid={!!(touched.email && fieldErrors.email)}
                   className={cn(
-                    'w-full rounded-xl border bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                     touched.email && fieldErrors.email
                       ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                      : 'border-slate-700/80 focus:border-violet-500'
+                      : 'border-wf-border-default focus:border-violet-500'
                   )}
                 />
               </div>
@@ -543,7 +550,7 @@ function LoginFormContent() {
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label htmlFor="login-password-input" className="block text-xs font-semibold text-slate-300">
+                <label htmlFor="login-password-input" className="block text-xs font-semibold text-wf-text-secondary">
                   Password
                 </label>
                 <Link
@@ -557,7 +564,7 @@ function LoginFormContent() {
                 <Lock
                   className={cn(
                     'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                    touched.password && fieldErrors.password ? 'text-rose-400' : 'text-slate-500'
+                    touched.password && fieldErrors.password ? 'text-rose-400' : 'text-wf-text-tertiary'
                   )}
                 />
                 <input
@@ -570,17 +577,17 @@ function LoginFormContent() {
                   onBlur={() => handleBlur('password')}
                   aria-invalid={!!(touched.password && fieldErrors.password)}
                   className={cn(
-                    'w-full rounded-xl border bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                     touched.password && fieldErrors.password
                       ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                      : 'border-slate-700/80 focus:border-violet-500'
+                      : 'border-wf-border-default focus:border-violet-500'
                   )}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                  className="absolute right-3 top-2.5 text-wf-text-secondary hover:text-slate-200 transition-colors focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -603,7 +610,7 @@ function LoginFormContent() {
               {isLoading ? 'Signing In...' : 'Sign In to Workspace'}
             </Button>
 
-            <div className="pt-2 text-center text-xs text-slate-400">
+            <div className="pt-2 text-center text-xs text-wf-text-secondary">
               Added by an Organizer?{' '}
               <button
                 type="button"
@@ -611,7 +618,7 @@ function LoginFormContent() {
                   setActiveTab('setup');
                   if (email) setSetupEmail(email);
                 }}
-                className="font-semibold text-violet-400 hover:text-violet-300 underline"
+                className="font-semibold text-wf-brand-burgundy dark:text-wf-cream hover:underline underline"
               >
                 Set up your member account
               </button>
@@ -621,10 +628,10 @@ function LoginFormContent() {
           /* First-Time Member Setup Workflow */
           <div className="space-y-4">
             <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-3.5 space-y-1">
-              <span className="text-xs font-bold text-white block">
+              <span className="text-xs font-bold text-wf-text-primary block">
                 First-Time Member Setup
               </span>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
+              <p className="text-[11px] text-wf-text-secondary leading-relaxed">
                 If your organization Organizer has added your email address, verify your membership below and set your account password.
               </p>
             </div>
@@ -646,21 +653,21 @@ function LoginFormContent() {
             {setupStep === 1 && (
               <form onSubmit={handleVerifyMembership} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className="block text-xs font-semibold text-wf-text-secondary">
                     Your Work Email Address *
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                     <input
                       type="email"
                       required
                       placeholder="name@company.com"
                       value={setupEmail}
                       onChange={(e) => setSetupEmail(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-wf-text-secondary">
                     Enter the exact email address your Organizer used when adding you to WorkForce.
                   </p>
                 </div>
@@ -684,64 +691,64 @@ function LoginFormContent() {
                     <CheckCircle2 className="h-4 w-4" />
                     <span>Member Account Setup</span>
                   </div>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-wf-text-secondary">
                     Set up your account password for <strong>{setupEmail}</strong>. If your email was added by a workspace Organizer, your organization access will be activated upon email verification.
                   </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className="block text-xs font-semibold text-wf-text-secondary">
                     Full Name
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                     <input
                       type="text"
                       placeholder="e.g. Alex Chen"
                       value={setupFullName}
                       onChange={(e) => setSetupFullName(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className="block text-xs font-semibold text-wf-text-secondary">
                     Department
                   </label>
                   <div className="relative">
-                    <Briefcase className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <Briefcase className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                     <input
                       type="text"
                       placeholder="e.g. Engineering, Marketing, Product"
                       value={setupDepartment}
                       onChange={(e) => setSetupDepartment(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-wf-text-secondary">
                     Assigned department for your workspace profile. Confirm or adjust if needed.
                   </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className="block text-xs font-semibold text-wf-text-secondary">
                     Create Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                     <input
                       type={showSetupPassword ? 'text' : 'password'}
                       required
                       placeholder="At least 8 characters"
                       value={setupPassword}
                       onChange={(e) => setSetupPassword(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword(!showSetupPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                      className="absolute right-3 top-2.5 text-wf-text-secondary hover:text-slate-200"
                     >
                       {showSetupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -749,18 +756,18 @@ function LoginFormContent() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className="block text-xs font-semibold text-wf-text-secondary">
                     Confirm Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                     <input
                       type="password"
                       required
                       placeholder="Re-enter password"
                       value={setupConfirmPassword}
                       onChange={(e) => setSetupConfirmPassword(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -794,7 +801,7 @@ function LoginFormContent() {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">Verification Link Sent</h4>
-                  <p className="text-xs text-slate-300 mt-1">
+                  <p className="text-xs text-wf-text-secondary mt-1">
                     A confirmation link has been sent to <strong>{setupEmail}</strong>. Please check your inbox and click the link to confirm your email address.
                   </p>
                 </div>
@@ -825,10 +832,10 @@ function LoginFormContent() {
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-white block">
+                  <span className="text-xs font-bold text-wf-text-primary block">
                     Explore Interactive Demo
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-wf-text-secondary">
                     {SYNTHETIC_DEMO_METRICS.organizationName} • {SYNTHETIC_DEMO_METRICS.totalEmployees} team members, {SYNTHETIC_DEMO_METRICS.totalProjects} projects ({SYNTHETIC_DEMO_METRICS.activeProjects} active), {SYNTHETIC_DEMO_METRICS.totalTasks} tasks
                   </span>
                 </div>
@@ -838,7 +845,7 @@ function LoginFormContent() {
               </Badge>
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-relaxed">
+            <p className="text-[11px] text-wf-text-secondary leading-relaxed">
               Test-drive WorkForce with an isolated synthetic company dataset. Select any role below to experience capacity monitoring, simulated AI matching, and role-based permissions without registering.
             </p>
 
@@ -850,7 +857,7 @@ function LoginFormContent() {
                     key={roleOpt.id}
                     type="button"
                     onClick={() => handleExploreDemo(roleOpt.id)}
-                    className="flex flex-col text-left p-3 rounded-xl border border-slate-800 bg-navy-950/70 hover:bg-navy-900/90 hover:border-violet-500/50 transition-all group focus:outline-none relative"
+                    className="flex flex-col text-left p-3 rounded-xl border border-wf-border-default bg-wf-surface-subtle hover:bg-wf-surface-card hover:border-wf-border-strong text-wf-text-primary transition-all group focus:outline-none relative"
                   >
                     <div className="flex items-center justify-between w-full mb-1.5">
                       <div className="flex items-center gap-2 min-w-0">
@@ -863,22 +870,22 @@ function LoginFormContent() {
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-bold text-white block">
+                          <span className="text-xs font-bold text-wf-text-primary block">
                             {roleOpt.title}
                           </span>
-                          <span className="text-[9px] font-mono text-slate-400 block truncate">
+                          <span className="text-[9px] font-mono text-wf-text-secondary block truncate">
                             {roleOpt.personName} • {roleOpt.badge}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[11px] text-violet-400 font-semibold group-hover:text-violet-300 transition-colors shrink-0">
+                      <div className="flex items-center gap-1 text-[11px] text-wf-brand-burgundy dark:text-wf-cream font-semibold transition-colors shrink-0">
                         <span>Demo</span>
                         <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                    <p className="text-[10px] text-wf-text-secondary line-clamp-2 leading-relaxed">
                       {roleOpt.description}
                     </p>
                   </button>
@@ -891,7 +898,7 @@ function LoginFormContent() {
           {isDev && (
             <div className="mt-4 pt-4 border-t border-slate-800/60 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-slate-400">
+                <span className="text-[10px] uppercase font-bold text-wf-text-secondary">
                   Local Dev Credentials Quick-Fill
                 </span>
                 <Badge variant="cyan" size="sm">
@@ -915,18 +922,18 @@ function LoginFormContent() {
                     <span className={cn('text-[9px] font-bold block truncate', opt.accentColor)}>
                       {opt.title.toUpperCase()}
                     </span>
-                    <span className="text-[8px] text-slate-400 block truncate">{opt.personName}</span>
+                    <span className="text-[8px] text-wf-text-secondary block truncate">{opt.personName}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="mt-6 text-center text-xs text-slate-400">
+          <div className="mt-6 text-center text-xs text-wf-text-secondary">
             Don&apos;t have an account yet?{' '}
             <Link
               href="/register"
-              className="font-semibold text-violet-400 hover:text-violet-300"
+              className="font-semibold text-wf-brand-burgundy dark:text-wf-cream hover:underline"
             >
               Create an organization
             </Link>

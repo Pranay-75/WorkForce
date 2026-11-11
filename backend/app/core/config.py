@@ -54,6 +54,19 @@ class Settings(BaseSettings):
 
     # AI Engine Configuration
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
+    # Rate Limiting Configuration
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_AI_PER_MINUTE: int = 15
+    RATE_LIMIT_AUTH_PER_MINUTE: int = 20
+    REDIS_URL: Optional[str] = None
+    MULTI_INSTANCE_MODE: bool = False
+    REQUIRE_DISTRIBUTED_RATE_LIMIT: bool = False
+    REDIS_OUTAGE_POLICY: str = "fail_closed"  # Options: "fail_closed" (HTTP 503 on Redis failure) or "fail_open"
+
+    # Trusted Reverse Proxy Controls (SEC-02)
+    TRUSTED_PROXIES: Union[List[str], str] = []
 
     # CORS Origins (supports comma-separated string, JSON array, or list of origins)
     CORS_ORIGINS: Union[List[str], str] = [
@@ -62,6 +75,29 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "https://workforce-platform.vercel.app",
     ]
+
+    @field_validator("TRUSTED_PROXIES", mode="before")
+    @classmethod
+    def parse_trusted_proxies(cls, v: Any) -> List[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if not v_trimmed:
+                return []
+            if v_trimmed.startswith("[") and v_trimmed.endswith("]"):
+                import json
+                try:
+                    parsed = json.loads(v_trimmed)
+                    if isinstance(parsed, list):
+                        v = parsed
+                except Exception:
+                    pass
+            if isinstance(v, str):
+                v = [proxy.strip() for proxy in v.split(",") if proxy.strip()]
+        if isinstance(v, (list, tuple, set)):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return []
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -217,6 +253,13 @@ class Settings(BaseSettings):
                 f"To run local development, use local Docker (http://127.0.0.1:54321); "
                 f"to run staging, set ENV_FILE=.env.staging; "
                 f"or to intentionally connect to production in production deployment runtime, set ENVIRONMENT=production and ALLOW_PRODUCTION_SUPABASE=true."
+            )
+
+        # 4. Multi-Instance Rate Limiting Guard (SEC-01)
+        if (self.MULTI_INSTANCE_MODE or self.REQUIRE_DISTRIBUTED_RATE_LIMIT) and not self.REDIS_URL:
+            raise ValueError(
+                "CONFIGURATION ERROR: Multi-instance mode is enabled (MULTI_INSTANCE_MODE or REQUIRE_DISTRIBUTED_RATE_LIMIT is true), "
+                "but REDIS_URL is not configured. Distributed rate limiting via Redis is mandatory in multi-instance deployments."
             )
 
         return self

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { generateSlug, isValidSlug } from '@/lib/slug';
 import { cn } from '@/lib/utils';
 import {
@@ -239,36 +240,37 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-wf-canvas text-wf-text-primary flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20"><ThemeToggle variant="compact" /></div>
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-80 h-80 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-lg text-center space-y-3 z-10">
-        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 shadow-glow mb-2">
+        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr bg-wf-brand-burgundy text-white shadow-sm mb-2">
           <Sparkles className="h-7 w-7 text-white" />
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+        <h1 className="text-3xl font-extrabold text-wf-text-primary tracking-tight">
           Create Organization Workspace
         </h1>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-wf-text-secondary">
           Set up your organization and bootstrap your team workspace
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg z-10">
-        <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl">
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-elevated p-6 sm:p-8 backdrop-blur-xl text-wf-text-primary">
           {pendingConfirmationEmail ? (
             <div className="text-center space-y-4 py-2">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <h2 className="text-lg font-bold text-white">Check your email</h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-wf-text-secondary leading-relaxed">
                 We sent a confirmation link to{' '}
                 <span className="font-semibold text-cyan-300">{pendingConfirmationEmail}</span>.
               </p>
-              <div className="rounded-xl border border-slate-700/60 bg-navy-950/60 p-3.5 text-xs text-slate-400 text-left space-y-2">
-                <div className="font-semibold text-slate-300">Next Steps:</div>
+              <div className="rounded-xl border border-slate-700/60 bg-navy-950/60 p-3.5 text-xs text-wf-text-secondary text-left space-y-2">
+                <div className="font-semibold text-wf-text-secondary">Next Steps:</div>
                 <ul className="list-disc pl-4 space-y-1.5 text-[11px]">
                   <li>Click the link in your email to verify your email address.</li>
                   {isDev && (
@@ -308,14 +310,14 @@ export default function RegisterPage() {
 
               {/* Full Name */}
               <div className="space-y-1.5">
-                <label htmlFor="register-fullname-input" className="block text-xs font-semibold text-slate-300">
+                <label htmlFor="register-fullname-input" className="block text-xs font-semibold text-wf-text-secondary">
                   Your Full Name
                 </label>
                 <div className="relative">
                   <User
                     className={cn(
                       'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                      touched.fullName && fieldErrors.fullName ? 'text-rose-400' : 'text-slate-500'
+                      touched.fullName && fieldErrors.fullName ? 'text-rose-400' : 'text-wf-text-tertiary'
                     )}
                   />
                   <input
@@ -328,10 +330,10 @@ export default function RegisterPage() {
                     onBlur={() => handleBlur('fullName')}
                     aria-invalid={!!(touched.fullName && fieldErrors.fullName)}
                     className={cn(
-                      'w-full rounded-xl border bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                      'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                       touched.fullName && fieldErrors.fullName
                         ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                        : 'border-slate-700/80 focus:border-violet-500'
+                        : 'border-wf-border-default focus:border-violet-500'
                     )}
                   />
                 </div>
@@ -346,7 +348,7 @@ export default function RegisterPage() {
               {/* Organization Name */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="register-orgname-input" className="block text-xs font-semibold text-slate-300">
+                  <label htmlFor="register-orgname-input" className="block text-xs font-semibold text-wf-text-secondary">
                     Organization Name
                   </label>
                   <button
@@ -366,7 +368,7 @@ export default function RegisterPage() {
                   <Building
                     className={cn(
                       'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                      touched.orgName && fieldErrors.orgName ? 'text-rose-400' : 'text-slate-500'
+                      touched.orgName && fieldErrors.orgName ? 'text-rose-400' : 'text-wf-text-tertiary'
                     )}
                   />
                   <input
@@ -379,10 +381,10 @@ export default function RegisterPage() {
                     onBlur={() => handleBlur('orgName')}
                     aria-invalid={!!(touched.orgName && fieldErrors.orgName)}
                     className={cn(
-                      'w-full rounded-xl border bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                      'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                       touched.orgName && fieldErrors.orgName
                         ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                        : 'border-slate-700/80 focus:border-violet-500'
+                        : 'border-wf-border-default focus:border-violet-500'
                     )}
                   />
                 </div>
@@ -396,14 +398,14 @@ export default function RegisterPage() {
                 {/* Custom Slug Input */}
                 {isCustomizingSlug && (
                   <div className="space-y-1 pt-1">
-                    <label htmlFor="register-slug-input" className="block text-[11px] font-medium text-slate-400">
+                    <label htmlFor="register-slug-input" className="block text-[11px] font-medium text-wf-text-secondary">
                       Custom Workspace URL Slug
                     </label>
                     <div className="relative">
                       <Globe
                         className={cn(
                           'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                          touched.slug && fieldErrors.slug ? 'text-rose-400' : 'text-slate-500'
+                          touched.slug && fieldErrors.slug ? 'text-rose-400' : 'text-wf-text-tertiary'
                         )}
                       />
                       <input
@@ -433,7 +435,7 @@ export default function RegisterPage() {
 
                 {/* Live Slug URL Preview */}
                 {effectiveSlug && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 pl-1 pt-0.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-wf-text-secondary pl-1 pt-0.5">
                     {isValidSlug(effectiveSlug) ? (
                       <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
                     ) : (
@@ -451,14 +453,14 @@ export default function RegisterPage() {
 
               {/* Work Email Address */}
               <div className="space-y-1.5">
-                <label htmlFor="register-email-input" className="block text-xs font-semibold text-slate-300">
+                <label htmlFor="register-email-input" className="block text-xs font-semibold text-wf-text-secondary">
                   Work Email Address
                 </label>
                 <div className="relative">
                   <Mail
                     className={cn(
                       'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                      touched.email && fieldErrors.email ? 'text-rose-400' : 'text-slate-500'
+                      touched.email && fieldErrors.email ? 'text-rose-400' : 'text-wf-text-tertiary'
                     )}
                   />
                   <input
@@ -471,10 +473,10 @@ export default function RegisterPage() {
                     onBlur={() => handleBlur('email')}
                     aria-invalid={!!(touched.email && fieldErrors.email)}
                     className={cn(
-                      'w-full rounded-xl border bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                      'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                       touched.email && fieldErrors.email
                         ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                        : 'border-slate-700/80 focus:border-violet-500'
+                        : 'border-wf-border-default focus:border-violet-500'
                     )}
                   />
                 </div>
@@ -501,7 +503,7 @@ export default function RegisterPage() {
                     </span>
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <p className="text-[11px] text-wf-text-secondary leading-relaxed">
                   As the organization creator, you will receive workspace administrative permissions. Once registered, you can securely invite Managers, HR, and Employees from the Talent Directory.
                 </p>
               </div>
@@ -510,14 +512,14 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Password Field */}
                 <div className="space-y-1.5">
-                  <label htmlFor="register-password-input" className="block text-xs font-semibold text-slate-300">
+                  <label htmlFor="register-password-input" className="block text-xs font-semibold text-wf-text-secondary">
                     Password
                   </label>
                   <div className="relative">
                     <Lock
                       className={cn(
                         'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                        touched.password && fieldErrors.password ? 'text-rose-400' : 'text-slate-500'
+                        touched.password && fieldErrors.password ? 'text-rose-400' : 'text-wf-text-tertiary'
                       )}
                     />
                     <input
@@ -530,17 +532,17 @@ export default function RegisterPage() {
                       onBlur={() => handleBlur('password')}
                       aria-invalid={!!(touched.password && fieldErrors.password)}
                       className={cn(
-                        'w-full rounded-xl border bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                        'w-full rounded-xl border bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                         touched.password && fieldErrors.password
                           ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
-                          : 'border-slate-700/80 focus:border-violet-500'
+                          : 'border-wf-border-default focus:border-violet-500'
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      className="absolute right-3 top-2.5 text-wf-text-secondary hover:text-slate-200 transition-colors focus:outline-none"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -555,14 +557,14 @@ export default function RegisterPage() {
 
                 {/* Confirm Password Field */}
                 <div className="space-y-1.5">
-                  <label htmlFor="register-confirm-password-input" className="block text-xs font-semibold text-slate-300">
+                  <label htmlFor="register-confirm-password-input" className="block text-xs font-semibold text-wf-text-secondary">
                     Confirm Password
                   </label>
                   <div className="relative">
                     <Lock
                       className={cn(
                         'absolute left-3 top-2.5 h-4 w-4 transition-colors',
-                        touched.confirmPassword && fieldErrors.confirmPassword ? 'text-rose-400' : 'text-slate-500'
+                        touched.confirmPassword && fieldErrors.confirmPassword ? 'text-rose-400' : 'text-wf-text-tertiary'
                       )}
                     />
                     <input
@@ -575,19 +577,19 @@ export default function RegisterPage() {
                       onBlur={() => handleBlur('confirmPassword')}
                       aria-invalid={!!(touched.confirmPassword && fieldErrors.confirmPassword)}
                       className={cn(
-                        'w-full rounded-xl border bg-navy-950/80 pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:outline-none transition-all',
+                        'w-full rounded-xl border bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                         touched.confirmPassword && fieldErrors.confirmPassword
                           ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
                           : confirmPassword && password === confirmPassword
                           ? 'border-emerald-500/60 focus:border-emerald-500'
-                          : 'border-slate-700/80 focus:border-violet-500'
+                          : 'border-wf-border-default focus:border-violet-500'
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      className="absolute right-3 top-2.5 text-wf-text-secondary hover:text-slate-200 transition-colors focus:outline-none"
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -611,7 +613,7 @@ export default function RegisterPage() {
               {password && (
                 <div className="rounded-xl border border-slate-800 bg-navy-950/60 p-3 space-y-2 animate-in fade-in">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400 text-[11px]">Password Strength:</span>
+                    <span className="text-wf-text-secondary text-[11px]">Password Strength:</span>
                     <span
                       className={cn(
                         'font-bold text-[11px]',
@@ -648,7 +650,7 @@ export default function RegisterPage() {
                     <div
                       className={cn(
                         'flex items-center gap-1',
-                        passwordStrength.hasLength ? 'text-emerald-400' : 'text-slate-500'
+                        passwordStrength.hasLength ? 'text-emerald-400' : 'text-wf-text-tertiary'
                       )}
                     >
                       <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
@@ -657,7 +659,7 @@ export default function RegisterPage() {
                     <div
                       className={cn(
                         'flex items-center gap-1',
-                        passwordStrength.hasMixedCase ? 'text-emerald-400' : 'text-slate-500'
+                        passwordStrength.hasMixedCase ? 'text-emerald-400' : 'text-wf-text-tertiary'
                       )}
                     >
                       <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
@@ -668,7 +670,7 @@ export default function RegisterPage() {
                         'flex items-center gap-1',
                         passwordStrength.hasNumber || passwordStrength.hasSpecial
                           ? 'text-emerald-400'
-                          : 'text-slate-500'
+                          : 'text-wf-text-tertiary'
                       )}
                     >
                       <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
@@ -690,7 +692,7 @@ export default function RegisterPage() {
             </form>
           )}
 
-          <div className="mt-6 text-center text-xs text-slate-400 space-y-1.5">
+          <div className="mt-6 text-center text-xs text-wf-text-secondary space-y-1.5">
             <div>
               Already have an account?{' '}
               <Link

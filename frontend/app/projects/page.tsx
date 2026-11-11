@@ -7,13 +7,15 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { useTasks } from '@/lib/hooks/useTasks';
 import { useOrganizationMembers } from '@/lib/hooks/useOrganizationMembers';
 import { useMockStore } from '@/lib/mockStore';
-import { PriorityLevel, ProjectStatus } from '@/lib/types';
+import { PriorityLevel, ProjectStatus, Project } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Dialog } from '@/components/ui/Dialog';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { InteractiveAvatar } from '@/components/ui/InteractiveAvatar';
 import {
   FolderKanban,
   Calendar,
@@ -22,19 +24,27 @@ import {
   ArrowRight,
   Plus,
   Clock,
-  Sparkles,
   ShieldCheck,
   Check,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
   UserPlus,
+  Search,
+  Filter,
+  X,
+  LayoutGrid,
+  List,
+  ChevronRight,
+  ArrowUpDown,
+  Sparkles,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function ProjectsPage() {
   const { isAuthenticated, user, organization, role: authRole } = useAuth();
 
-  // Supabase Phase 2.2B real data hooks
+  // Supabase real data hooks
   const {
     projects: dbProjects,
     isLoading: isProjectsLoading,
@@ -63,6 +73,14 @@ export default function ProjectsPage() {
   const activeRole = isLive ? authRole : mockRole;
   const isManagerOrAdmin = activeRole === 'manager' || activeRole === 'admin' || activeRole === 'organizer';
 
+  // Presentation State
+  const [viewMode, setViewMode] = React.useState<'grid' | 'table'>('grid');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
+  const [selectedPriority, setSelectedPriority] = React.useState<string>('all');
+  const [selectedManager, setSelectedManager] = React.useState<string>('all');
+  const [sortBy, setSortBy] = React.useState<'deadline' | 'name' | 'priority' | 'progress'>('deadline');
+
   // Member Assignment Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [targetProjectId, setTargetProjectId] = React.useState<string>('');
@@ -71,6 +89,22 @@ export default function ProjectsPage() {
   const [assignLoading, setAssignLoading] = React.useState(false);
   const [assignError, setAssignError] = React.useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
+
+  // Create Project Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formError, setFormError] = React.useState<string | null>(null);
+
+  // Form State
+  const [projectName, setProjectName] = React.useState('');
+  const [projectDesc, setProjectDesc] = React.useState('');
+  const [priority, setPriority] = React.useState<PriorityLevel>('high');
+  const [status, setStatus] = React.useState<ProjectStatus>('in_progress');
+  const [startDate, setStartDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [targetEndDate, setTargetEndDate] = React.useState('2026-12-31');
+  const [totalHours, setTotalHours] = React.useState('200');
+  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
+  const [selectedManagerId, setSelectedManagerId] = React.useState<string>('');
 
   const handleOpenAssignModal = (projId: string) => {
     setTargetProjectId(projId);
@@ -138,23 +172,7 @@ export default function ProjectsPage() {
     }));
   }, [isLive, orgMembers, mockEmployees, tasks]);
 
-  const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
-  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [formError, setFormError] = React.useState<string | null>(null);
-
-  // Form State
-  const [projectName, setProjectName] = React.useState('');
-  const [projectDesc, setProjectDesc] = React.useState('');
-  const [priority, setPriority] = React.useState<PriorityLevel>('high');
-  const [status, setStatus] = React.useState<ProjectStatus>('in_progress');
-  const [startDate, setStartDate] = React.useState(new Date().toISOString().split('T')[0]);
-  const [targetEndDate, setTargetEndDate] = React.useState('2026-12-31');
-  const [totalHours, setTotalHours] = React.useState('200');
-  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([]);
-  const [selectedManagerId, setSelectedManagerId] = React.useState<string>('');
-
-  // Eligible Managers filter: strictly 'manager' and 'admin' roles only (prohibiting organizer, hr, employee)
+  // Eligible Managers filter: strictly 'manager' and 'admin' roles only
   const eligibleManagers = React.useMemo(() => {
     if (isLive) {
       return orgMembers.filter(
@@ -166,9 +184,99 @@ export default function ProjectsPage() {
     );
   }, [isLive, orgMembers, mockEmployees]);
 
-    const filteredProjects = projects.filter((p) =>
-    selectedStatus === 'all' ? true : p.status === selectedStatus
-  );
+  // Distinct managers present in the current projects list for the filter dropdown
+  const distinctProjectManagers = React.useMemo(() => {
+    const managersMap = new Map<string, string>();
+    projects.forEach((p) => {
+      if (p.managerName) {
+        managersMap.set(p.managerId || p.managerName, p.managerName);
+      }
+    });
+    return Array.from(managersMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [projects]);
+
+  // Portfolio Summary Metrics strictly calculated from accessible project data
+  const portfolioMetrics = React.useMemo(() => {
+    const total = projects.length;
+    const inProgress = projects.filter((p) => p.status === 'in_progress').length;
+    const planning = projects.filter((p) => p.status === 'planning').length;
+    const completed = projects.filter((p) => p.status === 'completed').length;
+    const completedHoursSum = projects.reduce((sum, p) => sum + (p.completedHours || 0), 0);
+    const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+
+    return {
+      total,
+      inProgress,
+      planning,
+      completed,
+      completedHoursSum,
+      inProgressPct,
+    };
+  }, [projects]);
+
+  // Combined Filter and Sort Pipeline
+  const filteredProjects = React.useMemo(() => {
+    return projects
+      .filter((p) => {
+        // Status filter
+        if (selectedStatus !== 'all' && p.status !== selectedStatus) return false;
+        // Priority filter
+        if (selectedPriority !== 'all' && p.priority !== selectedPriority) return false;
+        // Manager filter
+        if (selectedManager !== 'all') {
+          if (p.managerId !== selectedManager && p.managerName !== selectedManager) {
+            return false;
+          }
+        }
+        // Text search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const matchName = p.name.toLowerCase().includes(q);
+          const matchDesc = p.description?.toLowerCase().includes(q) || false;
+          const matchLead = p.managerName?.toLowerCase().includes(q) || false;
+          if (!matchName && !matchDesc && !matchLead) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'name') {
+          return a.name.localeCompare(b.name);
+        }
+        if (sortBy === 'priority') {
+          const weight: Record<PriorityLevel, number> = {
+            critical: 4,
+            high: 3,
+            medium: 2,
+            low: 1,
+          };
+          return (weight[b.priority] || 0) - (weight[a.priority] || 0);
+        }
+        if (sortBy === 'progress') {
+          const aEffort = a.totalHours || 1;
+          const bEffort = b.totalHours || 1;
+          const aPct = (a.completedHours || 0) / aEffort;
+          const bPct = (b.completedHours || 0) / bEffort;
+          return bPct - aPct;
+        }
+        // Default: deadline (earliest target completion first)
+        if (!a.targetEndDate) return 1;
+        if (!b.targetEndDate) return -1;
+        return new Date(a.targetEndDate).getTime() - new Date(b.targetEndDate).getTime();
+      });
+  }, [projects, selectedStatus, selectedPriority, selectedManager, searchQuery, sortBy]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== '' ||
+    selectedStatus !== 'all' ||
+    selectedPriority !== 'all' ||
+    selectedManager !== 'all';
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setSelectedStatus('all');
+    setSelectedPriority('all');
+    setSelectedManager('all');
+  };
 
   const toggleMemberSelection = (empId: string) => {
     setSelectedMemberIds((prev) =>
@@ -241,45 +349,72 @@ export default function ProjectsPage() {
     setProjectName('');
     setProjectDesc('');
     setSelectedManagerId('');
+    setSelectedMemberIds([]);
     setFormError(null);
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+      {/* Portfolio Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Project Portfolio & Delivery Benchmarks
-            </h2>
-            <Badge variant="violet" size="sm">
-              {projects.filter((p) => p.status === 'in_progress').length} Active / {projects.length} Total Projects
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-wf-text-primary">
+              Project Portfolio
+            </h1>
+            <Badge variant="burgundy" size="sm" className="font-medium">
+              {portfolioMetrics.inProgress} In Flight • {portfolioMetrics.total} Total
+            </Badge>
+            <Badge variant={isLive ? 'success' : 'slate'} size="sm" className="text-[10px]">
+              {isLive ? 'Live PostgreSQL' : 'Demo Workspace'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Monitor delivery milestones, tracked project effort, and team member commitments
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1 max-w-2xl leading-relaxed">
+            Portfolio initiatives, allocated resource capacity, and milestone delivery progress across active engineering streams.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-          >
-            <option value="all">All Project Statuses</option>
-            <option value="in_progress">In Progress</option>
-            <option value="planning">Planning</option>
-            <option value="on_hold">On Hold</option>
-            <option value="completed">Completed</option>
-          </select>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          {/* View Mode Toggle */}
+          <div className="flex items-center rounded-xl border border-wf-border-default bg-wf-surface-card p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-label="Grid layout"
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-lg text-xs transition-colors',
+                viewMode === 'grid'
+                  ? 'bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream font-semibold shadow-xs'
+                  : 'text-wf-text-secondary hover:text-wf-text-primary'
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              aria-label="Table roster layout"
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-lg text-xs transition-colors',
+                viewMode === 'table'
+                  ? 'bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream font-semibold shadow-xs'
+                  : 'text-wf-text-secondary hover:text-wf-text-primary'
+              )}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
 
+          {/* Role-Governed Create Project Action */}
           {isManagerOrAdmin && (
             <Button
               variant="primary"
               size="md"
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => {
+                setFormError(null);
+                setIsCreateModalOpen(true);
+              }}
+              className="shadow-sm"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               <span>Create Project</span>
@@ -288,31 +423,237 @@ export default function ProjectsPage() {
         </div>
       </div>
 
+      {/* Portfolio Metrics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Total Portfolio Initiatives"
+          value={portfolioMetrics.total}
+          subtitle="Active workspace scope"
+          icon={<FolderKanban className="h-4 w-4 text-wf-text-muted" />}
+          badgeText="Portfolio"
+          badgeVariant="slate"
+        />
+
+        <MetricCard
+          title="In Active Delivery"
+          value={portfolioMetrics.inProgress}
+          subtitle={`${portfolioMetrics.inProgressPct}% of portfolio in delivery`}
+          progress={{ value: portfolioMetrics.inProgressPct, colorScheme: 'burgundy' }}
+          icon={<Clock className="h-4 w-4 text-wf-text-muted" />}
+          badgeText={portfolioMetrics.inProgress > 0 ? 'In Flight' : 'None'}
+          badgeVariant="burgundy"
+        />
+
+        <MetricCard
+          title="Planning & Scoping"
+          value={portfolioMetrics.planning}
+          subtitle="Upcoming strategic initiatives"
+          icon={<Calendar className="h-4 w-4 text-wf-text-muted" />}
+          badgeText="Queued"
+          badgeVariant="sage"
+        />
+
+        <MetricCard
+          title="Completed & Delivered"
+          value={portfolioMetrics.completed}
+          subtitle={`${portfolioMetrics.completedHoursSum}h tracked delivered effort`}
+          icon={<CheckCircle2 className="h-4 w-4 text-wf-text-muted" />}
+          badgeText={portfolioMetrics.completed > 0 ? 'Delivered' : 'Zero'}
+          badgeVariant="success"
+        />
+      </div>
+
       {/* Error Banner */}
       {isLive && projectsError && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+        <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-4 text-xs text-wf-semantic-danger flex items-center justify-between shadow-card">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{projectsError}</span>
           </div>
           <Button variant="secondary" size="sm" onClick={() => refetchProjects()}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
-            Retry
+            <span>Retry</span>
           </Button>
         </div>
       )}
 
+      {/* Search & Combined Filter Bar */}
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-4 sm:p-5 shadow-card space-y-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+          {/* Search Input */}
+          <div className="relative sm:col-span-2 lg:col-span-4">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-wf-text-muted pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search initiatives, scope, or leads..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle pl-10 pr-4 py-2 text-xs sm:text-sm text-wf-text-primary placeholder:text-wf-text-muted focus:border-wf-border-focus focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-wf-text-muted hover:text-wf-text-primary"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status Filter */}
+          <div className="lg:col-span-2">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-2 text-xs sm:text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+            >
+              <option value="all">All Statuses</option>
+              <option value="in_progress">In Progress</option>
+              <option value="planning">Planning</option>
+              <option value="on_hold">On Hold</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          {/* Priority Filter */}
+          <div className="lg:col-span-2">
+            <select
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-2 text-xs sm:text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+            >
+              <option value="all">All Priorities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          {/* Manager / Lead Filter */}
+          <div className="lg:col-span-2">
+            <select
+              value={selectedManager}
+              onChange={(e) => setSelectedManager(e.target.value)}
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-2 text-xs sm:text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+            >
+              <option value="all">All Project Leads</option>
+              {distinctProjectManagers.map((mgr) => (
+                <option key={mgr.id} value={mgr.id}>
+                  {mgr.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sort Selector */}
+          <div className="lg:col-span-2">
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-2 text-xs sm:text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors appearance-none pr-8"
+              >
+                <option value="deadline">Sort: Deadline</option>
+                <option value="priority">Sort: Priority</option>
+                <option value="progress">Sort: Progress</option>
+                <option value="name">Sort: Name (A-Z)</option>
+              </select>
+              <ArrowUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-wf-text-muted pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filter Chips Row */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-wf-border-default text-xs">
+            <span className="text-[11px] font-semibold text-wf-text-muted uppercase tracking-wider">
+              Filters:
+            </span>
+
+            {searchQuery.trim() && (
+              <Badge variant="slate" size="sm" className="flex items-center gap-1">
+                <span>&ldquo;{searchQuery}&rdquo;</span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="hover:text-wf-text-primary ml-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            {selectedStatus !== 'all' && (
+              <Badge variant="slate" size="sm" className="flex items-center gap-1">
+                <span>Status: {selectedStatus.replace('_', ' ')}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('all')}
+                  className="hover:text-wf-text-primary ml-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            {selectedPriority !== 'all' && (
+              <Badge variant="slate" size="sm" className="flex items-center gap-1">
+                <span>Priority: {selectedPriority}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPriority('all')}
+                  className="hover:text-wf-text-primary ml-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            {selectedManager !== 'all' && (
+              <Badge variant="slate" size="sm" className="flex items-center gap-1">
+                <span>
+                  Lead: {distinctProjectManagers.find((m) => m.id === selectedManager)?.name || selectedManager}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedManager('all')}
+                  className="hover:text-wf-text-primary ml-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="text-[11px] font-medium text-wf-brand-burgundy dark:text-wf-cream hover:underline ml-1"
+            >
+              Clear all
+            </button>
+
+            <span className="text-[11px] text-wf-text-muted ml-auto font-mono">
+              Showing {filteredProjects.length} of {projects.length}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Loading Skeleton */}
       {isLive && isProjectsLoading && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {[1, 2].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-64 rounded-xl border border-slate-800 bg-navy-900/40 p-6 animate-pulse space-y-4"
+              className="h-64 rounded-2xl border border-wf-border-default bg-wf-surface-card p-6 animate-pulse space-y-4 shadow-card"
             >
-              <div className="h-5 w-48 bg-slate-800 rounded" />
-              <div className="h-4 w-full bg-slate-800/60 rounded" />
-              <div className="h-8 w-full bg-slate-800/40 rounded mt-6" />
+              <div className="h-5 w-48 bg-wf-surface-subtle rounded-xl" />
+              <div className="h-4 w-full bg-wf-surface-subtle rounded-xl" />
+              <div className="h-4 w-3/4 bg-wf-surface-subtle rounded-xl" />
+              <div className="h-8 w-full bg-wf-surface-subtle rounded-xl mt-6" />
             </div>
           ))}
         </div>
@@ -320,31 +661,48 @@ export default function ProjectsPage() {
 
       {/* Empty State */}
       {!isProjectsLoading && filteredProjects.length === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-12 text-center space-y-3">
-          <FolderKanban className="mx-auto h-10 w-10 text-slate-500" />
-          <h3 className="text-base font-bold text-white">No Projects Found</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            {isManagerOrAdmin
-              ? 'No project initiatives match your criteria. Click "Create Project" to launch your first delivery milestone.'
-              : 'There are currently no active projects assigned to your team in this organization.'}
-          </p>
-          {isManagerOrAdmin && (
-            <div className="pt-2">
+        <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-12 text-center space-y-4 shadow-card">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-wf-surface-subtle border border-wf-border-default text-wf-text-muted">
+            <FolderKanban className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-wf-text-primary">
+              {hasActiveFilters ? 'No Matching Projects Found' : 'No Projects in Workspace'}
+            </h3>
+            <p className="text-xs text-wf-text-secondary max-w-md mx-auto leading-relaxed">
+              {hasActiveFilters
+                ? 'No project portfolio initiatives match your active filter criteria. Try adjusting your search term, priority, or status filters.'
+                : isManagerOrAdmin
+                ? 'No project portfolio initiatives have been authored yet. Launch your first delivery stream using the action below.'
+                : 'There are currently no active projects assigned to your team in this organization.'}
+            </p>
+          </div>
+
+          <div className="pt-2 flex items-center justify-center gap-2">
+            {hasActiveFilters ? (
+              <Button variant="secondary" size="sm" onClick={clearAllFilters}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                <span>Reset All Filters</span>
+              </Button>
+            ) : isManagerOrAdmin ? (
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => setIsCreateModalOpen(true)}
+                onClick={() => {
+                  setFormError(null);
+                  setIsCreateModalOpen(true);
+                }}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 <span>Launch New Project</span>
               </Button>
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
       )}
 
-      {/* Projects Grid */}
-      {!isProjectsLoading && filteredProjects.length > 0 && (
+      {/* Projects Grid View */}
+      {!isProjectsLoading && filteredProjects.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {filteredProjects.map((proj) => {
             const projectTasks = tasks.filter((t) => t.projectId === proj.id);
@@ -362,101 +720,129 @@ export default function ProjectsPage() {
             return (
               <Card
                 key={proj.id}
-                className="flex flex-col justify-between border-slate-800/90 hover:border-violet-500/50 transition-all hover:shadow-card group"
+                className="flex flex-col justify-between border-wf-border-default hover:border-wf-border-focus/50 transition-all hover:shadow-elevated group"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <FolderKanban className="h-4 w-4 text-violet-400" />
-                        <h3 className="text-base font-bold text-white group-hover:text-violet-300 transition-colors">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream border border-wf-border-default shrink-0">
+                          <FolderKanban className="h-3.5 w-3.5" />
+                        </div>
+                        <Link
+                          href={`/projects/${proj.id}`}
+                          className="text-base font-bold text-wf-text-primary group-hover:text-wf-brand-burgundy dark:group-hover:text-wf-cream transition-colors truncate"
+                        >
                           {proj.name}
-                        </h3>
+                        </Link>
                       </div>
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                        {proj.description}
+                      <p className="text-xs text-wf-text-secondary line-clamp-2 leading-relaxed">
+                        {proj.description || 'Strategic workforce initiative driving core organizational delivery.'}
                       </p>
                     </div>
-                    <Badge
-                      variant={
-                        proj.priority === 'critical'
-                          ? 'rose'
-                          : proj.priority === 'high'
-                          ? 'amber'
-                          : 'slate'
-                      }
-                      size="sm"
-                    >
-                      {proj.priority}
-                    </Badge>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge
+                        variant={
+                          proj.priority === 'critical'
+                            ? 'danger'
+                            : proj.priority === 'high'
+                            ? 'warning'
+                            : 'slate'
+                        }
+                        size="sm"
+                        className="capitalize"
+                      >
+                        {proj.priority}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4 flex-1">
-                  {/* Progress Bar */}
-                  <div className="space-y-1">
+                  {/* Progress Bar & Milestone Completion */}
+                  <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-mono">
-                      <span className="text-slate-400">Total Completion</span>
-                      <span className="text-slate-200 font-bold">
+                      <span className="text-wf-text-secondary">Milestone Progress</span>
+                      <span className="text-wf-text-primary font-bold">
                         {completedHours}h / {totalEffortHours}h ({progressPct}%)
                       </span>
                     </div>
-                    <ProgressBar value={progressPct} />
+                    <ProgressBar
+                      value={progressPct}
+                      colorScheme={progressPct >= 100 ? 'emerald' : 'auto'}
+                    />
                   </div>
 
-                  {/* Dates & Lead */}
-                  <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-400 rounded-xl bg-navy-900/60 p-3 border border-slate-800/60">
+                  {/* Metadata Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs text-wf-text-secondary rounded-xl bg-wf-surface-subtle p-3 border border-wf-border-default">
                     <div className="space-y-0.5">
-                      <span className="text-slate-400 block">Target Deadline</span>
-                      <span className="text-slate-200 font-mono font-semibold flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-cyan-400" />
+                      <span className="text-[11px] text-wf-text-muted uppercase tracking-wider font-semibold block">
+                        Target Deadline
+                      </span>
+                      <span className="text-wf-text-primary font-mono font-medium flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-wf-text-muted" />
                         {proj.targetEndDate || 'Unscheduled'}
                       </span>
                     </div>
-                    <div className="space-y-0.5">
-                      <span className="text-slate-400 block">Project Lead</span>
-                      <span className="text-slate-200 font-semibold truncate block">
+
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="text-[11px] text-wf-text-muted uppercase tracking-wider font-semibold block">
+                        Project Lead
+                      </span>
+                      <span className="text-wf-text-primary font-medium truncate block">
                         {proj.managerName || 'Unassigned'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Member Count & Task Count */}
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                      <Users className="h-3.5 w-3.5 text-cyan-400" />
-                      <span>{proj.memberIds.length} member{proj.memberIds.length !== 1 ? 's' : ''} allocated</span>
+                  {/* Team Members & Tasks Count */}
+                  <div className="flex items-center justify-between pt-0.5 text-xs text-wf-text-secondary">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-wf-text-muted" />
+                      <span>{proj.memberIds.length} team member{proj.memberIds.length !== 1 ? 's' : ''}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                      <CheckSquare className="h-3.5 w-3.5 text-violet-400" />
-                      <span className="font-mono">
-                        {projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}
-                      </span>
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <CheckSquare className="h-3.5 w-3.5 text-wf-text-muted" />
+                      <span>{projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </CardContent>
 
-                <div className="border-t border-slate-800/80 bg-navy-950/40 p-3 px-5 flex flex-wrap items-center justify-between gap-2">
-                  <Badge variant={proj.status === 'in_progress' ? 'cyan' : 'slate'} size="sm">
+                {/* Footer Actions */}
+                <div className="border-t border-wf-border-default bg-wf-surface-subtle p-3 px-5 flex flex-wrap items-center justify-between gap-2 rounded-b-2xl">
+                  <Badge
+                    variant={
+                      proj.status === 'in_progress'
+                        ? 'burgundy'
+                        : proj.status === 'completed'
+                        ? 'success'
+                        : proj.status === 'planning'
+                        ? 'sage'
+                        : 'slate'
+                    }
+                    size="sm"
+                  >
                     {proj.status.replace('_', ' ').toUpperCase()}
                   </Badge>
+
                   <div className="flex items-center gap-2">
-                    {isManagerOrAdmin && (
+                    {isManagerOrAdmin && isLive && (
                       <Button
                         variant="secondary"
                         size="sm"
                         onClick={() => handleOpenAssignModal(proj.id)}
                         className="text-xs"
                       >
-                        <UserPlus className="h-3.5 w-3.5 mr-1 text-cyan-400" />
-                        <span>Assign Member</span>
+                        <UserPlus className="h-3.5 w-3.5 mr-1" />
+                        <span>Assign</span>
                       </Button>
                     )}
                     <Link href={`/projects/${proj.id}`}>
-                      <Button variant="ghost" size="sm" className="text-xs">
-                        <span>Project Dashboard</span>
-                        <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                      <Button variant="ghost" size="sm" className="text-xs text-wf-text-secondary hover:text-wf-text-primary">
+                        <span>Details</span>
+                        <ChevronRight className="h-3.5 w-3.5 ml-1" />
                       </Button>
                     </Link>
                   </div>
@@ -467,18 +853,145 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {/* Projects Table View */}
+      {!isProjectsLoading && filteredProjects.length > 0 && viewMode === 'table' && (
+        <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card overflow-hidden shadow-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-wf-border-default bg-wf-surface-subtle text-[11px] font-semibold text-wf-text-muted uppercase tracking-wider">
+                  <th className="py-3 px-4">Initiative Name &amp; Scope</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Priority</th>
+                  <th className="py-3 px-4">Project Lead</th>
+                  <th className="py-3 px-4 min-w-[180px]">Delivery Progress</th>
+                  <th className="py-3 px-4">Deadline</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-wf-border-default text-wf-text-secondary">
+                {filteredProjects.map((proj) => {
+                  const projectTasks = tasks.filter((t) => t.projectId === proj.id);
+                  const completedTasksHours = projectTasks
+                    .filter((t) => t.status === 'completed')
+                    .reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+                  const completedHours = isLive ? completedTasksHours : (proj.completedHours || completedTasksHours);
+                  const totalTaskHours = projectTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+                  const totalEffortHours = Math.max(proj.totalHours || 0, totalTaskHours);
+                  const progressPct =
+                    totalEffortHours > 0
+                      ? Math.min(100, Math.round((completedHours / totalEffortHours) * 100))
+                      : 0;
+
+                  return (
+                    <tr
+                      key={proj.id}
+                      className="hover:bg-wf-surface-subtle transition-colors group"
+                    >
+                      <td className="py-3.5 px-4 max-w-xs">
+                        <Link
+                          href={`/projects/${proj.id}`}
+                          className="font-bold text-wf-text-primary group-hover:text-wf-brand-burgundy dark:group-hover:text-wf-cream transition-colors block truncate text-sm"
+                        >
+                          {proj.name}
+                        </Link>
+                        <p className="text-[11px] text-wf-text-muted line-clamp-1 mt-0.5">
+                          {proj.description || 'Strategic workforce initiative'}
+                        </p>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <Badge
+                          variant={
+                            proj.status === 'in_progress'
+                              ? 'burgundy'
+                              : proj.status === 'completed'
+                              ? 'success'
+                              : proj.status === 'planning'
+                              ? 'sage'
+                              : 'slate'
+                          }
+                          size="sm"
+                        >
+                          {proj.status.replace('_', ' ')}
+                        </Badge>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <Badge
+                          variant={
+                            proj.priority === 'critical'
+                              ? 'danger'
+                              : proj.priority === 'high'
+                              ? 'warning'
+                              : 'slate'
+                          }
+                          size="sm"
+                        >
+                          {proj.priority}
+                        </Badge>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap text-wf-text-primary font-medium">
+                        {proj.managerName || 'Unassigned'}
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-mono">
+                            <span className="text-wf-text-primary font-semibold">{progressPct}%</span>
+                            <span className="text-wf-text-muted">{completedHours}h / {totalEffortHours}h</span>
+                          </div>
+                          <ProgressBar value={progressPct} colorScheme={progressPct >= 100 ? 'emerald' : 'auto'} />
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-wf-text-primary">
+                        {proj.targetEndDate || 'Unscheduled'}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isManagerOrAdmin && isLive && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenAssignModal(proj.id)}
+                              className="text-xs"
+                            >
+                              Assign
+                            </Button>
+                          )}
+                          <Link href={`/projects/${proj.id}`}>
+                            <Button variant="outline" size="sm" className="text-xs">
+                              <span>View</span>
+                              <ChevronRight className="h-3 w-3 ml-0.5" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Create Project Dialog Modal */}
       <Dialog
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Project Initiative"
-        description="Author a new project portfolio initiative for your organization."
+        description="Author a new project portfolio initiative for your organization workspace."
         maxWidth="lg"
       >
         <form onSubmit={handleCreateProject} className="space-y-4 py-2">
           {formError && (
-            <div className="rounded-lg border border-rose-500/40 bg-rose-950/20 p-2.5 text-xs text-rose-300">
-              {formError}
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{formError}</span>
             </div>
           )}
 
@@ -490,60 +1003,73 @@ export default function ProjectsPage() {
             required
           />
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-300">
-              Project Description & Scope
+          <div className="space-y-1.5 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
+              Project Description &amp; Scope
             </label>
             <textarea
               rows={3}
               placeholder="Outline project deliverables, core architectural components, and milestones..."
               value={projectDesc}
               onChange={(e) => setProjectDesc(e.target.value)}
-              className="w-full rounded-lg border border-slate-700/80 bg-navy-850 p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card p-3 text-sm text-wf-text-primary placeholder:text-wf-text-muted focus:border-wf-border-focus focus:outline-none transition-colors"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Select
-              label="Project Manager (Manager Role Only)"
+          <div className="space-y-1.5 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
+              Project Lead (Manager or Admin Role Required)
+            </label>
+            <select
               value={selectedManagerId}
               onChange={(e) => setSelectedManagerId(e.target.value)}
-              options={[
-                { label: '-- Select a Project Manager (Manager Role Required) --', value: '' },
-                ...eligibleManagers.map((m: any) => ({
-                  label: `${m.fullName} (${m.role.toUpperCase()} • ${m.department || 'Engineering'})`,
-                  value: m.userId || m.id,
-                })),
-              ]}
-            />
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3.5 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+            >
+              <option value="">-- Select a Project Manager (Manager/Admin Required) --</option>
+              {eligibleManagers.map((m: any) => (
+                <option key={m.userId || m.id} value={m.userId || m.id}>
+                  {m.fullName} ({m.role.toUpperCase()} • {m.department || 'Engineering'})
+                </option>
+              ))}
+            </select>
             {eligibleManagers.length === 0 && (
-              <p className="text-[11px] text-amber-400">
-                Notice: No members with the Manager role exist in this organization. You can invite or assign a Manager under Employee Management.
+              <p className="text-[11px] text-wf-semantic-warning">
+                Notice: No members with Manager role exist in this organization. You can assign a Manager under Employee Management.
               </p>
             )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Select
-              label="Priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as PriorityLevel)}
-              options={[
-                { label: 'High Priority', value: 'high' },
-                { label: 'Critical Priority', value: 'critical' },
-                { label: 'Medium Priority', value: 'medium' },
-                { label: 'Low Priority', value: 'low' },
-              ]}
-            />
-            <Select
-              label="Initial Status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              options={[
-                { label: 'In Progress', value: 'in_progress' },
-                { label: 'Planning', value: 'planning' },
-              ]}
-            />
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
+                Priority
+              </label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as PriorityLevel)}
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+              >
+                <option value="high">High Priority</option>
+                <option value="critical">Critical Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="low">Low Priority</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
+                Initial Status
+              </label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
+              >
+                <option value="in_progress">In Progress</option>
+                <option value="planning">Planning</option>
+              </select>
+            </div>
+
             <Input
               label="Effort Budget (Hours) *"
               type="number"
@@ -571,12 +1097,12 @@ export default function ProjectsPage() {
           </div>
 
           {/* Team Members Assignment Selector */}
-          <div className="space-y-2 pt-1">
-            <label className="block text-xs font-medium text-slate-300">
+          <div className="space-y-2 pt-1 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
               Allocate Team Members ({selectedMemberIds.length} Selected)
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-navy-950/60 p-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-xl border border-wf-border-default bg-wf-surface-subtle p-2.5">
               {selectableMembers.map((emp) => {
                 const isSelected = selectedMemberIds.includes(emp.id);
                 return (
@@ -584,30 +1110,34 @@ export default function ProjectsPage() {
                     type="button"
                     key={emp.id}
                     onClick={() => toggleMemberSelection(emp.id)}
-                    className={`flex items-center justify-between rounded-lg p-2 text-left text-xs transition-colors border ${
+                    className={cn(
+                      'flex items-center justify-between rounded-xl p-2.5 text-left text-xs transition-colors border',
                       isSelected
-                        ? 'border-violet-500/60 bg-violet-950/30 text-white'
-                        : 'border-slate-800 bg-navy-900/40 text-slate-400 hover:text-slate-200'
-                    }`}
+                        ? 'border-wf-brand-burgundy/40 bg-wf-brand-burgundy/10 text-wf-text-primary shadow-xs'
+                        : 'border-wf-border-default bg-wf-surface-card text-wf-text-secondary hover:text-wf-text-primary'
+                    )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-[10px] font-bold text-white shrink-0">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-wf-surface-subtle text-[10px] font-bold text-wf-text-primary border border-wf-border-default shrink-0">
                         {emp.fullName
                           .split(' ')
+                          .filter(Boolean)
                           .map((n) => n[0])
-                          .join('')}
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-semibold text-white truncate">
+                        <div className="font-semibold text-wf-text-primary truncate">
                           {emp.fullName}
                         </div>
-                        <div className="text-[10px] text-slate-400 truncate">
-                          {emp.department}
+                        <div className="text-[10px] text-wf-text-muted truncate">
+                          {emp.department} • {emp.currentLoadHours}h load
                         </div>
                       </div>
                     </div>
                     {isSelected && (
-                      <Check className="h-4 w-4 text-cyan-400 shrink-0 ml-2" />
+                      <Check className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream shrink-0 ml-2" />
                     )}
                   </button>
                 );
@@ -615,7 +1145,7 @@ export default function ProjectsPage() {
             </div>
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800/80">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"
@@ -651,30 +1181,30 @@ export default function ProjectsPage() {
       >
         <form onSubmit={handleAssignSubmit} className="space-y-4 py-2">
           {assignError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{assignError}</span>
             </div>
           )}
 
           {assignSuccess && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3 text-xs text-wf-semantic-success flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{assignSuccess}</span>
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+          <div className="space-y-1.5 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
               Select Active Member *
             </label>
             {orgMembers.length === 0 ? (
-              <p className="text-xs text-amber-400">No active members found in organization.</p>
+              <p className="text-xs text-wf-semantic-warning">No active members found in organization.</p>
             ) : (
               <select
                 value={selectedMemberId}
                 onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3.5 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
                 required
               >
                 <option value="" disabled>-- Select a Team Member --</option>
@@ -693,22 +1223,22 @@ export default function ProjectsPage() {
 
           {/* Optional Task Assignment Selection */}
           {targetProjectId && (
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="space-y-2 pt-2 border-t border-wf-border-default text-left">
+              <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
                 Optionally Assign Open Tasks from this Project:
               </label>
               {tasks.filter((t) => t.projectId === targetProjectId && !t.assignedTo).length === 0 ? (
-                <p className="text-[11px] text-slate-500 italic">
+                <p className="text-[11px] text-wf-text-muted italic">
                   No unassigned tasks found for this project.
                 </p>
               ) : (
-                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-xl border border-wf-border-default bg-wf-surface-subtle p-2.5">
                   {tasks
                     .filter((t) => t.projectId === targetProjectId && !t.assignedTo)
                     .map((t) => (
                       <label
                         key={t.id}
-                        className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                        className="flex items-center gap-2 text-xs text-wf-text-secondary hover:text-wf-text-primary cursor-pointer p-1 rounded-lg hover:bg-wf-surface-card"
                       >
                         <input
                           type="checkbox"
@@ -720,10 +1250,10 @@ export default function ProjectsPage() {
                               setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
                             }
                           }}
-                          className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                          className="rounded border-wf-border-default bg-wf-surface-card text-wf-brand-burgundy focus:ring-wf-border-focus"
                         />
                         <span className="truncate">{t.title}</span>
-                        <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                        <span className="text-[10px] text-wf-text-muted font-mono ml-auto shrink-0">
                           {t.estimatedHours}h
                         </span>
                       </label>
@@ -733,7 +1263,7 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"

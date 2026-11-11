@@ -20,16 +20,18 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300',
+        'flex flex-col items-center justify-center p-8 sm:p-12 text-center animate-in fade-in duration-reveal motion-reduce:animate-none select-none',
         className
       )}
     >
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/60 bg-navy-800/80 text-violet-400 shadow-glow mb-4">
-        {icon || <FolderKanban className="h-7 w-7" />}
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-wf-border-default bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream shadow-sm mb-4">
+        {icon || <FolderKanban className="h-8 w-8" aria-hidden="true" />}
       </div>
-      <h4 className="text-base font-semibold text-slate-100 mb-1">{title}</h4>
+      <h4 className="text-base sm:text-lg font-semibold text-wf-text-primary tracking-tight mb-1.5">
+        {title}
+      </h4>
       {description && (
-        <p className="text-xs text-slate-400 max-w-sm mb-5 leading-relaxed">
+        <p className="text-xs sm:text-sm text-wf-text-secondary max-w-sm mb-6 leading-relaxed">
           {description}
         </p>
       )}

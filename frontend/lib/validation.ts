@@ -183,3 +183,33 @@ export function validateConfirmPassword(password: string, confirmPassword: strin
   }
   return null;
 }
+
+/**
+ * Sanitizes a redirect destination URL parameter (next).
+ * Ensures only safe relative internal application paths are allowed.
+ * Defends against open redirect attacks, including:
+ * - Absolute external URLs (http://, https://)
+ * - Protocol-relative URLs (//)
+ * - Backslash-based bypasses (/\, /\\, \\, \/)
+ * - Control characters and whitespace injections (\r, \n, \t)
+ */
+export function sanitizeNextDestination(
+  next: string | null | undefined,
+  fallback: string = '/dashboard'
+): string {
+  if (!next || typeof next !== 'string') return fallback;
+  const trimmed = next.trim();
+  // Must begin with exactly one forward slash and not a double forward slash
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+    return fallback;
+  }
+  // Disallow any backslash character anywhere in the path
+  if (trimmed.includes('\\')) {
+    return fallback;
+  }
+  // Prohibit whitespace, control characters, or embedded schemes
+  if (/[\r\n\t\s]/.test(trimmed) || /^\/[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return fallback;
+  }
+  return trimmed;
+}

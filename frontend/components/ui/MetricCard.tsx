@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Card, CardContent } from './Card';
-import { Badge } from './Badge';
+import { Badge, BadgeProps } from './Badge';
 import { ProgressBar } from './ProgressBar';
+import { Skeleton } from './LoadingState';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -18,11 +19,13 @@ export interface MetricCardProps {
   progress?: {
     value: number;
     max?: number;
-    colorScheme?: 'auto' | 'violet' | 'cyan' | 'emerald';
+    colorScheme?: 'auto' | 'violet' | 'cyan' | 'emerald' | 'burgundy' | 'sage';
   };
   badgeText?: string;
-  badgeVariant?: 'violet' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'slate';
+  badgeVariant?: BadgeProps['variant'];
   sparkline?: number[];
+  isLoading?: boolean;
+  emptyText?: string;
   className?: string;
 }
 
@@ -36,6 +39,8 @@ export function MetricCard({
   badgeText,
   badgeVariant = 'slate',
   sparkline,
+  isLoading = false,
+  emptyText = 'N/A',
   className,
 }: MetricCardProps) {
   const isPositive = trend ? trend.value >= 0 : null;
@@ -61,45 +66,75 @@ export function MetricCard({
     return { linePath, areaPath };
   }, [sparkline]);
 
+  if (isLoading) {
+    return (
+      <Card className={cn('relative overflow-hidden border-wf-border-default bg-wf-surface-card shadow-card', className)}>
+        <CardContent className="p-5 sm:p-6 md:p-7 space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-8 w-20" />
+            </div>
+            <Skeleton className="h-10 w-10 rounded-xl" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full mt-2" />
+          <div className="flex items-center gap-2 pt-1">
+            <Skeleton className="h-4 w-14 rounded-full" />
+            <Skeleton className="h-3.5 w-28" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const displayValue = value !== undefined && value !== null && value !== '' ? value : emptyText;
+  const isValueEmpty = displayValue === emptyText;
+
   return (
     <Card
       className={cn(
-        'relative overflow-hidden border-zinc-800/80 bg-zinc-900/90 hover:border-zinc-700/80 transition-all hover:shadow-md',
+        'relative overflow-hidden border-wf-border-default bg-wf-surface-card shadow-card transition-colors duration-hover',
         className
       )}
     >
-      {/* Top subtle highlight border */}
-      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-zinc-400/30 via-zinc-600/10 to-transparent" />
+      {/* Top subtle highlight line in Sage/Cream */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-wf-brand-burgundy/40 via-wf-brand-cream/30 to-transparent" />
 
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+      <CardContent className="p-5 sm:p-6 md:p-7">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1.5 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-wf-text-secondary truncate select-none">
               {title}
             </p>
-            <div className="text-2xl font-bold tracking-tight text-zinc-100 font-mono">
-              {value}
+            <div
+              className={cn(
+                'text-2xl sm:text-3xl font-bold tracking-tight font-mono tabular-nums',
+                isValueEmpty ? 'text-wf-text-tertiary font-normal' : 'text-wf-text-primary'
+              )}
+            >
+              {displayValue}
             </div>
           </div>
           {icon && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2.5 text-zinc-300 shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-wf-border-default bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream shadow-sm">
               {icon}
             </div>
           )}
         </div>
 
-        {/* Optional Sparkline curve matching Option 2 screenshot */}
+        {/* Optional Sparkline curve */}
         {sparklineData && (
-          <div className="mt-3 -mb-1 w-full h-7 overflow-hidden">
+          <div className="mt-4 -mb-1 w-full h-8 overflow-hidden select-none">
             <svg
               className="w-full h-full overflow-visible"
               viewBox="0 0 100 24"
               preserveAspectRatio="none"
+              aria-hidden="true"
             >
               <defs>
                 <linearGradient id={`sparkline-grad-${title.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#FAFAFA" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#FAFAFA" stopOpacity="0" />
+                  <stop offset="0%" stopColor="var(--wf-brand-burgundy)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--wf-brand-burgundy)" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
               <path
@@ -109,8 +144,8 @@ export function MetricCard({
               <path
                 d={sparklineData.linePath}
                 fill="none"
-                stroke="#FAFAFA"
-                strokeWidth="1.5"
+                stroke="var(--wf-brand-burgundy)"
+                strokeWidth="1.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -129,18 +164,18 @@ export function MetricCard({
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {trend && (
             <div
               className={cn(
-                'flex items-center gap-1 text-xs font-semibold',
-                isPositive ? 'text-emerald-400' : 'text-rose-400'
+                'flex items-center gap-1 text-xs font-semibold tabular-nums',
+                isPositive ? 'text-wf-semantic-success' : 'text-wf-semantic-danger'
               )}
             >
               {isPositive ? (
-                <TrendingUp className="h-3.5 w-3.5" />
+                <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
               ) : (
-                <TrendingDown className="h-3.5 w-3.5" />
+                <TrendingDown className="h-3.5 w-3.5" aria-hidden="true" />
               )}
               <span>{Math.abs(trend.value)}%</span>
             </div>
@@ -151,7 +186,7 @@ export function MetricCard({
             </Badge>
           )}
           {subtitle && (
-            <span className="text-xs text-zinc-300 leading-normal">{subtitle}</span>
+            <span className="text-xs text-wf-text-secondary leading-normal">{subtitle}</span>
           )}
         </div>
       </CardContent>

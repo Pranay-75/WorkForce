@@ -44,11 +44,14 @@ def generate_custom_jwt(
 
 class MockQueryBuilder:
     def __init__(self, data=None, error=None, single=False, parent=None):
+        self._original_list = data if isinstance(data, list) else None
         self._data = list(data) if data is not None else []
         self._error = error
         self._single = single
         self._parent = parent
         self._is_order_query = False
+        self._pending_insert = None
+        self._pending_update = None
 
     def select(self, *args, **kwargs):
         return self
@@ -81,9 +84,28 @@ class MockQueryBuilder:
     def maybe_single(self, *args, **kwargs):
         return self
 
+    def insert(self, values):
+        self._pending_insert = values if isinstance(values, list) else [values]
+        return self
+
+    def update(self, values):
+        self._pending_update = values
+        return self
+
     def execute(self):
         if self._error:
             raise self._error
+        if self._pending_insert is not None:
+            if self._original_list is not None:
+                self._original_list.extend(self._pending_insert)
+            self._data.extend(self._pending_insert)
+            data = self._pending_insert[0] if (self._single and self._pending_insert) else self._pending_insert
+            return type("SupabaseResponse", (), {"data": data, "error": None})()
+        if self._pending_update is not None:
+            for item in self._data:
+                item.update(self._pending_update)
+            data = self._data[0] if (self._single and self._data) else self._data
+            return type("SupabaseResponse", (), {"data": data, "error": None})()
         if self._is_order_query and self._parent and self._parent.earliest_member_data is not None:
             data = self._parent.earliest_member_data
         else:
@@ -92,9 +114,10 @@ class MockQueryBuilder:
 
 
 class MockSupabaseAdmin:
-    def __init__(self, memberships_data=None, profiles_data=None, earliest_member_data=None, db_error=None, fail_on_auth_api=False):
+    def __init__(self, memberships_data=None, profiles_data=None, earliest_member_data=None, invitations_data=None, db_error=None, fail_on_auth_api=False):
         self.memberships_data = memberships_data if memberships_data is not None else []
         self.profiles_data = profiles_data if profiles_data is not None else []
+        self.invitations_data = invitations_data if invitations_data is not None else []
         self.earliest_member_data = earliest_member_data
         self.db_error = db_error
         self.fail_on_auth_api = fail_on_auth_api
@@ -106,6 +129,8 @@ class MockSupabaseAdmin:
             return MockQueryBuilder(data=self.memberships_data, parent=self)
         elif table_name == "user_profiles":
             return MockQueryBuilder(data=self.profiles_data, parent=self)
+        elif table_name == "organization_invitations":
+            return MockQueryBuilder(data=self.invitations_data, parent=self)
         return MockQueryBuilder(data=[], parent=self)
 
 
@@ -909,7 +934,11 @@ def test_organizer_can_add_members_and_change_roles(monkeypatch):
     token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
 
     # Add member
-    res_add = client.post("/api/v1/auth/members/add", headers={"Authorization": f"Bearer {token}"})
+    res_add = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "new.team.member@acme.corp", "role": "employee"},
+    )
     assert res_add.status_code == 200
     assert res_add.json()["status"] == "member_added"
     assert res_add.json()["role"] == "organizer"
@@ -1282,7 +1311,11 @@ def test_active_authors_demo_organizer_access(monkeypatch):
     assert res_org.json()["role"] == "organizer"
 
     # 3. Add member -> 200
-    res_add = client.post("/api/v1/auth/members/add", headers={"Authorization": f"Bearer {token}"})
+    res_add = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "fresh.contributor@authors.org", "role": "employee"},
+    )
     assert res_add.status_code == 200
     assert res_add.json()["status"] == "member_added"
 
@@ -1688,3 +1721,285 @@ def test_dev_fallback_strict_isolation_and_fail_closed(monkeypatch):
         json={"new_role": "manager"},
     )
     assert res_prod_demo.status_code == 401
+
+
+# =============================================================================
+# 11. MEMBER MANAGEMENT DATABASE PERSISTENCE TESTS
+# =============================================================================
+
+def test_member_insertion_persistence(monkeypatch):
+    """Verify that adding an organization member persists directly to the database."""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    new_user_uid = "b0000000-0000-0000-0000-000000000077"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            }
+        ],
+        profiles_data=[
+            {"id": new_user_uid, "email": "engineer.new@acme.corp", "full_name": "New Engineer"}
+        ],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    # Add member by user_id
+    res_add = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": new_user_uid, "role": "manager"},
+    )
+    assert res_add.status_code == 200
+    assert res_add.json()["status"] == "member_added"
+    assert res_add.json()["assigned_role"] == "manager"
+
+    # Verify actual persistence in mock_db
+    inserted = [m for m in mock_db.memberships_data if m.get("user_id") == new_user_uid]
+    assert len(inserted) == 1
+    assert inserted[0]["role"] == "manager"
+    assert inserted[0]["organization_id"] == org_id
+    assert inserted[0]["status"] == "active"
+
+
+def test_member_role_update_persistence(monkeypatch):
+    """Verify that changing a member's role persists directly to database records."""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    member_uid = "b0000000-0000-0000-0000-000000000033"
+
+    target_membership = {
+        "user_id": member_uid,
+        "role": "employee",
+        "status": "active",
+        "organization_id": org_id,
+        "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+    }
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            target_membership,
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    # Update role to manager
+    res_update = client.put(
+        f"/api/v1/auth/members/{member_uid}/role",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_update.status_code == 200
+    assert res_update.json()["status"] == "role_updated"
+    assert res_update.json()["new_role"] == "manager"
+
+    # Verify actual database persistence
+    assert target_membership["role"] == "manager"
+
+
+def test_duplicate_active_member_insertion_rejected(monkeypatch):
+    """Adding a user who is already an active member must be rejected with 400 Bad Request."""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    existing_member_uid = "b0000000-0000-0000-0000-000000000033"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            {
+                "user_id": existing_member_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+            }
+        ],
+        profiles_data=[
+            {"id": existing_member_uid, "email": "existing@acme.corp", "full_name": "Existing User"}
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    res_dup = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"user_id": existing_member_uid, "role": "employee"},
+    )
+    assert res_dup.status_code == 400
+    assert "already an active member" in res_dup.json()["detail"]
+
+
+def test_cross_organization_member_role_update_rejected(monkeypatch):
+    """Attempting to update a member who belongs to another organization must be rejected with 403."""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_a_id = "a0000000-0000-0000-0000-000000000001"
+    org_b_id = "a0000000-0000-0000-0000-000000000002"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    alien_member_uid = "b0000000-0000-0000-0000-000000000055"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_a_id,
+                "organizations": {"id": org_a_id, "name": "Org A", "slug": "org-a", "created_by": organizer_uid}
+            },
+            {
+                "user_id": alien_member_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_b_id,
+                "organizations": {"id": org_b_id, "name": "Org B", "slug": "org-b"}
+            }
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    res_alien = client.put(
+        f"/api/v1/auth/members/{alien_member_uid}/role",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_alien.status_code == 403
+    assert "belongs to another organization" in res_alien.json()["detail"]
+
+
+def test_database_update_failure_fails_closed(monkeypatch):
+    """When the database throws an exception during update, endpoint must return 500 and never simulated success."""
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+    member_uid = "b0000000-0000-0000-0000-000000000033"
+
+    class FailingUpdateBuilder(MockQueryBuilder):
+        def update(self, *a, **kw):
+            class ExecFailing:
+                def eq(self, *a, **kw):
+                    return self
+                def execute(self):
+                    raise RuntimeError("Deadlock detected in postgres worker")
+            return ExecFailing()
+
+    class FailingUpdateSupabaseAdmin(MockSupabaseAdmin):
+        def table(self, table_name: str):
+            if table_name == "organization_memberships":
+                return FailingUpdateBuilder(data=self.memberships_data, parent=self)
+            return super().table(table_name)
+
+    mock_db = FailingUpdateSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems", "created_by": organizer_uid}
+            },
+            {
+                "user_id": member_uid,
+                "role": "employee",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Systems", "slug": "acme-systems"}
+            }
+        ]
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    res_fail = client.put(
+        f"/api/v1/auth/members/{member_uid}/role",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_role": "manager"},
+    )
+    assert res_fail.status_code == 500
+    assert "Failed to persist updated member role in database" in res_fail.json()["detail"]
+
+
+def test_empty_member_add_payload_rejected(monkeypatch):
+    """
+    SEC-03: Verify that an empty payload or missing member identifier (no email, no user_id)
+    is rejected with HTTP 400 Bad Request and causes no database operations.
+    """
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", TEST_SECRET)
+    org_id = "a0000000-0000-0000-0000-000000000001"
+    organizer_uid = "b0000000-0000-0000-0000-000000000099"
+
+    mock_db = MockSupabaseAdmin(
+        memberships_data=[
+            {
+                "user_id": organizer_uid,
+                "role": "organizer",
+                "status": "active",
+                "organization_id": org_id,
+                "organizations": {"id": org_id, "name": "Acme Corp", "slug": "acme", "created_by": organizer_uid},
+            }
+        ],
+    )
+    monkeypatch.setattr("app.api.deps.get_supabase_admin", lambda: mock_db)
+
+    token = generate_custom_jwt(sub=organizer_uid, email="founder@acme.corp")
+
+    # 1. Completely empty body
+    res_none = client.post("/api/v1/auth/members/add", headers={"Authorization": f"Bearer {token}"})
+    assert res_none.status_code == 400
+    assert "Missing required member identifier" in res_none.json()["detail"]
+
+    # 2. Empty json object
+    res_empty = client.post("/api/v1/auth/members/add", headers={"Authorization": f"Bearer {token}"}, json={})
+    assert res_empty.status_code == 400
+    assert "Missing required member identifier" in res_empty.json()["detail"]
+
+    # 3. Only role provided, without user_id or email
+    res_role_only = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role": "employee"}
+    )
+    assert res_role_only.status_code == 400
+    assert "Missing required member identifier" in res_role_only.json()["detail"]
+
+    # 4. Whitespace only email and user_id
+    res_ws = client.post(
+        "/api/v1/auth/members/add",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "   ", "user_id": "   "}
+    )
+    assert res_ws.status_code == 400
+    assert "Missing required member identifier" in res_ws.json()["detail"]
+
+    # Assert no database mutation occurred
+    assert len(mock_db.memberships_data) == 1
+    assert len(mock_db.invitations_data) == 0

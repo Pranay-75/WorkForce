@@ -76,7 +76,7 @@ Format your response strictly as valid JSON with keys:
     if client:
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model=settings.GEMINI_MODEL,
                 contents=prompt,
             )
             raw_text = response.text.strip()
@@ -94,7 +94,7 @@ Format your response strictly as valid JSON with keys:
                 identified_risks=data.get("identified_risks", []),
                 actionable_recommendations=data.get("actionable_recommendations", []),
                 is_ai_generated=True,
-                model_used="gemini-3.8-flash",
+                model_used=settings.GEMINI_MODEL,
             )
         except Exception as e:
             logger.warning(f"Gemini API call failed, falling back to deterministic insights: {e}")
@@ -176,7 +176,7 @@ Format your response strictly as valid JSON with keys:
     if client:
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model=settings.GEMINI_MODEL,
                 contents=prompt,
             )
             raw_text = response.text.strip()
@@ -195,7 +195,7 @@ Format your response strictly as valid JSON with keys:
                 capacity_assessment=data.get("capacity_assessment", f"Projected utilization is {payload.projected_utilization_pct}%."),
                 trade_offs=data.get("trade_offs", []),
                 is_ai_generated=True,
-                model_used="gemini-3.8-flash",
+                model_used=settings.GEMINI_MODEL,
             )
         except Exception as e:
             logger.warning(f"Gemini API call failed for matching explanation: {e}")
@@ -267,7 +267,7 @@ Format your response strictly as valid JSON with keys:
     if client:
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model=settings.GEMINI_MODEL,
                 contents=prompt,
             )
             raw_text = response.text.strip()
@@ -284,7 +284,7 @@ Format your response strictly as valid JSON with keys:
                 velocity_analysis=data.get("velocity_analysis", "Velocity analysis completed."),
                 strategic_priorities=data.get("strategic_priorities", []),
                 is_ai_generated=True,
-                model_used="gemini-3.8-flash",
+                model_used=settings.GEMINI_MODEL,
             )
         except Exception as e:
             logger.warning(f"Gemini API call failed for executive report: {e}")

@@ -1,4 +1,5 @@
 from typing import Optional, List
+from starlette.requests import Request
 from fastapi import Depends, HTTPException, Header, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.config import settings
@@ -51,6 +52,7 @@ DEFAULT_ORG_ID = "a0000000-0000-0000-0000-000000000001"
 DEFAULT_ORG_NAME = "Acme Systems Engineering"
 
 async def get_current_user(
+    request: Request,
     auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     x_organization_id: Optional[str] = Header(None, alias="X-Organization-Id"),
     x_demo_user_id: Optional[str] = Header(None, alias="X-Demo-User-Id"),
@@ -63,7 +65,10 @@ async def get_current_user(
     # 1. Standard Production / Supabase Auth Path
     if auth_credentials and auth_credentials.credentials:
         token = auth_credentials.credentials
-        payload = verify_and_decode_token(token)
+        if request and hasattr(request, "state") and getattr(request.state, "verified_jwt_payload", None):
+            payload = request.state.verified_jwt_payload
+        else:
+            payload = verify_and_decode_token(token)
         user_id = payload.get("sub")
         email = payload.get("email", "")
 
@@ -165,7 +170,7 @@ async def get_current_user(
             # Non-fatal metadata fetch failure; core role and membership already verified
             pass
 
-        return AuthenticatedUser(
+        authenticated_user = AuthenticatedUser(
             user_id=user_id,
             email=email or prof.get("email", ""),
             organization_id=org_id,
@@ -181,6 +186,9 @@ async def get_current_user(
                 weekly_capacity_hours=float(prof.get("weekly_capacity_hours", 40.0)),
             ),
         )
+        if request and hasattr(request, "state"):
+            request.state.authenticated_user = authenticated_user
+        return authenticated_user
 
     # 2. Local Development Mock Identity (Explicit opt-in required; strictly forbidden in production)
     if (
@@ -190,7 +198,7 @@ async def get_current_user(
     ):
         if x_demo_user_id in DEV_ROLE_MAPPING:
             m = DEV_ROLE_MAPPING[x_demo_user_id]
-            return AuthenticatedUser(
+            demo_user = AuthenticatedUser(
                 user_id=x_demo_user_id,
                 email=m["email"],
                 organization_id=DEFAULT_ORG_ID,
@@ -206,6 +214,9 @@ async def get_current_user(
                 ),
                 is_demo_user=True,
             )
+            if request and hasattr(request, "state"):
+                request.state.authenticated_user = demo_user
+            return demo_user
 
     # 3. Missing or unauthorized credentials -> Reject by default
     raise HTTPException(

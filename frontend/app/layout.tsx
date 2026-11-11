@@ -3,6 +3,7 @@ import './globals.css';
 import { AppShell } from '@/components/layout/AppShell';
 import { MockStoreProvider } from '@/lib/mockStore';
 import { AuthProvider } from '@/lib/authContext';
+import { ThemeProvider } from '@/lib/themeContext';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://workforce-platform.vercel.app'),
@@ -38,13 +39,40 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-background-base text-slate-100 antialiased">
-        <AuthProvider>
-          <MockStoreProvider>
-            <AppShell>{children}</AppShell>
-          </MockStoreProvider>
-        </AuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('wf-theme');
+                  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var isDark = stored === 'dark' || ((!stored || stored === 'system') && prefersDark);
+                  var root = document.documentElement;
+                  if (isDark) {
+                    root.classList.add('dark');
+                    root.classList.remove('light');
+                    root.style.colorScheme = 'dark';
+                  } else {
+                    root.classList.add('light');
+                    root.classList.remove('dark');
+                    root.style.colorScheme = 'light';
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className="bg-wf-canvas text-wf-text-primary antialiased">
+        <ThemeProvider>
+          <AuthProvider>
+            <MockStoreProvider>
+              <AppShell>{children}</AppShell>
+            </MockStoreProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -11,9 +11,11 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Dialog } from '@/components/ui/Dialog';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { InteractiveAvatar } from '@/components/ui/InteractiveAvatar';
 import {
   ArrowLeft,
   Mail,
@@ -31,10 +33,12 @@ import {
   Edit3,
   Phone,
   ExternalLink,
-  Lock,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { AccessDenied } from '@/components/ui/AccessDenied';
 import { UserRole } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function EmployeeDetailPage() {
   const params = useParams();
@@ -112,12 +116,18 @@ export default function EmployeeDetailPage() {
   // Loading skeleton for live mode
   if (isLive && isMembersLoading) {
     return (
-      <div className="space-y-6 animate-pulse p-6">
-        <div className="h-6 w-32 bg-slate-800 rounded" />
-        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
-          <div className="h-48 bg-navy-900/40 rounded-xl border border-slate-800" />
+      <div className="space-y-6 animate-pulse p-4 sm:p-6">
+        <div className="h-6 w-36 bg-wf-surface-subtle rounded-xl" />
+        <div className="h-56 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="h-28 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+          <div className="h-28 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+          <div className="h-28 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+          <div className="h-28 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-64 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+          <div className="h-64 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
         </div>
       </div>
     );
@@ -129,17 +139,24 @@ export default function EmployeeDetailPage() {
 
   if (!liveMember && !mockEmployee) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-12 text-center space-y-3">
-        <h3 className="text-lg font-bold text-white">Employee Not Found</h3>
-        <p className="text-xs text-slate-400">
-          The requested employee identifier does not exist in the active organization directory.
-        </p>
-        <Link href="/employees">
-          <Button variant="secondary" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Back to Directory
-          </Button>
-        </Link>
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-12 text-center space-y-4 shadow-card">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-wf-surface-subtle border border-wf-border-default text-wf-text-muted">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold text-wf-text-primary">Employee Not Found</h3>
+          <p className="text-xs text-wf-text-secondary max-w-sm mx-auto">
+            The requested employee identifier does not exist in the active organization directory.
+          </p>
+        </div>
+        <div>
+          <Link href="/employees">
+            <Button variant="secondary" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-1.5" />
+              <span>Back to Directory</span>
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -187,8 +204,6 @@ export default function EmployeeDetailPage() {
     avatarUrl: liveMember?.avatarUrl || mockEmployee?.avatarUrl,
     phone,
   };
-
-  // isSelf already defined above
 
   // Handle opening Project Assignment Modal
   const handleOpenAssignModal = () => {
@@ -325,14 +340,6 @@ export default function EmployeeDetailPage() {
     }
   };
 
-  const initials = employee.fullName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'EM';
-
   // 8-week capacity history for demo exploration
   const historyData = [
     { week: 'W1', load: Math.max(employee.weeklyCapacityHours - 4, 0), pct: 90 },
@@ -346,11 +353,11 @@ export default function EmployeeDetailPage() {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* Back Navigation Bar & Primary Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Link href="/employees">
-          <Button variant="ghost" size="sm" className="text-xs">
+          <Button variant="ghost" size="sm" className="text-xs text-wf-text-secondary hover:text-wf-text-primary -ml-2">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
             <span>Back to Talent Directory</span>
           </Button>
@@ -359,7 +366,7 @@ export default function EmployeeDetailPage() {
           {/* Self-Profile Edit Button */}
           {isSelf && (
             <Button variant="secondary" size="sm" onClick={handleOpenEditModal} className="text-xs">
-              <Edit3 className="h-3.5 w-3.5 mr-1 text-violet-400" />
+              <Edit3 className="h-3.5 w-3.5 mr-1.5 text-wf-brand-burgundy dark:text-wf-cream" />
               <span>Edit Profile</span>
             </Button>
           )}
@@ -367,39 +374,41 @@ export default function EmployeeDetailPage() {
           {/* Project Assignment Action */}
           {isManagerOrAdmin && isLive && (
             <Button variant="secondary" size="sm" onClick={handleOpenAssignModal} className="text-xs">
-              <FolderKanban className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+              <FolderKanban className="h-3.5 w-3.5 mr-1.5 text-wf-brand-burgundy dark:text-wf-cream" />
               <span>Assign Project</span>
             </Button>
           )}
 
-          <Badge variant="violet" size="sm">
-            Profile ID: {employee.id.slice(0, 8)}...
+          <Badge variant="slate" size="sm" className="font-mono">
+            ID: {employee.id.slice(0, 8)}
           </Badge>
           <Badge
-            variant={utilPct > 100 ? 'rose' : utilPct >= 80 ? 'amber' : 'emerald'}
+            variant={utilPct > 100 ? 'danger' : utilPct >= 80 ? 'warning' : utilPct > 0 ? 'success' : 'slate'}
             size="sm"
           >
-            {utilPct > 100 ? 'Overload Alert' : utilPct >= 80 ? 'Near Limit' : 'Optimal Capacity'}
+            {utilPct > 100 ? 'Overload Alert' : utilPct >= 80 ? 'Near Limit' : utilPct > 0 ? 'Optimal Capacity' : 'Available'}
           </Badge>
         </div>
       </div>
 
       {/* Role Administration Banner for Admins */}
       {isAdmin && isLive && !isSelf && role !== 'organizer' && (
-        <div className="rounded-xl border border-slate-800 bg-navy-900/80 p-3 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-300">
-            <ShieldCheck className="h-4 w-4 text-cyan-400 shrink-0" />
-            <span>Admin Governance: Manage membership role for <strong>{fullName}</strong></span>
+        <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-card">
+          <div className="flex items-center gap-2.5 text-xs text-wf-text-secondary">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-wf-surface-subtle text-wf-brand-burgundy dark:text-wf-cream border border-wf-border-default shrink-0">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+            <span>Admin Governance: Manage membership role for <strong className="text-wf-text-primary font-semibold">{fullName}</strong></span>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+            <label className="text-[11px] text-wf-text-muted uppercase tracking-wider font-semibold">
               Role:
             </label>
             <select
               value={role}
               onChange={(e) => handleRoleChange(e.target.value as UserRole)}
               disabled={roleChangeLoading || (!isOrganizer && role === 'admin')}
-              className="rounded-lg border border-slate-700/80 bg-navy-850 px-2.5 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+              className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none disabled:opacity-50 transition-colors"
             >
               {isOrganizer && <option value="admin">Administrator (Full Access)</option>}
               <option value="manager">Manager (Planning &amp; Team Lead)</option>
@@ -412,77 +421,139 @@ export default function EmployeeDetailPage() {
 
       {/* Role Change Feedback */}
       {roleChangeSuccess && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+        <div className="rounded-2xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3.5 text-xs text-wf-semantic-success flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>{roleChangeSuccess}</span>
         </div>
       )}
       {roleChangeError && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2 animate-in fade-in">
-          <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+        <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3.5 text-xs text-wf-semantic-danger flex items-center gap-2 animate-in fade-in">
+          <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{roleChangeError}</span>
         </div>
       )}
 
       {/* Hero Profile Header Card */}
-      <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-purple-700 to-indigo-800 text-xl font-bold text-white shadow-lg border border-violet-400/40">
-              {initials}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold text-white">
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-6 sm:p-8 shadow-card space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+            <InteractiveAvatar
+              name={employee.fullName}
+              jobTitle={employee.jobTitle}
+              department={employee.department}
+              avatarUrl={employee.avatarUrl}
+              size="lg"
+              utilizationPct={utilPct}
+              weeklyCapacityHours={employee.weeklyCapacityHours}
+              activeAssignedHours={employee.currentLoadHours}
+              employeeId={employee.id}
+              showPopover={false}
+            />
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-wf-text-primary">
                   {employee.fullName}
-                </h2>
-                {role === 'organizer' ? (
-                  <Badge variant="violet" size="sm" className="uppercase text-[10px] font-bold">
-                    Organizer
-                  </Badge>
-                ) : (
-                  <Badge variant="cyan" size="sm" className="uppercase text-[10px]">
-                    {employee.role}
+                </h1>
+                <Badge
+                  variant={
+                    role === 'organizer'
+                      ? 'burgundy'
+                      : role === 'admin'
+                      ? 'danger'
+                      : role === 'manager'
+                      ? 'warning'
+                      : role === 'hr'
+                      ? 'cyan'
+                      : 'slate'
+                  }
+                  size="sm"
+                  className="uppercase text-[10px] font-semibold tracking-wider"
+                >
+                  {role}
+                </Badge>
+                {isSelf && (
+                  <Badge variant="sage" size="sm" className="text-[10px]">
+                    You
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-slate-300 font-medium">{jobTitle} • {department}</p>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
-                <span className="flex items-center gap-1 font-mono">
-                  <Mail className="h-3.5 w-3.5 text-slate-500" />
+              <p className="text-sm font-medium text-wf-text-secondary">
+                {jobTitle} <span className="text-wf-text-muted">•</span> {department}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-wf-text-muted pt-1">
+                <span className="flex items-center gap-1.5 font-mono">
+                  <Mail className="h-3.5 w-3.5 text-wf-text-tertiary" />
                   {email}
                 </span>
                 {phone && (
-                  <>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 font-mono">
-                      <Phone className="h-3.5 w-3.5 text-slate-500" />
-                      {phone}
-                    </span>
-                  </>
+                  <span className="flex items-center gap-1.5 font-mono">
+                    <Phone className="h-3.5 w-3.5 text-wf-text-tertiary" />
+                    {phone}
+                  </span>
                 )}
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-slate-500" />
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-wf-text-tertiary" />
                   {isLive ? 'Active Organization Member' : 'San Francisco, CA'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-1 min-w-[200px] text-right">
-            <span className="text-xs text-slate-400 uppercase font-semibold">
-              Weekly Allocation Load
+          <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between lg:justify-center gap-2 sm:gap-4 lg:gap-1.5 p-4 rounded-xl bg-wf-surface-subtle border border-wf-border-default min-w-[220px]">
+            <span className="text-[11px] font-semibold text-wf-text-muted uppercase tracking-wider">
+              Sprint Allocation
             </span>
-            <div className="text-2xl font-bold font-mono text-white">
-              {currentLoadHours}h / {weeklyCapacityHours}h ({utilPct}%)
+            <div className="text-xl sm:text-2xl font-bold font-mono text-wf-text-primary">
+              {currentLoadHours}h <span className="text-sm font-normal text-wf-text-secondary">/ {weeklyCapacityHours}h</span>
             </div>
-            <div className="w-full">
-              <ProgressBar value={utilPct} />
+            <div className="w-full sm:w-44 lg:w-48 pt-1">
+              <ProgressBar value={utilPct} colorScheme="auto" />
             </div>
+            <span className="text-[11px] text-wf-text-secondary">
+              {utilPct}% of weekly capacity
+            </span>
           </div>
         </div>
-      </Card>
+      </div>
+
+      {/* Executive Workload & Capacity Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Weekly Capacity Baseline"
+          value={`${weeklyCapacityHours}h`}
+          subtitle="Contractual weekly hours"
+          icon={<Clock className="h-4 w-4 text-wf-text-muted" />}
+          badgeText="Baseline"
+          badgeVariant="slate"
+        />
+
+        <MetricCard
+          title="Active Assigned Load"
+          value={`${currentLoadHours}h`}
+          subtitle={`${activeTasks.length} active tasks scheduled`}
+          icon={<CheckSquare className="h-4 w-4 text-wf-text-muted" />}
+          badgeText={utilPct > 100 ? 'Over Limit' : utilPct >= 80 ? 'Heavy Load' : 'Optimal'}
+          badgeVariant={utilPct > 100 ? 'danger' : utilPct >= 80 ? 'warning' : 'success'}
+        />
+
+        <MetricCard
+          title="Capacity Utilization"
+          value={`${utilPct}%`}
+          subtitle={utilPct > 100 ? 'Requires task redistribution' : utilPct >= 80 ? 'Approaching max threshold' : 'Balanced distribution'}
+          progress={{ value: utilPct, colorScheme: 'auto' }}
+          badgeText={utilPct > 100 ? 'Overload' : utilPct >= 80 ? 'Near Limit' : 'Optimal'}
+          badgeVariant={utilPct > 100 ? 'danger' : utilPct >= 80 ? 'warning' : 'success'}
+        />
+
+        <MetricCard
+          title="Allocated Initiatives"
+          value={allocatedProjects.length}
+          subtitle="Active portfolio commitments"
+          icon={<FolderKanban className="h-4 w-4 text-wf-text-muted" />}
+          badgeText={allocatedProjects.length > 0 ? 'Assigned' : 'Unallocated'}
+          badgeVariant={allocatedProjects.length > 0 ? 'burgundy' : 'slate'}
+        />
+      </div>
 
       {/* Allocated Projects & Verified Skills Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -491,11 +562,11 @@ export default function EmployeeDetailPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FolderKanban className="h-4 w-4 text-cyan-400" />
+                <FolderKanban className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
                 <CardTitle>Allocated Projects ({allocatedProjects.length})</CardTitle>
               </div>
               {isManagerOrAdmin && isLive && (
-                <Button variant="ghost" size="sm" onClick={handleOpenAssignModal} className="text-xs text-cyan-400">
+                <Button variant="ghost" size="sm" onClick={handleOpenAssignModal} className="text-xs text-wf-brand-burgundy dark:text-wf-cream hover:bg-wf-surface-subtle">
                   <UserPlus className="h-3.5 w-3.5 mr-1" />
                   <span>Assign</span>
                 </Button>
@@ -510,39 +581,39 @@ export default function EmployeeDetailPage() {
               allocatedProjects.map((p) => (
                 <div
                   key={p.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-slate-700 transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3.5 hover:border-wf-border-focus/50 transition-colors"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/projects/${p.id}`}
-                        className="text-xs font-bold text-white hover:text-cyan-300 transition-colors flex items-center gap-1"
+                        className="text-xs font-semibold text-wf-text-primary hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors flex items-center gap-1"
                       >
                         <span>{p.name}</span>
-                        <ExternalLink className="h-3 w-3 text-slate-500" />
+                        <ExternalLink className="h-3 w-3 text-wf-text-muted" />
                       </Link>
                       <Badge
                         variant={
                           p.priority === 'critical'
-                            ? 'rose'
+                            ? 'danger'
                             : p.priority === 'high'
-                            ? 'amber'
+                            ? 'warning'
                             : 'slate'
                         }
                         size="sm"
                       >
                         {p.priority}
                       </Badge>
-                      <Badge variant="violet" size="sm">
+                      <Badge variant="outline" size="sm">
                         {p.status.replace('_', ' ')}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    <div className="flex items-center gap-2 text-[11px] text-wf-text-secondary">
                       <span>Lead: {p.managerName || 'Assigned Lead'}</span>
                       {p.totalHours !== undefined && (
                         <>
-                          <span>•</span>
-                          <span className="font-mono text-slate-300">
+                          <span className="text-wf-text-muted">•</span>
+                          <span className="font-mono text-wf-text-primary">
                             {p.completedHours || 0}h / {p.totalHours}h
                           </span>
                         </>
@@ -552,19 +623,22 @@ export default function EmployeeDetailPage() {
 
                   <Link href={`/projects/${p.id}`}>
                     <Button variant="ghost" size="sm" className="text-xs">
-                      View Project
+                      <span>View</span>
+                      <ChevronRight className="h-3 w-3 ml-1" />
                     </Button>
                   </Link>
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center text-slate-400">
-                <FolderKanban className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-                <p className="text-xs font-medium text-slate-300">
+              <div className="p-8 text-center text-wf-text-secondary">
+                <FolderKanban className="mx-auto h-8 w-8 text-wf-text-muted mb-2" />
+                <p className="text-xs font-medium text-wf-text-primary">
                   Not allocated to any active projects
                 </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Use the Assign action above to allocate this member to active initiatives.
+                <p className="text-[11px] text-wf-text-muted mt-1 max-w-sm mx-auto">
+                  {isManagerOrAdmin
+                    ? 'Use the Assign action above to allocate this member to active initiatives.'
+                    : 'No project allocations currently assigned to this profile.'}
                 </p>
               </div>
             )}
@@ -575,7 +649,7 @@ export default function EmployeeDetailPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Award className="h-4 w-4 text-violet-400" />
+              <Award className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
               <CardTitle>Skills &amp; Competencies ({employee.skills.length})</CardTitle>
             </div>
             <CardDescription>
@@ -587,18 +661,18 @@ export default function EmployeeDetailPage() {
               employee.skills.map((s) => (
                 <div
                   key={s.skillId}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3"
+                  className="flex items-center justify-between rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3.5"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">
+                      <span className="text-xs font-semibold text-wf-text-primary">
                         {s.skillName}
                       </span>
-                      <Badge variant="cyan" size="sm">
+                      <Badge variant="slate" size="sm">
                         {s.category}
                       </Badge>
                     </div>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-wf-text-muted">
                       Status: {s.verified ? 'Verified by Lead' : 'Self-Reported'}
                     </span>
                   </div>
@@ -606,7 +680,7 @@ export default function EmployeeDetailPage() {
                   <Badge
                     variant={
                       s.proficiency === 'expert'
-                        ? 'violet'
+                        ? 'burgundy'
                         : s.proficiency === 'advanced'
                         ? 'cyan'
                         : 'slate'
@@ -618,12 +692,12 @@ export default function EmployeeDetailPage() {
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center text-slate-400">
-                <Award className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-                <p className="text-xs font-medium text-slate-300">
+              <div className="p-8 text-center text-wf-text-secondary">
+                <Award className="mx-auto h-8 w-8 text-wf-text-muted mb-2" />
+                <p className="text-xs font-medium text-wf-text-primary">
                   Default skills linked via department role ({employee.department})
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
+                <p className="text-[11px] text-wf-text-muted mt-1 max-w-sm mx-auto">
                   Technical skills are evaluated dynamically during project staffing and deterministic task assignment.
                 </p>
               </div>
@@ -634,11 +708,11 @@ export default function EmployeeDetailPage() {
 
       {/* Operational Capacity Overview & Assigned Tasks Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Operational Scheduling Risk */}
+        {/* Operational Capacity Overview */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-violet-400" />
+              <Clock className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
               <CardTitle>Operational Capacity Overview</CardTitle>
             </div>
             <CardDescription>
@@ -647,35 +721,36 @@ export default function EmployeeDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {isLive ? (
-              <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                <Clock className="h-8 w-8 text-slate-500 mb-2" />
-                <p className="text-xs font-medium text-slate-200">
+              <div className="flex flex-col items-center justify-center p-8 text-center text-wf-text-secondary">
+                <Clock className="h-8 w-8 text-wf-text-muted mb-2" />
+                <p className="text-xs font-medium text-wf-text-primary">
                   Current sprint utilization: {utilPct}% ({currentLoadHours}h / {weeklyCapacityHours}h)
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1 max-w-sm">
+                <p className="text-[11px] text-wf-text-muted mt-1 max-w-sm">
                   Historical capacity trends will populate automatically as multi-week operational snapshots accumulate.
                 </p>
               </div>
             ) : (
               <>
-                <div className="flex items-end justify-between gap-2 h-36 pt-4 border-b border-slate-800/80 pb-2">
+                <div className="flex items-end justify-between gap-2 h-36 pt-4 border-b border-wf-border-default pb-2">
                   {historyData.map((item, idx) => {
                     const heightPct = Math.min((item.load / (employee.weeklyCapacityHours * 1.25 || 50)) * 100, 100);
                     const isOver = item.pct > 100;
                     return (
                       <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                        <span className="text-[10px] font-mono text-slate-400">
+                        <span className="text-[10px] font-mono text-wf-text-muted">
                           {item.load}h
                         </span>
                         <div
-                          className={`w-full rounded-t-md transition-all duration-300 ${
+                          className={cn(
+                            'w-full rounded-t-md transition-all duration-300',
                             isOver
-                              ? 'bg-gradient-to-t from-rose-600 to-red-500 shadow-sm'
-                              : 'bg-gradient-to-t from-violet-600 to-cyan-500'
-                          }`}
+                              ? 'bg-wf-semantic-danger shadow-sm'
+                              : 'bg-wf-brand-burgundy/80 dark:bg-wf-cream/70'
+                          )}
                           style={{ height: `${heightPct}%` }}
                         />
-                        <span className="text-[10px] font-semibold text-slate-400">
+                        <span className="text-[10px] font-semibold text-wf-text-muted">
                           {item.week}
                         </span>
                       </div>
@@ -683,16 +758,16 @@ export default function EmployeeDetailPage() {
                   })}
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                <div className="flex items-center justify-between text-xs text-wf-text-secondary pt-1">
                   <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-full bg-violet-500" />
+                    <div className="h-2 w-2 rounded-full bg-wf-brand-burgundy dark:bg-wf-cream" />
                     <span>Standard Load</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="h-2 w-2 rounded-full bg-rose-500" />
+                    <div className="h-2 w-2 rounded-full bg-wf-semantic-danger" />
                     <span>Capacity Overload</span>
                   </div>
-                  <span className="font-mono text-emerald-400">
+                  <span className="font-mono text-xs font-semibold text-wf-text-primary">
                     Avg: {Math.round(historyData.reduce((s, i) => s + i.pct, 0) / historyData.length)}%
                   </span>
                 </div>
@@ -706,11 +781,11 @@ export default function EmployeeDetailPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CheckSquare className="h-4 w-4 text-violet-400" />
+                <CheckSquare className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
                 <CardTitle>Currently Assigned Tasks ({assignedTasks.length})</CardTitle>
               </div>
               <Link href="/tasks">
-                <Button variant="ghost" size="sm" className="text-xs">
+                <Button variant="ghost" size="sm" className="text-xs text-wf-text-secondary hover:text-wf-text-primary">
                   Manage Tasks
                 </Button>
               </Link>
@@ -721,7 +796,7 @@ export default function EmployeeDetailPage() {
           </CardHeader>
           <CardContent>
             {assignedTasks.length > 0 ? (
-              <div className="divide-y divide-slate-800/80 max-h-72 overflow-y-auto">
+              <div className="divide-y divide-wf-border-default max-h-72 overflow-y-auto">
                 {assignedTasks.map((t) => (
                   <div
                     key={t.id}
@@ -731,16 +806,16 @@ export default function EmployeeDetailPage() {
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/tasks/${t.id}`}
-                          className="text-xs font-bold text-white hover:text-violet-300 transition-colors"
+                          className="text-xs font-semibold text-wf-text-primary hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors"
                         >
                           {t.title}
                         </Link>
                         <Badge
                           variant={
                             t.priority === 'critical'
-                              ? 'rose'
+                              ? 'danger'
                               : t.priority === 'high'
-                              ? 'amber'
+                              ? 'warning'
                               : 'slate'
                           }
                           size="sm"
@@ -748,13 +823,13 @@ export default function EmployeeDetailPage() {
                           {t.priority}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-2 text-[11px] text-wf-text-secondary">
                         <span>{t.projectName}</span>
                         {t.dueDate && (
                           <>
-                            <span>•</span>
+                            <span className="text-wf-text-muted">•</span>
                             <span className="flex items-center gap-1 font-mono">
-                              <Calendar className="h-3 w-3" /> Due {t.dueDate}
+                              <Calendar className="h-3 w-3 text-wf-text-muted" /> Due {t.dueDate}
                             </span>
                           </>
                         )}
@@ -762,10 +837,10 @@ export default function EmployeeDetailPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs font-bold text-cyan-400">
+                      <span className="font-mono text-xs font-semibold text-wf-text-primary">
                         {t.estimatedHours} hrs
                       </span>
-                      <Badge variant="violet" size="sm">
+                      <Badge variant="outline" size="sm">
                         {t.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                       <Link href={`/tasks/${t.id}`}>
@@ -778,12 +853,12 @@ export default function EmployeeDetailPage() {
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center text-slate-400">
-                <CheckSquare className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-                <p className="text-xs font-medium text-slate-300">
+              <div className="p-8 text-center text-wf-text-secondary">
+                <CheckSquare className="mx-auto h-8 w-8 text-wf-text-muted mb-2" />
+                <p className="text-xs font-medium text-wf-text-primary">
                   No active tasks assigned
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-wf-text-muted mt-1">
                   This employee has full open availability for new project allocations.
                 </p>
               </div>
@@ -793,13 +868,15 @@ export default function EmployeeDetailPage() {
       </div>
 
       {/* Operational Risk Assessment Callout */}
-      <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-4 text-xs text-slate-400 flex items-start gap-3">
-        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-4.5 text-xs text-wf-text-secondary flex items-start gap-3.5 shadow-card">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-wf-semantic-warning-bg text-wf-semantic-warning border border-wf-semantic-warning-border shrink-0 mt-0.5">
+          <AlertTriangle className="h-4 w-4" />
+        </div>
         <div className="space-y-1">
-          <span className="font-semibold text-slate-200 block">
-            Transparent Heuristic Risk Model:
+          <span className="font-semibold text-wf-text-primary block">
+            Transparent Heuristic Risk Model
           </span>
-          <p className="leading-relaxed">
+          <p className="leading-relaxed text-wf-text-secondary">
             Operational risk scores ({Math.round(employee.burnoutRiskScore * 100)}% index) reflect
             purely active assigned workload divided by weekly capacity.
             They are operational metrics designed to prevent delivery delays and over-allocation, not clinical or
@@ -817,25 +894,25 @@ export default function EmployeeDetailPage() {
       >
         <form onSubmit={handleAssignSubmit} className="space-y-4 py-2">
           {assignError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{assignError}</span>
             </div>
           )}
 
           {assignSuccess && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3 text-xs text-wf-semantic-success flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{assignSuccess}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+            <label className="block text-xs font-semibold text-wf-text-secondary">
               Select Target Project *
             </label>
             {dbProjects.length === 0 ? (
-              <p className="text-xs text-amber-400">No active projects found in workspace.</p>
+              <p className="text-xs text-wf-semantic-warning">No active projects found in workspace.</p>
             ) : (
               <select
                 value={assignProjectId}
@@ -843,7 +920,7 @@ export default function EmployeeDetailPage() {
                   setAssignProjectId(e.target.value);
                   setAssignTaskIds([]);
                 }}
-                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3.5 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
                 required
               >
                 <option value="" disabled>-- Select a Project --</option>
@@ -861,22 +938,22 @@ export default function EmployeeDetailPage() {
 
           {/* Optional Open Task Assignment */}
           {assignProjectId && (
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-semibold text-slate-300">
+            <div className="space-y-2 pt-2 border-t border-wf-border-default">
+              <label className="block text-xs font-semibold text-wf-text-secondary">
                 Optionally Assign Open Tasks from this Project:
               </label>
               {dbTasks.filter((t) => t.projectId === assignProjectId && !t.assignedTo).length === 0 ? (
-                <p className="text-[11px] text-slate-500 italic">
+                <p className="text-[11px] text-wf-text-muted italic">
                   No unassigned tasks found for this project.
                 </p>
               ) : (
-                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+                <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-xl border border-wf-border-default bg-wf-surface-subtle p-2.5">
                   {dbTasks
                     .filter((t) => t.projectId === assignProjectId && !t.assignedTo)
                     .map((t) => (
                       <label
                         key={t.id}
-                        className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                        className="flex items-center gap-2 text-xs text-wf-text-secondary hover:text-wf-text-primary cursor-pointer p-1 rounded-lg hover:bg-wf-surface-card"
                       >
                         <input
                           type="checkbox"
@@ -888,10 +965,10 @@ export default function EmployeeDetailPage() {
                               setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
                             }
                           }}
-                          className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                          className="rounded border-wf-border-default bg-wf-surface-card text-wf-brand-burgundy focus:ring-wf-border-focus"
                         />
                         <span className="truncate">{t.title}</span>
-                        <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                        <span className="text-[10px] text-wf-text-muted font-mono ml-auto shrink-0">
                           {t.estimatedHours}h
                         </span>
                       </label>
@@ -901,7 +978,7 @@ export default function EmployeeDetailPage() {
             </div>
           )}
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"
@@ -935,15 +1012,15 @@ export default function EmployeeDetailPage() {
       >
         <form onSubmit={handleEditSubmit} className="space-y-4 py-2">
           {editError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{editError}</span>
             </div>
           )}
 
           {editSuccess && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3 text-xs text-wf-semantic-success flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{editSuccess}</span>
             </div>
           )}
@@ -964,14 +1041,14 @@ export default function EmployeeDetailPage() {
             required
           />
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+          <div className="space-y-1.5 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
               Department *
             </label>
             <select
               value={editDepartment}
               onChange={(e) => setEditDepartment(e.target.value)}
-              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3.5 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
               required
             >
               <option value="Engineering">Engineering</option>
@@ -986,8 +1063,8 @@ export default function EmployeeDetailPage() {
             </select>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+          <div className="space-y-1.5 text-left">
+            <label className="block text-xs font-semibold text-wf-text-secondary select-none tracking-tight">
               Weekly Capacity Baseline (Hours/Week) *
             </label>
             <input
@@ -997,10 +1074,10 @@ export default function EmployeeDetailPage() {
               step={0.5}
               value={editCapacityHours}
               onChange={(e) => setEditCapacityHours(parseFloat(e.target.value) || 0)}
-              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3.5 py-2 text-sm text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
               required
             />
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-wf-text-muted">
               Standard full-time baseline is 40.0h. Used to calculate utilization and overload thresholds.
             </p>
           </div>
@@ -1012,7 +1089,7 @@ export default function EmployeeDetailPage() {
             placeholder="+1 (555) 012-3456"
           />
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"

@@ -10,7 +10,15 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
     | 'amber'
     | 'rose'
     | 'slate'
-    | 'outline';
+    | 'neutral'
+    | 'outline'
+    | 'burgundy'
+    | 'cream'
+    | 'sage'
+    | 'success'
+    | 'warning'
+    | 'danger'
+    | 'info';
   size?: 'sm' | 'md';
 }
 
@@ -22,34 +30,53 @@ export function Badge({
   ...props
 }: BadgeProps) {
   const variants = {
-    blue:
-      'bg-zinc-800/90 text-zinc-200 border-zinc-700/80',
-    violet:
-      'bg-zinc-800/90 text-zinc-200 border-zinc-700/80',
-    cyan:
-      'bg-zinc-800/70 text-zinc-300 border-zinc-700/60',
+    // WorkForce Brand Semantics
+    burgundy:
+      'bg-wf-brand-burgundy/15 text-wf-brand-burgundy dark:text-wf-cream border-wf-brand-burgundy/30',
+    cream:
+      'bg-wf-brand-cream/30 text-wf-text-primary border-wf-brand-cream',
+    sage:
+      'bg-wf-brand-sage/20 text-wf-text-primary border-wf-brand-sage/40',
+    success:
+      'bg-wf-semantic-success-bg text-wf-semantic-success border-wf-semantic-success-border',
+    warning:
+      'bg-wf-semantic-warning-bg text-wf-semantic-warning border-wf-semantic-warning-border',
+    danger:
+      'bg-wf-semantic-danger-bg text-wf-semantic-danger border-wf-semantic-danger-border',
+    info:
+      'bg-wf-semantic-info-bg text-wf-semantic-info border-wf-semantic-info-border',
+
+    // Existing Color Name Aliases (mapped to accessible tokens)
     emerald:
-      'bg-emerald-950/60 text-emerald-300 border-emerald-700/50',
+      'bg-wf-semantic-success-bg text-wf-semantic-success border-wf-semantic-success-border',
     amber:
-      'bg-amber-950/60 text-amber-300 border-amber-700/50',
+      'bg-wf-semantic-warning-bg text-wf-semantic-warning border-wf-semantic-warning-border',
     rose:
-      'bg-rose-950/60 text-rose-300 border-rose-700/50',
+      'bg-wf-semantic-danger-bg text-wf-semantic-danger border-wf-semantic-danger-border',
+    cyan:
+      'bg-wf-semantic-info-bg text-wf-semantic-info border-wf-semantic-info-border',
+    blue:
+      'bg-wf-semantic-info-bg text-wf-semantic-info border-wf-semantic-info-border',
+    violet:
+      'bg-wf-brand-burgundy/15 text-wf-brand-burgundy dark:text-wf-cream border-wf-brand-burgundy/30',
     slate:
-      'bg-zinc-800/80 text-zinc-300 border-zinc-700',
+      'bg-wf-surface-subtle text-wf-text-secondary border-wf-border-default',
+    neutral:
+      'bg-wf-surface-subtle text-wf-text-secondary border-wf-border-default',
     outline:
-      'bg-transparent text-zinc-300 border-zinc-700',
+      'bg-transparent text-wf-text-secondary border-wf-border-default',
   };
 
   const sizes = {
-    sm: 'text-[11px] px-2 py-0.5 font-medium',
-    md: 'text-xs px-2.5 py-1 font-semibold',
+    sm: 'text-[11px] px-2 py-0.5 font-medium leading-tight',
+    md: 'text-xs px-2.5 py-1 font-semibold leading-tight',
   };
 
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border transition-colors select-none',
-        variants[variant],
+        'inline-flex items-center gap-1.5 rounded-full border transition-colors duration-micro select-none',
+        variants[variant] || variants.slate,
         sizes[size],
         className
       )}

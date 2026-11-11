@@ -4,62 +4,201 @@
 
 @layer base {
   :root {
-    --bg-base: #09090B;
-    --bg-subtle: #18181B;
-    --bg-card: #18181B;
-    --border-subtle: #27272A;
-    --text-primary: #FAFAFA;
-    --text-secondary: #A1A1AA;
+    /* ==========================================================================
+       WorkForce Apple-Inspired Design Tokens — Light Theme (Default Root)
+       ========================================================================== */
+    /* Canvas & Surfaces */
+    --wf-canvas-base: #FAF8F5;          /* Warm Alabaster */
+    --wf-surface-subtle: #F3EFEA;       /* Warm Putty */
+    --wf-surface-card: #FFFFFF;         /* Pure White */
+    --wf-surface-elevated: #FFFFFF;     /* Elevated Pure White */
+    --wf-surface-overlay: rgba(250, 248, 245, 0.85);
+
+    /* Borders & Structural Lines */
+    --wf-border-subtle: #E8E4DD;
+    --wf-border-default: #D8D3CA;
+    --wf-border-strong: #A5A79B;        /* Muted Sage Grey */
+    --wf-border-focus: #590907;         /* Deep Burgundy Focus Ring */
+
+    /* Typography */
+    --wf-text-primary: #1A1817;         /* Deep Carbon (14.5:1 contrast) */
+    --wf-text-secondary: #635F5B;       /* Muted Umber (5.2:1 contrast) */
+    --wf-text-tertiary: #757069;        /* High-contrast readable warm grey (4.5:1 contrast) */
+
+    /* Brand Triad */
+    --wf-brand-burgundy: #590907;
+    --wf-brand-burgundy-hover: #450705;
+    --wf-brand-burgundy-active: #360504;
+    --wf-brand-sage: #A5A79B;
+    --wf-brand-cream: #E8D2B5;
+
+    /* Actions */
+    --wf-action-primary: #590907;
+    --wf-action-hover: #450705;
+    --wf-action-active: #360504;
+    --wf-action-primary-text: #FFFFFF;
+
+    /* Semantic States (Contrast >= 5.0:1) */
+    --wf-semantic-success: #1C4733;
+    --wf-semantic-success-bg: #EAF4EE;
+    --wf-semantic-success-border: #C8E3D2;
+
+    --wf-semantic-warning: #6E3F0A;
+    --wf-semantic-warning-bg: #FAF2E6;
+    --wf-semantic-warning-border: #F0DDBC;
+
+    --wf-semantic-danger: #590907;
+    --wf-semantic-danger-bg: #F8EBEA;
+    --wf-semantic-danger-border: #E8C7C5;
+
+    --wf-semantic-info: #20454D;
+    --wf-semantic-info-bg: #EDF4F6;
+    --wf-semantic-info-border: #CCE0E4;
+
+    /* Backwards compatibility aliases */
+    --bg-base: var(--wf-canvas-base);
+    --bg-subtle: var(--wf-surface-subtle);
+    --bg-card: var(--wf-surface-card);
+    --border-subtle: var(--wf-border-subtle);
+    --text-primary: var(--wf-text-primary);
+    --text-secondary: var(--wf-text-secondary);
+  }
+
+  .dark {
+    /* ==========================================================================
+       WorkForce Apple-Inspired Design Tokens — Dark Theme (Deep Espresso Obsidian)
+       ========================================================================== */
+    /* Canvas & Surfaces */
+    --wf-canvas-base: #0F0E0E;          /* Deep Espresso Obsidian */
+    --wf-surface-subtle: #171615;       /* Muted Charcoal */
+    --wf-surface-card: #1F1D1C;         /* Elevated Espresso */
+    --wf-surface-elevated: #282624;     /* Top-tier Slate */
+    --wf-surface-overlay: rgba(15, 14, 14, 0.88);
+
+    /* Borders & Structural Lines */
+    --wf-border-subtle: #2B2827;
+    --wf-border-default: #383432;
+    --wf-border-strong: rgba(165, 167, 155, 0.35); /* Subtle Sage outline */
+    --wf-border-focus: #E8D2B5;         /* Warm Cream Focus Ring */
+
+    /* Typography */
+    --wf-text-primary: #F4EFEA;         /* Alabaster Cream (15.1:1 contrast) */
+    --wf-text-secondary: #A39F99;       /* Ash Sage (5.4:1 contrast) */
+    --wf-text-tertiary: #85807A;        /* Enhanced subtle text (4.3:1 contrast) */
+
+    /* Brand Triad */
+    --wf-brand-burgundy: #8A1E1B;       /* Luminous Burgundy */
+    --wf-brand-burgundy-hover: #A32926;
+    --wf-brand-burgundy-active: #721614;
+    --wf-brand-sage: #7C7F72;
+    --wf-brand-cream: #D4BEA3;
+
+    /* Actions */
+    --wf-action-primary: #8A1E1B;
+    --wf-action-hover: #A32926;
+    --wf-action-active: #721614;
+    --wf-action-primary-text: #FFFFFF;
+
+    /* Semantic States (Contrast >= 5.0:1) */
+    --wf-semantic-success: #4E9B72;
+    --wf-semantic-success-bg: #13241A;
+    --wf-semantic-success-border: #1C402B;
+
+    --wf-semantic-warning: #E0943A;
+    --wf-semantic-warning-bg: #281D0F;
+    --wf-semantic-warning-border: #4D3315;
+
+    --wf-semantic-danger: #E05D52;
+    --wf-semantic-danger-bg: #2A1211;
+    --wf-semantic-danger-border: #52211F;
+
+    --wf-semantic-info: #6AA3B0;
+    --wf-semantic-info-bg: #102126;
+    --wf-semantic-info-border: #1D3E45;
+
+    /* Backwards compatibility aliases */
+    --bg-base: var(--wf-canvas-base);
+    --bg-subtle: var(--wf-surface-subtle);
+    --bg-card: var(--wf-surface-card);
+    --border-subtle: var(--wf-border-subtle);
+    --text-primary: var(--wf-text-primary);
+    --text-secondary: var(--wf-text-secondary);
   }
 
   body {
-    @apply bg-background-base text-zinc-100 antialiased selection:bg-zinc-200 selection:text-zinc-950;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--wf-canvas-base);
+    color: var(--wf-text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom Scrollbar for sleek neutral SaaS */
+  /* Accessible high-contrast selection */
+  ::selection {
+    background-color: var(--wf-brand-cream);
+    color: #1A1817;
+  }
+
+  .dark ::selection {
+    background-color: var(--wf-brand-burgundy);
+    color: #FFFFFF;
+  }
+
+  /* Custom Sleek Scrollbars */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #09090B;
+    background: var(--wf-canvas-base);
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #27272A;
+    background: var(--wf-border-default);
     border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #3F3F46;
+    background: var(--wf-border-strong);
   }
 }
 
 @layer utilities {
-
-  /* Clean neutral glass & panel utilities */
+  /* Apple frosted glass panel utilities */
   .glass-panel {
-    background: rgba(24, 24, 27, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(63, 63, 70, 0.4);
+    background: var(--wf-surface-overlay);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--wf-border-default);
   }
 
-  .glow-border {
-    border-color: rgba(250, 250, 250, 0.2);
-    box-shadow: 0 0 12px -3px rgba(250, 250, 250, 0.1);
+  /* Tabular numbers for clean data metrics */
+  .font-tabular {
+    font-variant-numeric: tabular-nums;
   }
 
-  .glow-cyan-border {
-    border-color: rgba(63, 63, 70, 0.6);
-    box-shadow: 0 0 12px -3px rgba(0, 0, 0, 0.4);
+  /* Subtle card elevation highlight */
+  .wf-card-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
   }
 
-  .gradient-text-brand {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-zinc-200 to-zinc-400;
+  .dark .wf-card-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* Reduced Motion Override (Emil Kowalski Motion Philosophy & WCAG 2.1 AA) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

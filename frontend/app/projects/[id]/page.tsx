@@ -14,7 +14,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Dialog } from '@/components/ui/Dialog';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input, Select } from '@/components/ui/Input';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { InteractiveAvatar } from '@/components/ui/InteractiveAvatar';
 import {
   FolderKanban,
   Calendar,
@@ -27,10 +30,12 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
-  RefreshCw,
   UserPlus,
   Trash2,
   Edit3,
+  Layers,
+  Briefcase,
+  ShieldAlert,
 } from 'lucide-react';
 
 export default function ProjectDetailPage() {
@@ -38,7 +43,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const projectId = params?.id as string;
 
-  const { isAuthenticated, organization, role: authRole } = useAuth();
+  const { user, isAuthenticated, organization, role: authRole } = useAuth();
   const isLive = isAuthenticated && Boolean(organization?.id);
 
   // Live hooks
@@ -65,12 +70,15 @@ export default function ProjectDetailPage() {
     employees: mockEmployees,
     tasks: mockTasks,
     activeRole: mockRole,
+    currentUserId: mockUserId,
     updateProject: mockUpdateProject,
     deleteProject: mockDeleteProject,
   } = useMockStore();
 
   const activeRole = isLive ? authRole : mockRole;
-  const isManagerOrAdmin = activeRole === 'organizer' || activeRole === 'admin' || activeRole === 'manager';
+  const currentUserId = isLive ? user?.id : mockUserId;
+  const isManagerOrAdmin =
+    activeRole === 'organizer' || activeRole === 'admin' || activeRole === 'manager';
   const isAdminOrOrganizer = activeRole === 'organizer' || activeRole === 'admin';
 
   const projects = isLive ? dbProjects : mockProjects;
@@ -87,6 +95,10 @@ export default function ProjectDetailPage() {
   const [assignError, setAssignError] = React.useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
 
+  // Member Removal Confirmation State (Strictly using ConfirmDialog, no browser prompt)
+  const [memberToRemove, setMemberToRemove] = React.useState<{ id: string; name: string } | null>(null);
+  const [removeLoading, setRemoveLoading] = React.useState(false);
+
   // Edit Project Modal State
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [editName, setEditName] = React.useState('');
@@ -97,19 +109,15 @@ export default function ProjectDetailPage() {
   const [editTotalHours, setEditTotalHours] = React.useState('');
   const [editManagerId, setEditManagerId] = React.useState('');
   const [editLoading, setEditLoading] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
 
-  // Eligible Managers filter: strictly 'manager' and 'admin' roles only (prohibiting organizer, hr, employee)
+  // Eligible Managers filter: strictly 'manager' and 'admin' roles only
   const eligibleManagers = React.useMemo(() => {
     if (isLive) {
-      return orgMembers.filter(
-        (m) => m.role === 'manager' || m.role === 'admin'
-      );
+      return orgMembers.filter((m) => m.role === 'manager' || m.role === 'admin');
     }
-    return mockEmployees.filter(
-      (e) => e.role === 'manager' || e.role === 'admin'
-    );
+    return mockEmployees.filter((e) => e.role === 'manager' || e.role === 'admin');
   }, [isLive, orgMembers, mockEmployees]);
-  const [editError, setEditError] = React.useState<string | null>(null);
 
   // Delete Project Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
@@ -123,24 +131,31 @@ export default function ProjectDetailPage() {
   if (isLive && isProjectsLoading) {
     return (
       <div className="space-y-6 animate-pulse p-6">
-        <div className="h-6 w-32 bg-slate-800 rounded" />
-        <div className="h-44 bg-navy-900/60 rounded-xl border border-slate-800" />
-        <div className="h-32 bg-navy-900/40 rounded-xl border border-slate-800" />
+        <div className="h-6 w-32 bg-wf-surface-subtle rounded-xl" />
+        <div className="h-44 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 bg-wf-surface-card rounded-2xl border border-wf-border-default" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-12 text-center space-y-3">
-        <h3 className="text-lg font-bold text-white">Project Not Found</h3>
-        <p className="text-xs text-slate-400">
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-12 text-center space-y-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-wf-brand-burgundy/10 text-wf-brand-burgundy dark:text-wf-cream">
+          <FolderKanban className="h-6 w-6" />
+        </div>
+        <h3 className="text-xl font-bold text-wf-text-primary tracking-tight">Project Not Found</h3>
+        <p className="text-sm text-wf-text-secondary max-w-md mx-auto">
           The requested project does not exist in the active organization portfolio.
         </p>
-        <Link href="/projects">
+        <Link href="/projects" className="inline-block pt-2">
           <Button variant="secondary" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Back to Projects
+            Back to Projects Portfolio
           </Button>
         </Link>
       </div>
@@ -151,6 +166,12 @@ export default function ProjectDetailPage() {
   const filteredTasks = projectTasks.filter((t) =>
     activeTab === 'all' ? true : t.status === activeTab
   );
+
+  // Task breakdown counts
+  const totalTasks = projectTasks.length;
+  const todoTasks = projectTasks.filter((t) => t.status === 'todo').length;
+  const inProgressTasks = projectTasks.filter((t) => t.status === 'in_progress').length;
+  const completedTasks = projectTasks.filter((t) => t.status === 'completed').length;
 
   // Resolve members allocated to this project
   const projectMembers = isLive
@@ -174,6 +195,11 @@ export default function ProjectDetailPage() {
           };
         })
     : mockEmployees.filter((e) => project.memberIds.includes(e.id));
+
+  const totalTeamCapacity = projectMembers.reduce(
+    (sum: number, m: any) => sum + (Number(m.weeklyCapacityHours) || 40),
+    0
+  );
 
   const completedTasksHours = projectTasks
     .filter((t) => t.status === 'completed')
@@ -317,59 +343,77 @@ export default function ProjectDetailPage() {
     }, 1500);
   };
 
-  const handleRemoveMember = async (userId: string, memberName: string) => {
-    if (!confirm(`Remove ${memberName} from ${project.name}?`)) return;
-    const res = await removeProjectMember(project.id, userId);
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove || !project) return;
+    setRemoveLoading(true);
+    const res = await removeProjectMember(project.id, memberToRemove.id);
+    setRemoveLoading(false);
+    const removedName = memberToRemove.name;
+    setMemberToRemove(null);
+
     if (res.error) {
       setActionNotice({ type: 'error', text: res.error });
     } else {
-      setActionNotice({ type: 'success', text: `${memberName} was removed from the project.` });
+      setActionNotice({ type: 'success', text: `${removedName} was removed from the project.` });
       setTimeout(() => setActionNotice(null), 3000);
     }
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* Action Notice */}
       {actionNotice && (
         <div
-          className={`rounded-xl border p-3 text-xs flex items-center gap-2 animate-in fade-in ${
+          role="status"
+          className={`rounded-2xl border p-4 text-xs sm:text-sm font-medium flex items-center gap-3 animate-in fade-in ${
             actionNotice.type === 'error'
-              ? 'border-rose-500/40 bg-rose-950/30 text-rose-300'
-              : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
+              ? 'border-wf-semantic-danger-border bg-wf-semantic-danger-bg text-wf-semantic-danger'
+              : 'border-wf-semantic-success-border bg-wf-semantic-success-bg text-wf-semantic-success'
           }`}
         >
           {actionNotice.type === 'error' ? (
-            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <AlertCircle className="h-4 w-4 shrink-0" />
           ) : (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
           )}
           <span>{actionNotice.text}</span>
         </div>
       )}
 
-      {/* Top Breadcrumb Header */}
-      <div className="flex items-center justify-between">
-        <Link href="/projects">
-          <Button variant="ghost" size="sm" className="text-xs">
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            <span>All Projects</span>
-          </Button>
+      {/* Top Breadcrumb Navigation & Role Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <Link
+          href="/projects"
+          className="inline-flex items-center text-xs sm:text-sm font-semibold text-wf-text-secondary hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors duration-hover"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          <span>Back to Projects Portfolio</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant={
               project.priority === 'critical'
-                ? 'rose'
+                ? 'danger'
                 : project.priority === 'high'
-                ? 'amber'
+                ? 'warning'
                 : 'slate'
             }
             size="sm"
           >
             {project.priority.toUpperCase()} PRIORITY
           </Badge>
-          <Badge variant="cyan" size="sm">
+          <Badge
+            variant={
+              project.status === 'completed'
+                ? 'success'
+                : project.status === 'in_progress'
+                ? 'burgundy'
+                : project.status === 'on_hold'
+                ? 'warning'
+                : 'sage'
+            }
+            size="sm"
+          >
             {project.status.replace('_', ' ').toUpperCase()}
           </Badge>
 
@@ -380,7 +424,7 @@ export default function ProjectDetailPage() {
               onClick={handleOpenEditModal}
               className="text-xs"
             >
-              <Edit3 className="h-3.5 w-3.5 mr-1 text-slate-300" />
+              <Edit3 className="h-3.5 w-3.5 mr-1 text-wf-brand-burgundy dark:text-wf-cream" />
               <span>Edit Project</span>
             </Button>
           )}
@@ -390,7 +434,7 @@ export default function ProjectDetailPage() {
               variant="ghost"
               size="sm"
               onClick={() => setIsDeleteModalOpen(true)}
-              className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+              className="text-xs text-wf-semantic-danger hover:bg-wf-semantic-danger-bg hover:text-wf-semantic-danger"
               title="Delete Project (Admin Only)"
             >
               <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -400,130 +444,233 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Project Banner Card */}
-      <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center gap-2.5">
-              <FolderKanban className="h-6 w-6 text-violet-400" />
-              <h2 className="text-2xl font-extrabold text-white">
+      {/* Project Identity Hero Banner */}
+      <Card className="border-wf-border-default bg-wf-surface-card p-6 sm:p-8 shadow-card">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3 max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-wf-brand-burgundy/10 text-wf-brand-burgundy dark:text-wf-cream shrink-0">
+                <FolderKanban className="h-5 w-5 sm:h-6 sm:w-6" />
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-wf-text-primary tracking-tight">
                 {project.name}
-              </h2>
+              </h1>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-wf-text-secondary leading-relaxed">
               {project.description || 'No detailed scope description provided.'}
             </p>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
-              <span className="flex items-center gap-1 font-mono">
-                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-wf-text-tertiary pt-1">
+              <span className="flex items-center gap-1.5 font-mono text-wf-text-secondary">
+                <Calendar className="h-3.5 w-3.5 text-wf-brand-burgundy dark:text-wf-cream" />
                 Target: {project.targetEndDate || 'Unscheduled'}
               </span>
               <span>•</span>
-              <span>Lead: {project.managerName || 'Unassigned'}</span>
+              <span className="flex items-center gap-1.5 text-wf-text-secondary">
+                <Briefcase className="h-3.5 w-3.5 text-wf-brand-sage" />
+                Lead: <strong className="text-wf-text-primary font-semibold">{project.managerName || 'Unassigned'}</strong>
+              </span>
               <span>•</span>
-              <span className="font-mono">{projectTasks.length} Total Tasks</span>
+              <span className="flex items-center gap-1.5 text-wf-text-secondary">
+                <Users className="h-3.5 w-3.5 text-wf-brand-sage" />
+                {projectMembers.length} {projectMembers.length === 1 ? 'member' : 'members'}
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5 text-wf-text-secondary font-mono">
+                <CheckSquare className="h-3.5 w-3.5 text-wf-brand-sage" />
+                {totalTasks} total tasks
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-1.5 min-w-[200px] text-right">
-            <span className="text-xs text-slate-400 uppercase font-semibold">
-              Project Delivery
-            </span>
-            <div className="text-2xl font-bold font-mono text-white">
-              {completedHours}h / {totalEffortHours}h ({progressPct}%)
+          {/* Delivery Metric Summary Widget */}
+          <div className="rounded-2xl border border-wf-border-subtle bg-wf-surface-subtle/50 p-4 sm:p-5 flex flex-col justify-between gap-3 min-w-[220px] lg:min-w-[240px]">
+            <div className="flex items-center justify-between text-xs font-semibold text-wf-text-secondary">
+              <span>Overall Delivery</span>
+              <span className="font-mono text-wf-brand-burgundy dark:text-wf-cream font-bold">
+                {progressPct}%
+              </span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-wf-text-primary tabular-nums">
+              {completedHours}h <span className="text-xs sm:text-sm font-normal text-wf-text-tertiary">/ {totalEffortHours}h</span>
             </div>
             <div className="w-full">
-              <ProgressBar value={progressPct} />
+              <ProgressBar value={progressPct} max={100} colorScheme="auto" />
             </div>
+            <p className="text-[11px] text-wf-text-tertiary">
+              {completedTasks} of {totalTasks} tasks delivered
+            </p>
           </div>
         </div>
       </Card>
 
-      {/* Assigned Team Members Row */}
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-cyan-400" />
-            <CardTitle>Allocated Team Members ({projectMembers.length})</CardTitle>
+      {/* Project Execution Overview (MetricCard Primitives) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Overall Delivery Progress"
+          value={`${progressPct}%`}
+          subtitle={`${completedHours}h of ${totalEffortHours}h effort logged`}
+          icon={<FolderKanban className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />}
+          progress={{ value: progressPct, max: 100, colorScheme: 'auto' }}
+        />
+        <MetricCard
+          title="Effort Budget Allocation"
+          value={`${totalEffortHours}h`}
+          subtitle={`${completedHours}h completed • ${Math.max(0, totalEffortHours - completedHours)}h remaining`}
+          icon={<Clock className="h-5 w-5 text-wf-brand-sage dark:text-wf-sage" />}
+        />
+        <MetricCard
+          title="Active Execution Tasks"
+          value={inProgressTasks}
+          subtitle={`${completedTasks} delivered • ${todoTasks} pending`}
+          icon={<CheckSquare className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />}
+        />
+        <MetricCard
+          title="Team Roster Bandwidth"
+          value={projectMembers.length}
+          subtitle={`${totalTeamCapacity}h/wk total weekly capacity`}
+          icon={<Users className="h-5 w-5 text-wf-brand-sage dark:text-wf-sage" />}
+        />
+      </div>
+
+      {/* Allocated Team Members Section */}
+      <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />
+              <CardTitle className="text-base sm:text-lg">
+                Allocated Team Members ({projectMembers.length})
+              </CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Contributors actively assigned to project deliverables and initiative workflows
+            </CardDescription>
           </div>
           {isManagerOrAdmin && (
-            <Button variant="secondary" size="sm" onClick={handleOpenAssignModal}>
-              <UserPlus className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+            <Button variant="secondary" size="sm" onClick={handleOpenAssignModal} className="text-xs shrink-0">
+              <UserPlus className="h-3.5 w-3.5 mr-1 text-wf-brand-burgundy dark:text-wf-cream" />
               <span>Assign Member</span>
             </Button>
           )}
         </CardHeader>
         <CardContent>
           {projectMembers.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3 text-center">
-              No team members have been specifically assigned to this project.
-            </p>
+            <div className="rounded-2xl border border-dashed border-wf-border-default bg-wf-surface-subtle/40 p-8 text-center space-y-2">
+              <Users className="mx-auto h-8 w-8 text-wf-text-tertiary" />
+              <p className="text-xs font-semibold text-wf-text-primary">No members allocated yet</p>
+              <p className="text-xs text-wf-text-secondary max-w-sm mx-auto">
+                Assign team members to allocate bandwidth and distribute tasks across your organization.
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {projectMembers.map((m) => (
-                <div
-                  key={m.id}
-                  className="rounded-xl border border-slate-800 bg-navy-900/60 p-3 hover:border-violet-500/50 transition-all group flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white shrink-0">
-                      {m.fullName
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')}
+              {projectMembers.map((m: any) => {
+                // Strict authorization guard: Employees CANNOT browse other employee profiles
+                const canNavigateToProfile = activeRole !== 'employee' || m.id === currentUserId;
+                const memberUtilPct = m.weeklyCapacityHours > 0
+                  ? Math.round(((m.currentLoadHours || 0) / m.weeklyCapacityHours) * 100)
+                  : 0;
+
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-2xl border border-wf-border-default bg-wf-surface-subtle/50 p-3.5 hover:border-wf-border-strong hover:bg-wf-surface-card transition-all duration-hover flex items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <InteractiveAvatar
+                        name={m.fullName}
+                        jobTitle={m.jobTitle}
+                        department={m.department}
+                        size="sm"
+                        weeklyCapacityHours={m.weeklyCapacityHours}
+                        activeAssignedHours={m.currentLoadHours}
+                        utilizationPct={memberUtilPct}
+                        employeeId={canNavigateToProfile ? m.id : undefined}
+                      />
+                      <div className="min-w-0 flex-1">
+                        {canNavigateToProfile ? (
+                          <Link
+                            href={`/employees/${m.id}`}
+                            className="text-xs font-semibold text-wf-text-primary group-hover:text-wf-brand-burgundy dark:group-hover:text-wf-cream transition-colors truncate block"
+                          >
+                            {m.fullName}
+                          </Link>
+                        ) : (
+                          <span
+                            className="text-xs font-semibold text-wf-text-primary truncate block"
+                            title="Employee profile navigation restricted"
+                          >
+                            {m.fullName}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-wf-text-secondary truncate block">
+                          {m.jobTitle}
+                        </span>
+                        <span className="text-[10px] font-mono text-wf-text-tertiary block pt-0.5">
+                          {m.currentLoadHours || 0}h / {m.weeklyCapacityHours || 40}h ({memberUtilPct}%)
+                        </span>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-semibold text-white group-hover:text-violet-300 transition-colors truncate">
-                        {m.fullName}
-                      </h4>
-                      <span className="text-[10px] text-slate-400 truncate block">
-                        {m.jobTitle}
-                      </span>
-                    </div>
+                    {isManagerOrAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMemberToRemove({ id: m.id, name: m.fullName })}
+                        className="text-wf-semantic-danger hover:bg-wf-semantic-danger-bg p-1 h-7 w-7 shrink-0"
+                        title={`Remove ${m.fullName} from project`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
-                  {isManagerOrAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveMember(m.id, m.fullName)}
-                      className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1 h-7 w-7 shrink-0 ml-2"
-                      title="Remove from project"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Project Tasks Summary & Filter Tabs */}
+      {/* Task Execution Workspace & Filter Tabs */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold text-white tracking-tight">
-              Project Task Roster
-            </h3>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-lg sm:text-xl font-bold text-wf-text-primary tracking-tight">
+              Project Task Execution Roster
+            </h2>
+            <p className="text-xs text-wf-text-secondary">
               Granular breakdown of requirements, deadlines, and assigned talent
             </p>
           </div>
 
           {/* Status Tabs */}
-          <div className="flex items-center gap-1 rounded-xl bg-navy-900 p-1 border border-slate-800 text-xs">
-            {(['all', 'todo', 'in_progress', 'completed'] as const).map((tab) => (
+          <div className="flex items-center gap-1 rounded-2xl bg-wf-surface-subtle p-1 border border-wf-border-subtle text-xs">
+            {(
+              [
+                { id: 'all', label: 'All Tasks', count: totalTasks },
+                { id: 'todo', label: 'To Do', count: todoTasks },
+                { id: 'in_progress', label: 'In Progress', count: inProgressTasks },
+                { id: 'completed', label: 'Completed', count: completedTasks },
+              ] as const
+            ).map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-lg px-3 py-1 font-medium transition-colors ${
-                  activeTab === tab
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`rounded-xl px-3 py-1.5 font-medium transition-all duration-hover text-xs flex items-center gap-1.5 ${
+                  activeTab === tab.id
+                    ? 'bg-wf-surface-card text-wf-brand-burgundy dark:text-wf-cream shadow-xs font-semibold border border-wf-border-subtle'
+                    : 'text-wf-text-secondary hover:text-wf-text-primary'
                 }`}
               >
-                {tab === 'all' ? 'All Tasks' : tab.replace('_', ' ').toUpperCase()}
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] rounded-full px-1.5 py-0.2 font-mono ${
+                    activeTab === tab.id
+                      ? 'bg-wf-brand-burgundy/10 text-wf-brand-burgundy dark:text-wf-cream'
+                      : 'bg-wf-surface-card text-wf-text-tertiary'
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
@@ -534,52 +681,68 @@ export default function ProjectDetailPage() {
           {filteredTasks.map((t) => (
             <Card
               key={t.id}
-              className="border-slate-800 hover:border-violet-500/50 transition-all"
+              className="border-wf-border-default hover:border-wf-border-strong hover:shadow-elevated transition-all duration-hover"
             >
-              <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2">
+              <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-2 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={`/tasks/${t.id}`}
-                      className="text-sm font-bold text-white hover:text-violet-300 transition-colors"
+                      className="text-sm font-bold text-wf-text-primary hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors duration-hover"
                     >
                       {t.title}
                     </Link>
                     <Badge
                       variant={
                         t.priority === 'critical'
-                          ? 'rose'
+                          ? 'danger'
                           : t.priority === 'high'
-                          ? 'amber'
+                          ? 'warning'
                           : 'slate'
                       }
                       size="sm"
                     >
                       {t.priority}
                     </Badge>
+                    <Badge
+                      variant={
+                        t.status === 'completed'
+                          ? 'success'
+                          : t.status === 'in_progress'
+                          ? 'burgundy'
+                          : 'sage'
+                      }
+                      size="sm"
+                    >
+                      {t.status.replace('_', ' ')}
+                    </Badge>
                   </div>
-                  <p className="text-xs text-slate-300 line-clamp-1">
-                    {t.description}
+                  <p className="text-xs text-wf-text-secondary line-clamp-2">
+                    {t.description || 'No additional task specifications provided.'}
                   </p>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-1">
-                    <span className="font-mono text-cyan-400 font-semibold">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-wf-text-tertiary pt-1">
+                    <span className="font-mono text-wf-brand-burgundy dark:text-wf-cream font-semibold">
                       {t.estimatedHours} hrs estimate
                     </span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 font-mono">
+                    <span className="flex items-center gap-1 font-mono text-wf-text-secondary">
                       <Calendar className="h-3 w-3" /> Due {t.dueDate || 'Unscheduled'}
                     </span>
                     <span>•</span>
-                    <span>
-                      Assignee:{' '}
-                      <strong className="text-slate-200">
-                        {t.assignedEmployeeName || 'Unassigned'}
-                      </strong>
-                    </span>
+                    <div className="flex items-center gap-1.5 text-wf-text-secondary">
+                      <span>Assignee:</span>
+                      {t.assignedEmployeeName ? (
+                        <span className="font-semibold text-wf-text-primary">
+                          {t.assignedEmployeeName}
+                        </span>
+                      ) : (
+                        <span className="text-wf-semantic-warning font-medium">Unassigned</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {!t.assignedTo ? (
                     <Link href="/matching">
                       <Button variant="accent" size="sm">
@@ -590,7 +753,8 @@ export default function ProjectDetailPage() {
                   ) : (
                     <Link href={`/tasks/${t.id}`}>
                       <Button variant="secondary" size="sm">
-                        View Details
+                        <span>View Task</span>
+                        <ArrowRight className="h-3.5 w-3.5 ml-1" />
                       </Button>
                     </Link>
                   )}
@@ -600,15 +764,30 @@ export default function ProjectDetailPage() {
           ))}
 
           {filteredTasks.length === 0 && (
-            <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400">
-              <CheckSquare className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-              <p className="text-xs font-medium text-slate-300">
-                No tasks matching &quot;{activeTab}&quot; status.
+            <div className="rounded-2xl border border-dashed border-wf-border-default bg-wf-surface-card p-10 text-center space-y-2">
+              <CheckSquare className="mx-auto h-8 w-8 text-wf-text-tertiary" />
+              <p className="text-xs font-semibold text-wf-text-primary">
+                No tasks matching &quot;{activeTab}&quot; status
+              </p>
+              <p className="text-xs text-wf-text-secondary">
+                Switch filters above to inspect tasks across other delivery phases.
               </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Member Removal Confirmation Dialog (Strict ConfirmDialog) */}
+      <ConfirmDialog
+        isOpen={Boolean(memberToRemove)}
+        onClose={() => setMemberToRemove(null)}
+        onConfirm={handleConfirmRemoveMember}
+        title="Remove Member from Project"
+        description={`Are you sure you want to remove ${memberToRemove?.name} from ${project.name}? Their uncompleted tasks will remain in the project scope.`}
+        confirmText="Remove Member"
+        variant="danger"
+        isLoading={removeLoading}
+      />
 
       {/* Assign Member Modal */}
       <Dialog
@@ -619,30 +798,30 @@ export default function ProjectDetailPage() {
       >
         <form onSubmit={handleAssignMember} className="space-y-4 py-2">
           {assignError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3.5 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{assignError}</span>
             </div>
           )}
 
           {assignSuccess && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="rounded-2xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3.5 text-xs text-wf-semantic-success flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{assignSuccess}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+            <label className="block text-xs font-semibold text-wf-text-primary">
               Select Active Member *
             </label>
             {orgMembers.length === 0 ? (
-              <p className="text-xs text-amber-400">No active members found in organization.</p>
+              <p className="text-xs text-wf-semantic-warning">No active members found in organization.</p>
             ) : (
               <select
                 value={selectedMemberId}
                 onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3 py-2 text-sm text-wf-text-primary focus:border-wf-brand-burgundy focus:outline-none"
                 required
               >
                 <option value="" disabled>-- Select a Team Member --</option>
@@ -659,22 +838,22 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Optional Task Assignment Selection */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <label className="block text-xs font-semibold text-slate-300">
+          <div className="space-y-2 pt-2 border-t border-wf-border-subtle">
+            <label className="block text-xs font-semibold text-wf-text-primary">
               Optionally Assign Open Tasks from this Project:
             </label>
             {projectTasks.filter((t) => !t.assignedTo).length === 0 ? (
-              <p className="text-[11px] text-slate-500 italic">
+              <p className="text-[11px] text-wf-text-tertiary italic">
                 No unassigned tasks found for this project.
               </p>
             ) : (
-              <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-navy-950/60 p-2">
+              <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-xl border border-wf-border-default bg-wf-surface-subtle p-2">
                 {projectTasks
                   .filter((t) => !t.assignedTo)
                   .map((t) => (
                     <label
                       key={t.id}
-                      className="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer"
+                      className="flex items-center gap-2 text-xs text-wf-text-secondary hover:text-wf-text-primary cursor-pointer p-1 rounded-lg"
                     >
                       <input
                         type="checkbox"
@@ -686,10 +865,10 @@ export default function ProjectDetailPage() {
                             setAssignTaskIds((prev) => prev.filter((id) => id !== t.id));
                           }
                         }}
-                        className="rounded border-slate-700 bg-navy-850 text-violet-600 focus:ring-violet-500"
+                        className="rounded border-wf-border-default bg-wf-surface-card text-wf-brand-burgundy focus:ring-wf-brand-burgundy"
                       />
                       <span className="truncate">{t.title}</span>
-                      <span className="text-[10px] text-cyan-400 font-mono ml-auto shrink-0">
+                      <span className="text-[10px] text-wf-brand-burgundy dark:text-wf-cream font-mono ml-auto shrink-0">
                         {t.estimatedHours}h
                       </span>
                     </label>
@@ -698,7 +877,7 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-subtle">
             <Button
               type="button"
               variant="secondary"
@@ -718,6 +897,7 @@ export default function ProjectDetailPage() {
           </div>
         </form>
       </Dialog>
+
       {/* Edit Project Dialog */}
       <Dialog
         isOpen={isEditModalOpen}
@@ -727,8 +907,8 @@ export default function ProjectDetailPage() {
       >
         <form onSubmit={handleEditProjectSubmit} className="space-y-3.5 py-2">
           {editError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3.5 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{editError}</span>
             </div>
           )}
@@ -741,14 +921,14 @@ export default function ProjectDetailPage() {
           />
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+            <label className="block text-xs font-semibold text-wf-text-primary">
               Project Description
             </label>
             <textarea
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
               rows={3}
-              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card px-3 py-2 text-sm text-wf-text-primary focus:border-wf-brand-burgundy focus:outline-none"
             />
           </div>
 
@@ -766,7 +946,7 @@ export default function ProjectDetailPage() {
               ]}
             />
             {eligibleManagers.length === 0 && (
-              <p className="text-[11px] text-amber-400">
+              <p className="text-[11px] text-wf-semantic-warning">
                 Notice: No members with the Manager role exist in this organization. You can invite or assign a Manager under Employee Management.
               </p>
             )}
@@ -813,7 +993,7 @@ export default function ProjectDetailPage() {
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-subtle">
             <Button
               type="button"
               variant="secondary"
@@ -844,25 +1024,25 @@ export default function ProjectDetailPage() {
       >
         <div className="space-y-4 py-2">
           {deleteError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3.5 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{deleteError}</span>
             </div>
           )}
 
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3.5 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="rounded-2xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg/50 p-4 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-wf-semantic-danger shrink-0 mt-0.5" />
             <div className="space-y-1 text-xs">
-              <p className="font-semibold text-rose-200">
+              <p className="font-semibold text-wf-text-primary">
                 Warning: Irreversible Administrator Action
               </p>
-              <p className="text-rose-300/80">
+              <p className="text-wf-text-secondary">
                 Deleting <strong>{project.name}</strong> will permanently remove this project and cascade-delete its {projectTasks.length} associated task{projectTasks.length !== 1 ? 's' : ''}.
               </p>
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-subtle">
             <Button
               type="button"
               variant="secondary"

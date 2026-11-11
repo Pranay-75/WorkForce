@@ -1,15 +1,34 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'elevated' | 'subtle' | 'interactive';
+  interactive?: boolean;
+}
+
 export function Card({
   className,
   children,
+  variant = 'default',
+  interactive = false,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: CardProps) {
+  const isInteractive = interactive || variant === 'interactive';
+
+  const variants = {
+    default: 'bg-wf-surface-card border-wf-border-default shadow-card',
+    elevated: 'bg-wf-surface-elevated border-wf-border-default shadow-elevated',
+    subtle: 'bg-wf-surface-subtle/60 border-wf-border-subtle shadow-none',
+    interactive:
+      'bg-wf-surface-card border-wf-border-default shadow-card hover:border-wf-border-strong hover:shadow-elevated cursor-pointer active:scale-[0.99] transition-all duration-hover motion-reduce:transition-none motion-reduce:active:scale-100',
+  };
+
   return (
     <div
       className={cn(
-        'rounded-xl border border-zinc-800/80 bg-zinc-900/90 text-zinc-100 shadow-card backdrop-blur-sm transition-all duration-200',
+        'rounded-2xl border text-wf-text-primary backdrop-blur-sm',
+        variants[variant],
+        isInteractive && variants.interactive,
         className
       )}
       {...props}
@@ -26,7 +45,7 @@ export function CardHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex flex-col space-y-1.5 p-5 pb-3', className)}
+      className={cn('flex flex-col space-y-1.5 p-6 sm:p-7 pb-3', className)}
       {...props}
     >
       {children}
@@ -42,7 +61,7 @@ export function CardTitle({
   return (
     <h3
       className={cn(
-        'text-base font-semibold leading-none tracking-tight text-zinc-100',
+        'text-base sm:text-lg font-semibold leading-snug tracking-tight text-wf-text-primary',
         className
       )}
       {...props}
@@ -58,7 +77,7 @@ export function CardDescription({
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p className={cn('text-xs text-zinc-400', className)} {...props}>
+    <p className={cn('text-xs text-wf-text-secondary leading-relaxed', className)} {...props}>
       {children}
     </p>
   );
@@ -70,7 +89,7 @@ export function CardContent({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('p-5 pt-2', className)} {...props}>
+    <div className={cn('p-6 sm:p-7 pt-2', className)} {...props}>
       {children}
     </div>
   );
@@ -83,7 +102,7 @@ export function CardFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex items-center p-5 pt-0 border-t border-zinc-800/60 mt-4', className)}
+      className={cn('flex items-center p-6 sm:p-7 pt-0 border-t border-wf-border-subtle mt-4', className)}
       {...props}
     >
       {children}

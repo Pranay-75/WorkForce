@@ -85,6 +85,7 @@ ALLOWED_TARGET_ROLES = ["admin", "hr", "manager", "employee"]
 
 
 class AddMemberRequest(BaseModel):
+    user_id: Optional[str] = None
     email: Optional[str] = None
     role: Optional[str] = "employee"
 
@@ -100,6 +101,7 @@ async def add_organization_member_endpoint(
     - Organizer can add Admin, HR, Manager, and Staff (employee).
     - Admin can add HR, Manager, and Staff (employee), but cannot add Admin.
     - Only an Organizer can add or invite an Administrator.
+    - Persists genuine membership or invitation records directly to the database.
     """
     target_role = (payload.role or "employee").lower() if payload and payload.role else "employee"
     if target_role not in ALLOWED_TARGET_ROLES:
@@ -115,6 +117,112 @@ async def add_organization_member_endpoint(
             detail="Only the organization organizer can add or invite an administrator.",
         )
 
+    target_email = payload.email.strip().lower() if (payload and payload.email and payload.email.strip()) else None
+    target_user_id = payload.user_id.strip() if (payload and payload.user_id and payload.user_id.strip()) else None
+
+    # SEC-03: Reject empty or incomplete member-add requests
+    if not target_email and not target_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing required member identifier. Either 'email' or 'user_id' must be provided.",
+        )
+
+    # Real Database Persistence (executed for authenticated database users)
+    if not current_user.is_demo_user:
+        admin_client = deps.get_supabase_admin()
+
+        # 1. Resolve target user profile if email or user_id provided
+        if target_user_id:
+            try:
+                prof_res = (
+                    admin_client.table("user_profiles")
+                    .select("id, email")
+                    .eq("id", target_user_id)
+                    .execute()
+                )
+                if not prof_res.data:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"User profile '{target_user_id}' not found.",
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database verification failed: {str(e)}",
+                )
+        elif target_email:
+            try:
+                prof_res = (
+                    admin_client.table("user_profiles")
+                    .select("id, email")
+                    .eq("email", target_email)
+                    .execute()
+                )
+                if prof_res.data and len(prof_res.data) > 0:
+                    target_user_id = prof_res.data[0]["id"]
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database lookup failed for profile email: {str(e)}",
+                )
+
+        # 2. Persist membership or invitation
+        if target_user_id:
+            try:
+                existing_res = (
+                    admin_client.table("organization_memberships")
+                    .select("id, role, status")
+                    .eq("organization_id", current_user.organization_id)
+                    .eq("user_id", target_user_id)
+                    .execute()
+                )
+                existing_rows = existing_res.data or []
+                if existing_rows:
+                    active_match = next((r for r in existing_rows if (r.get("status") or "").lower() == "active"), None)
+                    if active_match:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"User is already an active member of this organization with role '{active_match.get('role')}'.",
+                        )
+                    # Reactivate existing suspended/inactive membership
+                    first_match = existing_rows[0]
+                    admin_client.table("organization_memberships").update({
+                        "role": target_role,
+                        "status": "active",
+                    }).eq("id", first_match["id"]).execute()
+                else:
+                    # Insert new active membership
+                    admin_client.table("organization_memberships").insert({
+                        "organization_id": current_user.organization_id,
+                        "user_id": target_user_id,
+                        "role": target_role,
+                        "status": "active",
+                    }).execute()
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to persist organization membership: {str(e)}",
+                )
+        elif target_email:
+            # Profile not yet registered: record in organization_invitations
+            try:
+                admin_client.table("organization_invitations").insert({
+                    "organization_id": current_user.organization_id,
+                    "email": target_email,
+                    "role": target_role,
+                    "invited_by": current_user.user_id,
+                    "status": "pending",
+                }).execute()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to record organization invitation: {str(e)}",
+                )
+
     return {
         "status": "member_added",
         "actor": current_user.email,
@@ -123,6 +231,7 @@ async def add_organization_member_endpoint(
         "organization_id": current_user.organization_id,
         "assigned_role": target_role,
         "email": payload.email if payload and payload.email else None,
+        "member_id": target_user_id,
     }
 
 
@@ -240,6 +349,23 @@ async def update_member_role_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the organization organizer can manage or demote an administrator.",
         )
+
+    # 8. Persist Updated Role to Database
+    if not current_user.is_demo_user:
+        try:
+            admin_client = deps.get_supabase_admin()
+            admin_client.table("organization_memberships").update({
+                "role": target_role
+            }).eq("organization_id", current_user.organization_id).eq("user_id", member_id).execute()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to persist updated member role in database: {str(e)}",
+            )
+    else:
+        # Dev offline mock mode
+        if member_id in DEV_ROLE_MAPPING:
+            DEV_ROLE_MAPPING[member_id]["role"] = UserRoleEnum(target_role)
 
     return {
         "status": "role_updated",

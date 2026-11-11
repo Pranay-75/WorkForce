@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.rate_limit import RateLimitMiddleware
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.api.v1.ai import router as ai_router
@@ -14,7 +15,10 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # CORS Middleware
+    # Rate Limiting Middleware (enforces sliding window on sensitive AI and auth endpoints)
+    app.add_middleware(RateLimitMiddleware)
+
+    # CORS Middleware (Outer layer: processes preflights and attaches CORS headers to all responses, including 429)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,

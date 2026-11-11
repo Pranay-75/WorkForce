@@ -335,18 +335,21 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
       // When a real Supabase session is authenticated, clear demo mode from storage and state
       localStorage.removeItem('workforce_demo_mode');
       localStorage.removeItem('workforce_demo_user_id');
+      document.cookie = 'workforce_demo_mode=; path=/; max-age=0; SameSite=Lax';
       setIsDemoMode(false);
       setDemoUserId('emp-1');
     } else {
       const savedMode = localStorage.getItem('workforce_demo_mode') === 'true';
       if (savedMode) {
         setIsDemoMode(true);
+        document.cookie = 'workforce_demo_mode=true; path=/; max-age=86400; SameSite=Lax';
         const savedId = localStorage.getItem('workforce_demo_user_id');
         if (savedId && demoIdentities.some((i) => i.id === savedId)) {
           setDemoUserId(savedId);
         }
       } else {
         setIsDemoMode(false);
+        document.cookie = 'workforce_demo_mode=; path=/; max-age=0; SameSite=Lax';
       }
     }
   }, [isAuthenticated]);
@@ -415,6 +418,7 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('workforce_demo_mode', 'true');
       localStorage.setItem('workforce_demo_user_id', identity.id);
+      document.cookie = 'workforce_demo_mode=true; path=/; max-age=86400; SameSite=Lax';
     }
     showFeedback(`Entered Demo Showcase as ${identity.name} (${identity.role.toUpperCase()})`);
   };
@@ -425,6 +429,7 @@ export function MockStoreProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('workforce_demo_mode');
       localStorage.removeItem('workforce_demo_user_id');
+      document.cookie = 'workforce_demo_mode=; path=/; max-age=0; SameSite=Lax';
     }
     showFeedback('Exited Demo Mode. Returning to standard authentication.');
   };
