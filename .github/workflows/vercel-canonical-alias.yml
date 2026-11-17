@@ -2,15 +2,22 @@ name: Assign Canonical Vercel Production Alias
 
 on:
   deployment_status:
+  workflow_dispatch:
 
 jobs:
   assign-canonical-alias:
     name: Sync workforce-platform.vercel.app Alias
-    # Run only for successful production deployments initiated by Vercel
+    # Run for manual dispatch or successful production deployments initiated by Vercel
     if: >
-      github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.creator.login == 'vercel[bot]' &&
-      (github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'production')
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.deployment_status.state == 'success' &&
+        github.event.deployment_status.creator.login == 'vercel[bot]' &&
+        (
+          contains(github.event.deployment.environment, 'Production') ||
+          contains(github.event.deployment.environment, 'production')
+        )
+      )
     runs-on: ubuntu-latest
     concurrency:
       group: vercel-canonical-alias
