@@ -262,44 +262,44 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Workspace Settings &amp; Governance
             </h2>
-            <Badge variant={isOrganizer ? 'violet' : isOrganizerOrAdmin ? 'cyan' : 'slate'} size="sm">
+            <Badge variant={isOrganizer ? 'burgundy' : isOrganizerOrAdmin ? 'neutral' : 'neutral'} size="sm">
               {activeRole === 'organizer' ? 'Super Admin / Organizer' : activeRole === 'admin' ? 'Organization Admin' : activeRole === 'hr' ? 'People & HR Admin' : 'Member'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Configure organization metadata, manage skill taxonomies, and view governance controls
           </p>
         </div>
       </div>
 
       {(saveSuccessMsg || transferSuccessMsg) && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 text-xs text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+        <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-4 text-xs text-wf-semantic-success flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-wf-semantic-success" />
           <span>{saveSuccessMsg || transferSuccessMsg}</span>
         </div>
       )}
 
       {(saveErrorMsg || transferErrorMsg) && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+        <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-4 text-xs text-wf-semantic-danger flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-wf-semantic-danger" />
           <span>{saveErrorMsg || transferErrorMsg}</span>
         </div>
       )}
 
       {/* Organization Profile Settings */}
-      <Card>
+      <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-cyan-400" />
-            <CardTitle>Organization Metadata</CardTitle>
+            <Building2 className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
+            <CardTitle className="text-wf-text-primary">Organization Metadata</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="text-wf-text-secondary">
             Multi-tenant workspace identity and verified database records
           </CardDescription>
         </CardHeader>
@@ -311,9 +311,9 @@ export default function SettingsPage() {
             disabled={!isOrganizer || isSavingOrg}
           />
           {isLive && (
-            <div className="space-y-1 text-xs text-slate-400">
-              <span className="font-semibold text-slate-300 block">Workspace Slug:</span>
-              <code className="text-cyan-400 font-mono bg-navy-850 px-2 py-1 rounded border border-slate-800">
+            <div className="space-y-1 text-xs text-wf-text-secondary">
+              <span className="font-semibold text-wf-text-primary block">Workspace Slug:</span>
+              <code className="text-wf-brand-burgundy dark:text-wf-cream font-mono bg-wf-surface-subtle px-2 py-1 rounded border border-wf-border-default">
                 {organization?.slug || 'default'}
               </code>
             </div>
@@ -337,7 +337,7 @@ export default function SettingsPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">
+            <p className="text-xs text-wf-text-tertiary italic">
               Organization workspace settings can only be edited by an Organizer.
             </p>
           )}
@@ -345,24 +345,24 @@ export default function SettingsPage() {
       </Card>
 
       {/* Skill Taxonomy Management */}
-      <Card>
+      <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Award className="h-4 w-4 text-violet-400" />
-              <CardTitle>Skill Taxonomy Matrix ({skills.length})</CardTitle>
+              <Award className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
+              <CardTitle className="text-wf-text-primary">Skill Taxonomy Matrix ({skills.length})</CardTitle>
             </div>
           </div>
-          <CardDescription>
+          <CardDescription className="text-wf-text-secondary">
             Defined technical and domain competencies used for AI candidate matching
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {skills.map((s) => (
-              <Badge key={s.id} variant="cyan" size="md">
+              <Badge key={s.id} variant="neutral" size="md">
                 <span>{s.name}</span>
-                <span className="text-[10px] text-cyan-300 font-mono">
+                <span className="text-[10px] opacity-70 font-mono">
                   ({s.category})
                 </span>
               </Badge>
@@ -373,32 +373,32 @@ export default function SettingsPage() {
 
       {/* Organizer-Only: Workspace Ownership Transfer (Danger Zone) */}
       {isOrganizer && (
-        <Card className="border-rose-900/50 bg-navy-900/70 p-6">
+        <Card className="border-wf-semantic-danger-border bg-wf-semantic-danger-bg/20 p-6 shadow-card">
           <div className="space-y-4 max-w-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-rose-400" />
-                <h3 className="text-base font-bold text-white">
+                <AlertTriangle className="h-5 w-5 text-wf-semantic-danger" />
+                <h3 className="text-base font-bold text-wf-semantic-danger">
                   Transfer Workspace Ownership
                 </h3>
               </div>
-              <Badge variant="rose" size="sm">
+              <Badge variant="danger" size="sm">
                 Organizer Only
               </Badge>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-wf-text-secondary leading-relaxed">
               Permanently transfer super-admin and primary ownership rights of this workspace to another active member. You will automatically become an Organization Administrator.
             </p>
 
             {isMembersLoading ? (
-              <div className="rounded-lg border border-slate-800 bg-navy-950/40 p-4 text-xs text-slate-400 flex items-center gap-2">
-                <RefreshCw className="h-4 w-4 animate-spin text-cyan-400" />
+              <div className="rounded-lg border border-wf-border-default bg-wf-surface-subtle/50 p-4 text-xs text-wf-text-secondary flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin text-wf-brand-burgundy dark:text-wf-cream" />
                 <span>Loading workspace members...</span>
               </div>
             ) : eligibleMembers.length === 0 ? (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-300 flex items-start gap-2">
-                <Info className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+              <div className="rounded-lg border border-wf-semantic-warning-border bg-wf-semantic-warning-bg p-3 text-xs text-wf-semantic-warning flex items-start gap-2">
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-wf-semantic-warning" />
                 <span>
                   No eligible active members found in this workspace to receive ownership. Invite and onboard a team member before transferring ownership.
                 </span>
@@ -441,16 +441,16 @@ export default function SettingsPage() {
       )}
 
       {/* Demo Seeder & Reset Banner */}
-      <Card className="border-slate-800 bg-navy-900/60 p-6">
+      <Card className="border-wf-border-default bg-wf-surface-card p-6 shadow-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="space-y-1.5 max-w-xl">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-400" />
-              <h3 className="text-base font-bold text-white">
+              <Sparkles className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />
+              <h3 className="text-base font-bold text-wf-text-primary">
                 Demonstration Sandbox Environment
               </h3>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-wf-text-secondary leading-relaxed">
               {isLive
                 ? 'Resetting demo data only affects client-side demonstration sandboxes. It will never overwrite, alter, or delete your actual verified organization data.'
                 : 'Reset the in-memory talent pool, active projects, tasks, and recommendation proposals to the standard demonstration baseline.'}
@@ -517,21 +517,21 @@ export default function SettingsPage() {
           </>
         }
       >
-        <div className="space-y-4 py-1 text-xs text-slate-300">
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-3.5 space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-rose-300">
-              <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+        <div className="space-y-4 py-1 text-xs text-wf-text-secondary">
+          <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg/20 p-3.5 space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-wf-semantic-danger">
+              <AlertTriangle className="h-4 w-4 text-wf-semantic-danger shrink-0" />
               <span>Critical Ownership Transition Notice</span>
             </div>
-            <p className="text-slate-300 leading-relaxed">
+            <p className="text-wf-text-secondary leading-relaxed">
               You are about to transfer primary workspace ownership of{' '}
-              <strong className="text-white">{organization?.name || 'this organization'}</strong> to:
+              <strong className="text-wf-text-primary">{organization?.name || 'this organization'}</strong> to:
             </p>
             {selectedTargetMember && (
-              <div className="bg-navy-950/80 border border-slate-800 rounded-lg p-3 space-y-1">
-                <div className="font-bold text-white text-sm">{selectedTargetMember.name}</div>
-                <div className="text-slate-400 font-mono text-[11px]">{selectedTargetMember.email}</div>
-                <div className="text-[11px] text-cyan-400 font-medium">
+              <div className="bg-wf-surface-subtle border border-wf-border-default rounded-lg p-3 space-y-1">
+                <div className="font-bold text-wf-text-primary text-sm">{selectedTargetMember.name}</div>
+                <div className="text-wf-text-secondary font-mono text-[11px]">{selectedTargetMember.email}</div>
+                <div className="text-[11px] text-wf-brand-burgundy dark:text-wf-cream font-medium">
                   Current Role: <span className="capitalize">{selectedTargetMember.role}</span>
                 </div>
               </div>
@@ -539,15 +539,15 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-2 pl-1">
-            <p className="font-semibold text-slate-200">What happens after transfer:</p>
-            <ul className="list-disc pl-5 space-y-1.5 text-slate-300 leading-relaxed">
+            <p className="font-semibold text-wf-text-primary">What happens after transfer:</p>
+            <ul className="list-disc pl-5 space-y-1.5 text-wf-text-secondary leading-relaxed">
               <li>
-                <strong className="text-white">{selectedTargetMember?.name}</strong> will become the sole{' '}
-                <span className="text-violet-300 font-semibold">Organizer</span> of this workspace.
+                <strong className="text-wf-text-primary">{selectedTargetMember?.name}</strong> will become the sole{' '}
+                <span className="text-wf-brand-burgundy dark:text-wf-cream font-semibold">Organizer</span> of this workspace.
               </li>
               <li>
                 Your role will immediately be changed to{' '}
-                <span className="text-cyan-300 font-semibold">Organization Administrator (admin)</span>.
+                <span className="text-wf-brand-burgundy dark:text-wf-cream font-semibold">Organization Administrator (admin)</span>.
               </li>
               <li>
                 You will no longer have authority to transfer workspace ownership or delete the organization.

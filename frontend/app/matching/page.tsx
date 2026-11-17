@@ -217,8 +217,8 @@ export default function MatchingHubPage() {
   if (isLive && isTasksLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
-        <p className="text-sm text-slate-400">Loading live organization tasks &amp; matching parameters...</p>
+        <RefreshCw className="h-8 w-8 animate-spin text-wf-brand-burgundy dark:text-wf-cream" />
+        <p className="text-sm text-wf-text-secondary">Loading live organization tasks &amp; matching parameters...</p>
       </div>
     );
   }
@@ -226,10 +226,10 @@ export default function MatchingHubPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Explainable AI Task Matching Hub
             </h2>
             <Badge variant={isLive ? 'cyan' : 'violet'} size="sm">
@@ -237,7 +237,7 @@ export default function MatchingHubPage() {
               {isLive ? 'Live Advisory Engine' : 'Simulated Demo Advisory'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Deterministic candidate pre-filtering combined with natural-language explainability and human-in-the-loop sign-off
           </p>
         </div>
@@ -245,11 +245,11 @@ export default function MatchingHubPage() {
         {/* Task Selection Selector */}
         {tasks.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Target Task:</span>
+            <span className="text-xs text-wf-text-secondary">Target Task:</span>
             <select
               value={selectedTaskId}
               onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-violet-500 focus:outline-none max-w-xs truncate"
+              className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs font-semibold text-wf-text-primary focus:border-wf-border-focus focus:outline-none max-w-xs truncate transition-colors"
             >
               {tasks.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -265,8 +265,8 @@ export default function MatchingHubPage() {
         <div
           className={`flex items-center gap-2 rounded-xl p-3.5 text-xs ${
             actionFeedback.type === 'success'
-              ? 'border border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-              : 'border border-rose-500/40 bg-rose-950/30 text-rose-300'
+              ? 'border border-wf-semantic-success-border bg-wf-semantic-success-bg text-wf-semantic-success'
+              : 'border border-wf-semantic-danger-border bg-wf-semantic-danger-bg text-wf-semantic-danger'
           }`}
         >
           {actionFeedback.type === 'success' ? (
@@ -280,24 +280,24 @@ export default function MatchingHubPage() {
 
       {/* Selected Task Overview Banner */}
       {targetTask ? (
-        <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card">
+        <Card className="border-wf-border-default bg-wf-surface-card p-5 shadow-card">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
+              <div className="flex items-center gap-2 text-xs font-mono text-wf-brand-burgundy dark:text-wf-cream">
                 <span>Project: {targetTask.projectName || 'Active Workspace'}</span>
                 <span>•</span>
-                <span className="text-slate-300">Estimated: {targetTask.estimatedHours}h</span>
+                <span className="text-wf-text-secondary">Estimated: {targetTask.estimatedHours}h</span>
                 {targetTask.dueDate && (
                   <>
                     <span>•</span>
-                    <span className="text-slate-300">Due: {targetTask.dueDate}</span>
+                    <span className="text-wf-text-secondary">Due: {targetTask.dueDate}</span>
                   </>
                 )}
               </div>
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-wf-text-primary">
                 {targetTask.title}
               </h3>
-              <p className="text-xs text-slate-300 line-clamp-2">
+              <p className="text-xs text-wf-text-secondary line-clamp-2">
                 {targetTask.description || 'No detailed task description provided.'}
               </p>
             </div>
@@ -322,10 +322,10 @@ export default function MatchingHubPage() {
           </div>
         </Card>
       ) : (
-        <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-12 text-center text-slate-400 space-y-3">
-          <Sparkles className="mx-auto h-10 w-10 text-slate-500 mb-2" />
-          <h4 className="text-base font-bold text-white">No Tasks Available for Matching</h4>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+        <div className="rounded-2xl border border-wf-border-default bg-wf-surface-subtle p-12 text-center text-wf-text-secondary space-y-3">
+          <Sparkles className="mx-auto h-10 w-10 text-wf-brand-burgundy dark:text-wf-cream mb-2" />
+          <h4 className="text-base font-bold text-wf-text-primary">No Tasks Available for Matching</h4>
+          <p className="text-xs text-wf-text-secondary max-w-sm mx-auto">
             Create tasks in the Tasks section to generate AI-assisted matching recommendations.
           </p>
           <Link href="/tasks">
@@ -338,11 +338,11 @@ export default function MatchingHubPage() {
       )}
 
       {/* Human In The Loop Governance Notice */}
-      <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-3.5 px-4 text-xs text-slate-300 flex items-center justify-between">
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-subtle p-3.5 px-4 text-xs text-wf-text-secondary flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <ShieldCheck className="h-4 w-4 text-cyan-400 shrink-0" />
+          <ShieldCheck className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream shrink-0" />
           <span>
-            <strong>Human-in-the-Loop Governance:</strong> AI rankings are strictly advisory. Final assignments require explicit manager approval and execute database-enforced transactions.
+            <strong className="text-wf-text-primary">Human-in-the-Loop Governance:</strong> AI rankings are strictly advisory. Final assignments require explicit manager approval and execute database-enforced transactions.
           </span>
         </div>
       </div>
@@ -351,10 +351,10 @@ export default function MatchingHubPage() {
       {taskRecommendations.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white tracking-tight">
+            <h3 className="text-base font-bold text-wf-text-primary tracking-tight">
               Ranked Candidate Suggestions ({taskRecommendations.length})
             </h3>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-wf-text-secondary">
               Weighted on: Capacity Availability (50%) & Department Alignment (50%)
             </span>
           </div>
@@ -367,19 +367,19 @@ export default function MatchingHubPage() {
               return (
                 <Card
                   key={rec.id}
-                  className={`border-slate-800 transition-all ${
+                  className={`border-wf-border-default bg-wf-surface-card shadow-card transition-all ${
                     isAccepted
-                      ? 'border-emerald-500/60 bg-emerald-950/15'
+                      ? 'border-wf-semantic-success-border bg-wf-semantic-success-bg/30'
                       : isRejected
-                      ? 'border-rose-900/40 opacity-75'
-                      : 'hover:border-violet-500/40'
+                      ? 'border-wf-semantic-danger-border bg-wf-semantic-danger-bg/20 opacity-75'
+                      : 'hover:border-wf-border-strong'
                   }`}
                 >
                   <div className="p-5 space-y-4">
                     {/* Candidate Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-800 text-sm font-bold text-white">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-wf-brand-burgundy text-sm font-bold text-white shadow-sm">
                           {rec.candidateName
                             .split(' ')
                             .map((n) => n[0])
@@ -387,23 +387,23 @@ export default function MatchingHubPage() {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h4 className="text-base font-bold text-white">
+                            <h4 className="text-base font-bold text-wf-text-primary">
                               {rec.candidateName}
                             </h4>
                             <Badge variant="cyan" size="sm">
                               {rec.candidateDepartment}
                             </Badge>
                           </div>
-                          <p className="text-xs text-slate-400">{rec.candidateTitle}</p>
+                          <p className="text-xs text-wf-text-secondary">{rec.candidateTitle}</p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          <span className="text-[10px] uppercase font-bold text-wf-text-secondary block">
                             Match Score
                           </span>
-                          <span className="text-xl font-extrabold font-mono text-cyan-400">
+                          <span className="text-xl font-extrabold font-mono text-wf-brand-burgundy dark:text-wf-cream">
                             {rec.matchScore}%
                           </span>
                         </div>
@@ -421,8 +421,8 @@ export default function MatchingHubPage() {
                     {/* Breakdown & Workload Impact */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Skills */}
-                      <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2">
-                        <span className="text-xs font-semibold text-slate-200 block">
+                      <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle/50 p-3.5 space-y-2">
+                        <span className="text-xs font-semibold text-wf-text-primary block">
                           Capability Alignment:
                         </span>
                         <div className="flex flex-wrap gap-1.5">
@@ -435,18 +435,18 @@ export default function MatchingHubPage() {
                       </div>
 
                       {/* Capacity Impact */}
-                      <div className="rounded-xl border border-slate-800 bg-navy-900/60 p-3.5 space-y-2">
+                      <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle/50 p-3.5 space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-slate-200">
+                          <span className="font-semibold text-wf-text-primary">
                             Workload Impact:
                           </span>
-                          <span className="font-mono text-slate-300">
+                          <span className="font-mono text-wf-text-secondary">
                             {rec.workloadImpact.currentLoadHours}h →{' '}
                             <strong
                               className={
                                 rec.workloadImpact.projectedUtilizationPct > 100
-                                  ? 'text-rose-400'
-                                  : 'text-emerald-400'
+                                  ? 'text-wf-semantic-danger'
+                                  : 'text-wf-semantic-success'
                               }
                             >
                               {rec.workloadImpact.projectedLoadHours}h (
@@ -459,19 +459,19 @@ export default function MatchingHubPage() {
                     </div>
 
                     {/* Explainability Rationale */}
-                    <div className="rounded-xl border border-violet-500/20 bg-navy-950/60 p-3.5 space-y-1.5 text-xs">
-                      <span className="font-semibold text-violet-300 flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                    <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle/70 p-3.5 space-y-1.5 text-xs">
+                      <span className="font-semibold text-wf-brand-burgundy dark:text-wf-cream flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5" />
                         Recommendation Rationale:
                       </span>
-                      <p className="text-slate-200 leading-relaxed italic">
+                      <p className="text-wf-text-primary leading-relaxed italic">
                         &ldquo;{rec.rationale}&rdquo;
                       </p>
                       {rec.riskFactors.length > 0 && (
-                        <div className="pt-1 text-[11px] text-amber-300 space-y-0.5">
+                        <div className="pt-1 text-[11px] text-wf-semantic-warning space-y-0.5">
                           {rec.riskFactors.map((rf, idx) => (
                             <div key={idx} className="flex items-center gap-1.5">
-                              <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+                              <AlertTriangle className="h-3 w-3 shrink-0 text-wf-semantic-warning" />
                               <span>Risk Note: {rf}</span>
                             </div>
                           ))}
@@ -481,28 +481,28 @@ export default function MatchingHubPage() {
 
                     {/* Gemini AI Detailed Explanation Card */}
                     {aiExplanations[rec.candidateId] && (
-                      <div className="rounded-xl border border-violet-500/40 bg-navy-950/80 p-3.5 space-y-2 text-xs animate-in fade-in">
+                      <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3.5 space-y-2 text-xs animate-in fade-in">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-violet-300 flex items-center gap-1.5">
-                            <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                          <span className="font-bold text-wf-brand-burgundy dark:text-wf-cream flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5" />
                             Executive Assessment ({aiExplanations[rec.candidateId].model_used || 'Operational AI'}):
                           </span>
                           <Badge variant={aiExplanations[rec.candidateId].is_ai_generated ? 'violet' : 'slate'} size="sm">
                             {aiExplanations[rec.candidateId].is_ai_generated ? 'Powered by Gemini 3.8-Flash' : 'Deterministic Rationale'}
                           </Badge>
                         </div>
-                        <p className="text-slate-200 leading-relaxed font-medium">
+                        <p className="text-wf-text-primary leading-relaxed font-medium">
                           {aiExplanations[rec.candidateId].ai_rationale}
                         </p>
-                        <p className="text-slate-300">
-                          <strong>Capacity Impact:</strong> {aiExplanations[rec.candidateId].capacity_assessment}
+                        <p className="text-wf-text-secondary">
+                          <strong className="text-wf-text-primary">Capacity Impact:</strong> {aiExplanations[rec.candidateId].capacity_assessment}
                         </p>
                         {aiExplanations[rec.candidateId].trade_offs.length > 0 && (
-                          <div className="space-y-0.5 pt-1 text-slate-400">
-                            <span className="font-semibold text-slate-300 block">Trade-Off Considerations:</span>
+                          <div className="space-y-0.5 pt-1 text-wf-text-secondary">
+                            <span className="font-semibold text-wf-text-primary block">Trade-Off Considerations:</span>
                             {aiExplanations[rec.candidateId].trade_offs.map((to, i) => (
                               <div key={i} className="flex items-start gap-1.5">
-                                <span className="text-amber-400">•</span>
+                                <span className="text-wf-semantic-warning">•</span>
                                 <span>{to}</span>
                               </div>
                             ))}
@@ -521,7 +521,7 @@ export default function MatchingHubPage() {
                           disabled={explainingId === rec.candidateId}
                           className="text-xs"
                         >
-                          <Sparkles className={`h-3.5 w-3.5 mr-1 text-violet-400 ${explainingId === rec.candidateId ? 'animate-spin' : ''}`} />
+                          <Sparkles className={`h-3.5 w-3.5 mr-1 text-wf-brand-burgundy dark:text-wf-cream ${explainingId === rec.candidateId ? 'animate-spin' : ''}`} />
                           <span>{explainingId === rec.candidateId ? 'Consulting Gemini...' : 'Explain Fit with Gemini'}</span>
                         </Button>
                         <Button
@@ -530,8 +530,8 @@ export default function MatchingHubPage() {
                           onClick={() => setRejectModalRecId(rec.id)}
                           disabled={actionLoading}
                         >
-                          <XCircle className="h-3.5 w-3.5 mr-1" />
-                          Reject with Reason
+                          <XCircle className="h-3.5 w-3.5 mr-1 text-wf-semantic-danger" />
+                          <span>Reject with Reason</span>
                         </Button>
                         <Button
                           variant="primary"
@@ -540,13 +540,13 @@ export default function MatchingHubPage() {
                           disabled={actionLoading}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          Approve & Assign Task
+                          <span>Approve &amp; Assign Task</span>
                         </Button>
                       </div>
                     )}
 
                     {rec.decisionReason && (
-                      <div className="rounded-lg bg-navy-950 p-2.5 text-xs text-rose-300 border border-rose-900/40">
+                      <div className="rounded-xl bg-wf-semantic-danger-bg p-2.5 text-xs text-wf-semantic-danger border border-wf-semantic-danger-border">
                         <strong>Rejection Feedback:</strong> {rec.decisionReason}
                       </div>
                     )}
@@ -566,7 +566,7 @@ export default function MatchingHubPage() {
         description="Provide structured manager feedback to record in the audit trail."
       >
         <div className="space-y-3.5 py-2">
-          <label className="block text-xs font-medium text-slate-300">
+          <label className="block text-xs font-medium text-wf-text-secondary">
             Reason for Rejection *
           </label>
           <textarea
@@ -574,7 +574,7 @@ export default function MatchingHubPage() {
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             placeholder="e.g. Employee already focusing on upcoming SDK milestone or requires different domain familiarity..."
-            className="w-full rounded-lg border border-slate-700 bg-navy-850 p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle p-2.5 text-xs text-wf-text-primary placeholder:text-wf-text-tertiary focus:border-wf-border-focus focus:outline-none transition-colors"
           />
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button

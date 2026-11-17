@@ -385,31 +385,31 @@ export default function TaskDetailPage() {
       )}
 
       {/* Task Specification Card */}
-      <Card className="border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-6 shadow-card">
+      <Card className="border-wf-border-default bg-wf-surface-card p-6 shadow-card">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-mono text-violet-400">
+            <div className="flex items-center gap-2 text-xs font-mono text-wf-brand-burgundy dark:text-wf-cream">
               <FolderKanban className="h-3.5 w-3.5" />
               <span>{task.projectName}</span>
               <span>•</span>
-              <span className="truncate max-w-[200px]">ID: {task.id}</span>
+              <span className="truncate max-w-[200px] text-wf-text-tertiary">ID: {task.id}</span>
             </div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">
+            <h2 className="text-2xl font-extrabold text-wf-text-primary tracking-tight">
               {task.title}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl">
+            <p className="text-xs sm:text-sm text-wf-text-secondary leading-relaxed max-w-3xl">
               {task.description || 'No detailed task specifications provided.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-wf-border-subtle">
             {/* Estimated Effort (Interactive Adjustment for Manager/Admin) */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-semibold text-slate-400">
+              <span className="text-[10px] uppercase font-semibold text-wf-text-secondary">
                 Estimated Effort (Hours)
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-base font-bold font-mono text-cyan-400">
+                <span className="text-base font-bold font-mono text-wf-brand-burgundy dark:text-wf-cream">
                   {task.estimatedHours}h
                 </span>
                 {isManagerOrAdmin && (
@@ -417,7 +417,7 @@ export default function TaskDetailPage() {
                     <button
                       onClick={() => handleAdjustHours(-2)}
                       disabled={isMutating}
-                      className="rounded p-1 bg-navy-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      className="rounded p-1 bg-wf-surface-subtle text-wf-text-secondary hover:bg-wf-surface-hover hover:text-wf-text-primary border border-wf-border-default transition-colors"
                       title="Decrease 2 hours"
                     >
                       <Minus className="h-3 w-3" />
@@ -425,7 +425,7 @@ export default function TaskDetailPage() {
                     <button
                       onClick={() => handleAdjustHours(2)}
                       disabled={isMutating}
-                      className="rounded p-1 bg-navy-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      className="rounded p-1 bg-wf-surface-subtle text-wf-text-secondary hover:bg-wf-surface-hover hover:text-wf-text-primary border border-wf-border-default transition-colors"
                       title="Increase 2 hours"
                     >
                       <Plus className="h-3 w-3" />
@@ -437,14 +437,14 @@ export default function TaskDetailPage() {
 
             {/* Target Deadline */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-semibold text-slate-400">
+              <span className="text-[10px] uppercase font-semibold text-wf-text-secondary">
                 Target Deadline
               </span>
-              <div className="flex items-center gap-1.5 text-xs font-mono text-slate-200">
-                <Calendar className={`h-3.5 w-3.5 ${isOverdue ? 'text-rose-400' : 'text-cyan-400'}`} />
-                <span className={isOverdue ? 'text-rose-300 font-bold' : ''}>{task.dueDate || 'Unscheduled'}</span>
+              <div className="flex items-center gap-1.5 text-xs font-mono text-wf-text-primary">
+                <Calendar className={`h-3.5 w-3.5 ${isOverdue ? 'text-wf-semantic-danger' : 'text-wf-brand-burgundy dark:text-wf-cream'}`} />
+                <span className={isOverdue ? 'text-wf-semantic-danger font-bold' : ''}>{task.dueDate || 'Unscheduled'}</span>
                 {isOverdue && (
-                  <span className="text-[10px] bg-rose-950/60 text-rose-400 border border-rose-500/40 rounded px-1 py-0.2">
+                  <span className="text-[10px] bg-wf-semantic-danger-bg text-wf-semantic-danger border border-wf-semantic-danger-border rounded px-1 py-0.2">
                     LATE
                   </span>
                 )}
@@ -453,25 +453,25 @@ export default function TaskDetailPage() {
 
             {/* Complexity Indicator */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-semibold text-slate-400">
+              <span className="text-[10px] uppercase font-semibold text-wf-text-secondary">
                 Technical Complexity
               </span>
-              <div className="flex items-center gap-1 text-xs font-semibold text-slate-200">
-                <Award className="h-3.5 w-3.5 text-amber-400" />
+              <div className="flex items-center gap-1 text-xs font-semibold text-wf-text-primary">
+                <Award className="h-3.5 w-3.5 text-wf-semantic-warning" />
                 <span>{task.complexity}</span>
               </div>
             </div>
 
             {/* Status Transition Control */}
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-semibold text-slate-400">
+              <span className="text-[10px] uppercase font-semibold text-wf-text-secondary">
                 Workflow Status
               </span>
               <select
                 value={task.status}
                 disabled={!canUpdateStatus || isMutating}
                 onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                className="w-full rounded-lg border border-slate-700 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-lg border border-wf-border-default bg-wf-surface-subtle px-2 py-1 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none disabled:opacity-50"
               >
                 <option value="todo">Todo</option>
                 <option value="in_progress">In Progress</option>
@@ -486,31 +486,31 @@ export default function TaskDetailPage() {
       {/* Two Column Layout: Skills & Assignee Impact */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Required Technical Skills */}
-        <Card className="flex flex-col justify-between">
+        <Card className="flex flex-col justify-between border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-cyan-400" />
-              <CardTitle>Required Technical Skills ({task.requiredSkills.length})</CardTitle>
+              <ShieldCheck className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
+              <CardTitle className="text-wf-text-primary">Required Technical Skills ({task.requiredSkills.length})</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-3 flex-1">
             {task.requiredSkills.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 text-center">
+              <p className="text-xs text-wf-text-tertiary py-4 text-center">
                 No prerequisite skills attached to this task.
               </p>
             ) : (
               task.requiredSkills.map((req) => (
                 <div
                   key={req.skillId}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-navy-900/60 p-3"
+                  className="flex items-center justify-between rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3"
                 >
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                    <span className="text-xs font-bold text-white">
+                    <CheckCircle2 className="h-4 w-4 text-wf-semantic-success shrink-0" />
+                    <span className="text-xs font-bold text-wf-text-primary">
                       {req.skillName}
                     </span>
                   </div>
-                  <Badge variant="cyan" size="sm">
+                  <Badge variant="neutral" size="sm">
                     MIN: {req.minProficiency.toUpperCase()}
                   </Badge>
                 </div>
@@ -520,14 +520,14 @@ export default function TaskDetailPage() {
         </Card>
 
         {/* Assignment & Workload Impact Card */}
-        <Card className="flex flex-col justify-between">
+        <Card className="flex flex-col justify-between border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-violet-400" />
-                <CardTitle>Assignee & Workload Impact</CardTitle>
+                <UserCheck className="h-4 w-4 text-wf-brand-burgundy dark:text-wf-cream" />
+                <CardTitle className="text-wf-text-primary">Assignee & Workload Impact</CardTitle>
               </div>
-              <Badge variant={task.assignedTo ? 'emerald' : 'amber'} size="sm">
+              <Badge variant={task.assignedTo ? 'success' : 'warning'} size="sm">
                 {task.assignedTo ? 'Assigned' : 'Unassigned'}
               </Badge>
             </div>
@@ -536,18 +536,18 @@ export default function TaskDetailPage() {
           <CardContent className="space-y-4 flex-1">
             {assignee ? (
               <div className="space-y-3.5">
-                <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-navy-900/80 p-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-purple-800 text-sm font-bold text-white shadow-sm">
+                <div className="flex items-center gap-3 rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-wf-brand-burgundy text-sm font-bold text-white shadow-sm">
                     {assignee.fullName
                       .split(' ')
                       .map((n) => n[0])
                       .join('')}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-white">
+                    <h4 className="text-sm font-bold text-wf-text-primary">
                       {assignee.fullName}
                     </h4>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-wf-text-secondary">
                       {assignee.jobTitle} • {assignee.department}
                     </p>
                   </div>
@@ -555,15 +555,15 @@ export default function TaskDetailPage() {
 
                 {/* Manager Reassignment Control */}
                 {isManagerOrAdmin && (
-                  <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
-                    <label className="block text-xs font-medium text-slate-400">
+                  <div className="pt-2 border-t border-wf-border-subtle space-y-1.5">
+                    <label className="block text-xs font-medium text-wf-text-secondary">
                       Reassign via assign_task() RPC:
                     </label>
                     <select
                       value={task.assignedTo || 'unassigned'}
                       disabled={isMutating}
                       onChange={(e) => handleReassign(e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-lg border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none"
                     >
                       <option value="unassigned">Unassigned (Send to AI Matching Hub)</option>
                       {employees.map((e) => {
@@ -579,25 +579,25 @@ export default function TaskDetailPage() {
                 )}
               </div>
             ) : (
-              <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-5 space-y-3 text-center">
-                <Sparkles className="mx-auto h-8 w-8 text-violet-400 animate-pulse" />
-                <h4 className="text-sm font-bold text-white">
+              <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle/50 p-5 space-y-3 text-center">
+                <Sparkles className="mx-auto h-8 w-8 text-wf-brand-burgundy dark:text-wf-cream animate-pulse" />
+                <h4 className="text-sm font-bold text-wf-text-primary">
                   No Talent Assigned Yet
                 </h4>
-                <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                <p className="text-xs text-wf-text-secondary leading-relaxed max-w-sm mx-auto">
                   Run explainable AI candidate ranking to match available team members based on skills, capacity, and deadlines.
                 </p>
 
                 {isManagerOrAdmin && (
                   <div className="pt-2 text-left space-y-1.5 max-w-xs mx-auto">
-                    <label className="block text-xs font-medium text-slate-400">
+                    <label className="block text-xs font-medium text-wf-text-secondary">
                       Direct Assign (Manager RPC):
                     </label>
                     <select
                       value="unassigned"
                       disabled={isMutating}
                       onChange={(e) => handleReassign(e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-lg border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none"
                     >
                       <option value="unassigned">Select team member...</option>
                       {employees.map((e) => {
@@ -634,8 +634,8 @@ export default function TaskDetailPage() {
       >
         <form onSubmit={handleEditTaskSubmit} className="space-y-3.5 py-2">
           {editError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-wf-semantic-danger shrink-0" />
               <span>{editError}</span>
             </div>
           )}
@@ -648,14 +648,14 @@ export default function TaskDetailPage() {
           />
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
+            <label className="block text-xs font-semibold text-wf-text-secondary">
               Task Description
             </label>
             <textarea
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
               rows={3}
-              className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+              className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-2 text-sm text-wf-text-primary placeholder:text-wf-text-tertiary focus:border-wf-border-focus focus:outline-none"
             />
           </div>
 
@@ -701,7 +701,7 @@ export default function TaskDetailPage() {
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-3 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"
@@ -732,25 +732,25 @@ export default function TaskDetailPage() {
       >
         <div className="space-y-4 py-2">
           {deleteError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+            <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-wf-semantic-danger shrink-0" />
               <span>{deleteError}</span>
             </div>
           )}
 
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3.5 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg/20 p-3.5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-wf-semantic-danger shrink-0 mt-0.5" />
             <div className="space-y-1 text-xs">
-              <p className="font-semibold text-rose-200">
+              <p className="font-semibold text-wf-semantic-danger">
                 Warning: Permanent Task Deletion
               </p>
-              <p className="text-rose-300/80">
-                Deleting <strong>{task.title}</strong> will remove it from project <strong>{task.projectName}</strong> and recalculate assignee workload automatically.
+              <p className="text-wf-text-secondary">
+                Deleting <strong className="text-wf-text-primary">{task.title}</strong> will remove it from project <strong className="text-wf-text-primary">{task.projectName}</strong> and recalculate assignee workload automatically.
               </p>
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-wf-border-default">
             <Button
               type="button"
               variant="secondary"

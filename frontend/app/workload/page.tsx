@@ -257,8 +257,8 @@ export default function WorkloadCapacityPage() {
   if (isLive && (isMembersLoading || isTasksLoading)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <RefreshCw className="h-8 w-8 animate-spin text-violet-400" />
-        <p className="text-sm text-slate-400">Loading live organization telemetry &amp; workload allocations...</p>
+        <RefreshCw className="h-8 w-8 animate-spin text-wf-brand-burgundy dark:text-wf-cream" />
+        <p className="text-sm text-wf-text-secondary">Loading live organization telemetry &amp; workload allocations...</p>
       </div>
     );
   }
@@ -266,17 +266,17 @@ export default function WorkloadCapacityPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
-              Capacity Monitor & Workload Balancing
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
+              Capacity Monitor &amp; Workload Balancing
             </h2>
             <Badge variant="cyan" size="sm">
               {isLive ? 'PostgreSQL Live Telemetry' : 'Demo Telemetry'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Deterministic capacity tracking, live bottleneck diagnostics, and interactive sprint rebalancing
           </p>
         </div>
@@ -302,8 +302,8 @@ export default function WorkloadCapacityPage() {
         <div
           className={`flex items-center gap-2 rounded-xl p-3.5 text-xs ${
             actionMessage.type === 'success'
-              ? 'border border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-              : 'border border-rose-500/40 bg-rose-950/30 text-rose-300'
+              ? 'border border-wf-semantic-success-border bg-wf-semantic-success-bg text-wf-semantic-success'
+              : 'border border-wf-semantic-danger-border bg-wf-semantic-danger-bg text-wf-semantic-danger'
           }`}
         >
           {actionMessage.type === 'success' ? (
@@ -319,67 +319,67 @@ export default function WorkloadCapacityPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card
           onClick={() => setStatusFilter(statusFilter === 'overloaded' ? 'all' : 'overloaded')}
-          className={`cursor-pointer transition-all border-rose-500/30 bg-rose-950/20 hover:border-rose-500/60 ${
-            statusFilter === 'overloaded' ? 'ring-2 ring-rose-500' : ''
+          className={`cursor-pointer transition-all border border-wf-semantic-danger-border bg-wf-semantic-danger-bg/40 hover:border-wf-semantic-danger ${
+            statusFilter === 'overloaded' ? 'ring-2 ring-wf-semantic-danger' : ''
           }`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[11px] uppercase font-bold text-rose-300">
+              <span className="text-[11px] uppercase font-bold text-wf-semantic-danger">
                 Over-Allocated (&gt;100%)
               </span>
-              <div className="text-2xl font-bold font-mono text-rose-400 mt-0.5">
+              <div className="text-2xl font-bold font-mono text-wf-semantic-danger mt-0.5">
                 {overloadedStaff.length} Member{overloadedStaff.length !== 1 ? 's' : ''}
               </div>
-              <span className="text-[10px] text-rose-400/80 mt-1 block">
+              <span className="text-[10px] text-wf-semantic-danger/80 mt-1 block">
                 {statusFilter === 'overloaded' ? 'Active Filter • Click to clear' : 'Click to filter roster'}
               </span>
             </div>
-            <AlertTriangle className="h-8 w-8 text-rose-400 opacity-80" />
+            <AlertTriangle className="h-8 w-8 text-wf-semantic-danger opacity-80" />
           </CardContent>
         </Card>
 
         <Card
           onClick={() => setStatusFilter(statusFilter === 'near_limit' ? 'all' : 'near_limit')}
-          className={`cursor-pointer transition-all border-amber-500/30 bg-amber-950/20 hover:border-amber-500/60 ${
-            statusFilter === 'near_limit' ? 'ring-2 ring-amber-500' : ''
+          className={`cursor-pointer transition-all border border-wf-semantic-warning-border bg-wf-semantic-warning-bg/40 hover:border-wf-semantic-warning ${
+            statusFilter === 'near_limit' ? 'ring-2 ring-wf-semantic-warning' : ''
           }`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[11px] uppercase font-bold text-amber-300">
+              <span className="text-[11px] uppercase font-bold text-wf-semantic-warning">
                 Near Limit (80–99%)
               </span>
-              <div className="text-2xl font-bold font-mono text-amber-400 mt-0.5">
+              <div className="text-2xl font-bold font-mono text-wf-semantic-warning mt-0.5">
                 {nearLimitStaff.length} Member{nearLimitStaff.length !== 1 ? 's' : ''}
               </div>
-              <span className="text-[10px] text-amber-400/80 mt-1 block">
+              <span className="text-[10px] text-wf-semantic-warning/80 mt-1 block">
                 {statusFilter === 'near_limit' ? 'Active Filter • Click to clear' : 'Click to filter roster'}
               </span>
             </div>
-            <BarChart3 className="h-8 w-8 text-amber-400 opacity-80" />
+            <BarChart3 className="h-8 w-8 text-wf-semantic-warning opacity-80" />
           </CardContent>
         </Card>
 
         <Card
           onClick={() => setStatusFilter(statusFilter === 'optimal' ? 'all' : 'optimal')}
-          className={`cursor-pointer transition-all border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-500/60 ${
-            statusFilter === 'optimal' ? 'ring-2 ring-emerald-500' : ''
+          className={`cursor-pointer transition-all border border-wf-semantic-success-border bg-wf-semantic-success-bg/40 hover:border-wf-semantic-success ${
+            statusFilter === 'optimal' ? 'ring-2 ring-wf-semantic-success' : ''
           }`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[11px] uppercase font-bold text-emerald-300">
+              <span className="text-[11px] uppercase font-bold text-wf-semantic-success">
                 Optimal / Available (&lt;80%)
               </span>
-              <div className="text-2xl font-bold font-mono text-emerald-400 mt-0.5">
+              <div className="text-2xl font-bold font-mono text-wf-semantic-success mt-0.5">
                 {optimalStaff.length} Member{optimalStaff.length !== 1 ? 's' : ''}
               </div>
-              <span className="text-[10px] text-emerald-400/80 mt-1 block">
+              <span className="text-[10px] text-wf-semantic-success/80 mt-1 block">
                 {statusFilter === 'optimal' ? 'Active Filter • Click to clear' : 'Click to filter roster'}
               </span>
             </div>
-            <CheckCircle2 className="h-8 w-8 text-emerald-400 opacity-80" />
+            <CheckCircle2 className="h-8 w-8 text-wf-semantic-success opacity-80" />
           </CardContent>
         </Card>
       </div>
@@ -389,12 +389,12 @@ export default function WorkloadCapacityPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-400" />
-              <h3 className="text-lg font-bold text-white tracking-tight">
+              <Sparkles className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />
+              <h3 className="text-lg font-bold text-wf-text-primary tracking-tight">
                 Workload Redistribution Sandbox
               </h3>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-wf-text-secondary">
               Proactive task transfer proposals to resolve capacity bottlenecks
             </p>
           </div>
@@ -422,15 +422,15 @@ export default function WorkloadCapacityPage() {
               return (
                 <Card
                   key={prop.id}
-                  className="border-violet-500/40 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card"
+                  className="border-wf-border-default bg-wf-surface-card p-5 shadow-card"
                 >
                   <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-wf-border-subtle">
                       <div className="space-y-0.5">
-                        <span className="text-[10px] uppercase font-bold font-mono text-cyan-400">
+                        <span className="text-[10px] uppercase font-bold font-mono text-wf-brand-burgundy dark:text-wf-cream">
                           Task Transfer Candidate
                         </span>
-                        <h4 className="text-base font-bold text-white">
+                        <h4 className="text-base font-bold text-wf-text-primary">
                           {prop.taskTitle} ({prop.taskHours}h)
                         </h4>
                       </div>
@@ -442,9 +442,9 @@ export default function WorkloadCapacityPage() {
                     {/* Redistribution Comparison Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Source Employee */}
-                      <div className="rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 space-y-3">
+                      <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg/40 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-rose-300">
+                          <span className="text-xs font-bold text-wf-semantic-danger">
                             Source: {prop.sourceEmployeeName}
                           </span>
                           <Badge variant="rose" size="sm">
@@ -453,9 +453,9 @@ export default function WorkloadCapacityPage() {
                         </div>
 
                         <div className="space-y-1.5 text-xs font-mono">
-                          <div className="flex justify-between text-slate-300">
+                          <div className="flex justify-between text-wf-semantic-danger">
                             <span>Before: {prop.sourceCurrentLoad}h ({sourceBeforePct}%)</span>
-                            <span className="text-emerald-400 font-bold">
+                            <span className="font-bold">
                               After: {prop.sourceProjectedLoad}h ({sourceAfterPct}%)
                             </span>
                           </div>
@@ -464,9 +464,9 @@ export default function WorkloadCapacityPage() {
                       </div>
 
                       {/* Target Employee */}
-                      <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 space-y-3">
+                      <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg/40 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-emerald-300">
+                          <span className="text-xs font-bold text-wf-semantic-success">
                             Target: {prop.targetEmployeeName}
                           </span>
                           <Badge variant="emerald" size="sm">
@@ -475,9 +475,9 @@ export default function WorkloadCapacityPage() {
                         </div>
 
                         <div className="space-y-1.5 text-xs font-mono">
-                          <div className="flex justify-between text-slate-300">
+                          <div className="flex justify-between text-wf-semantic-success">
                             <span>Before: {prop.targetCurrentLoad}h ({targetBeforePct}%)</span>
-                            <span className="text-cyan-400 font-bold">
+                            <span className="font-bold">
                               After: {prop.targetProjectedLoad}h ({targetAfterPct}%)
                             </span>
                           </div>
@@ -487,7 +487,7 @@ export default function WorkloadCapacityPage() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                      <p className="text-xs text-slate-400 italic">
+                      <p className="text-xs text-wf-text-secondary italic">
                         {prop.rationale}
                       </p>
                       {isManagerOrAdmin && (
@@ -509,33 +509,33 @@ export default function WorkloadCapacityPage() {
             })}
           </div>
         ) : overloadedStaff.length > 0 ? (
-          <div className="rounded-2xl border border-amber-500/40 bg-amber-950/20 p-6 text-center text-slate-300 space-y-3">
-            <AlertTriangle className="mx-auto h-8 w-8 text-amber-400" />
-            <h4 className="text-base font-bold text-white">
+          <div className="rounded-2xl border border-wf-semantic-warning-border bg-wf-semantic-warning-bg/40 p-6 text-center text-wf-text-primary space-y-3">
+            <AlertTriangle className="mx-auto h-8 w-8 text-wf-semantic-warning" />
+            <h4 className="text-base font-bold text-wf-text-primary">
               Overload Detected — Automated Reallocation Constrained
             </h4>
-            <p className="text-xs text-amber-200/80 max-w-lg mx-auto">
+            <p className="text-xs text-wf-semantic-warning max-w-lg mx-auto">
               {overloadedStaff.length} team member{overloadedStaff.length > 1 ? 's are' : ' is'} currently overallocated ({overloadedStaff.map(e => `${e.fullName}: ${e.currentLoadHours}h/${e.weeklyCapacityHours}h`).join(', ')}), but automated 1-to-1 task redistribution cannot safely transfer individual deliverables without pushing other team members past 100% capacity.
             </p>
             <div className="flex flex-wrap justify-center gap-2 pt-1 text-xs">
-              <span className="rounded-lg bg-navy-900/80 border border-slate-700 px-3 py-1 text-slate-300">
+              <span className="rounded-xl bg-wf-surface-card border border-wf-border-default px-3 py-1 text-wf-text-secondary">
                 Action: Break down large deliverables into smaller sub-tasks or expand team capacity.
               </span>
             </div>
           </div>
         ) : nearLimitStaff.length > 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-6 text-center text-slate-400 space-y-2">
-            <Clock className="mx-auto h-7 w-7 text-cyan-400 mb-1" />
-            <h4 className="text-sm font-bold text-white">Safe Operating Range</h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
+          <div className="rounded-2xl border border-wf-border-default bg-wf-surface-subtle/50 p-6 text-center text-wf-text-secondary space-y-2">
+            <Clock className="mx-auto h-7 w-7 text-wf-brand-burgundy dark:text-wf-cream mb-1" />
+            <h4 className="text-sm font-bold text-wf-text-primary">Safe Operating Range</h4>
+            <p className="text-xs text-wf-text-secondary max-w-md mx-auto">
               {nearLimitStaff.length} team member{nearLimitStaff.length > 1 ? 's are' : ' is'} operating near capacity limit (80-100%), and no immediate transfers are required.
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400 space-y-2">
-            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-1" />
-            <h4 className="text-sm font-bold text-white">No Capacity Bottlenecks Detected</h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
+          <div className="rounded-2xl border border-wf-border-default bg-wf-surface-subtle/50 p-8 text-center text-wf-text-secondary space-y-2">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-wf-semantic-success mb-1" />
+            <h4 className="text-sm font-bold text-wf-text-primary">No Capacity Bottlenecks Detected</h4>
+            <p className="text-xs text-wf-text-secondary max-w-md mx-auto">
               All active team members are currently operating within safe weekly thresholds.
             </p>
           </div>
@@ -555,13 +555,13 @@ export default function WorkloadCapacityPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-wf-text-tertiary" />
                 <input
                   type="text"
                   placeholder="Search members..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 pl-8 text-xs text-slate-200 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none w-44"
+                  className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 pl-8 text-xs text-wf-text-primary placeholder:text-wf-text-tertiary focus:border-wf-border-focus focus:outline-none w-44 transition-colors"
                 />
               </div>
 
@@ -569,7 +569,7 @@ export default function WorkloadCapacityPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
               >
                 <option value="all">All Statuses ({employees.length})</option>
                 <option value="overloaded">Overloaded &gt;100% ({overloadedStaff.length})</option>
@@ -581,7 +581,7 @@ export default function WorkloadCapacityPage() {
               <select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
               >
                 <option value="all">All Departments</option>
                 {departments.map((dept) => (
@@ -595,7 +595,7 @@ export default function WorkloadCapacityPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="rounded-lg border border-slate-700 bg-navy-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
               >
                 <option value="util_desc">Highest Utilization %</option>
                 <option value="util_asc">Lowest Utilization %</option>
@@ -636,32 +636,32 @@ export default function WorkloadCapacityPage() {
                   key={emp.id}
                   className={`rounded-2xl border transition-all ${
                     isExpanded
-                      ? 'border-violet-500/60 bg-navy-900/90 shadow-lg'
-                      : 'border-slate-800/80 bg-navy-900/50 hover:border-slate-700'
+                      ? 'border-wf-border-strong bg-wf-surface-subtle shadow-md'
+                      : 'border-wf-border-default bg-wf-surface-card hover:border-wf-border-strong shadow-card'
                   }`}
                 >
                   {/* Summary Bar */}
                   <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Employee Identity */}
                     <div className="flex items-center gap-3 min-w-[240px]">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-purple-800 text-xs font-bold text-white shadow-sm">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-wf-brand-burgundy text-xs font-bold text-white shadow-sm">
                         {initials}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <Link
                             href={`/employees/${emp.id}`}
-                            className="text-sm font-bold text-white hover:text-violet-300 transition-colors truncate"
+                            className="text-sm font-bold text-wf-text-primary hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors truncate"
                           >
                             {emp.fullName}
                           </Link>
                           {emp.id === currentUserId && (
-                            <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-mono font-bold text-wf-brand-burgundy dark:text-wf-cream bg-wf-brand-burgundy/15 border border-wf-brand-burgundy/30 px-1.5 py-0.2 rounded">
                               YOU
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-slate-400 block truncate">
+                        <span className="text-xs text-wf-text-secondary block truncate">
                           {emp.jobTitle} • {emp.department}
                         </span>
                       </div>
@@ -671,14 +671,14 @@ export default function WorkloadCapacityPage() {
                     <div className="flex-1 max-w-lg space-y-1.5">
                       <div className="flex justify-between items-center text-xs font-mono">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-slate-400">Allocated:</span>
+                          <span className="text-wf-text-secondary">Allocated:</span>
                           <span
                             className={
                               isOverloaded
-                                ? 'text-rose-400 font-bold'
+                                ? 'text-wf-semantic-danger font-bold'
                                 : isNearLimit
-                                ? 'text-amber-400 font-semibold'
-                                : 'text-slate-200'
+                                ? 'text-wf-semantic-warning font-semibold'
+                                : 'text-wf-text-primary'
                             }
                           >
                             {emp.currentLoadHours}h / {emp.weeklyCapacityHours}h ({util}%)
@@ -688,11 +688,11 @@ export default function WorkloadCapacityPage() {
                         {/* Buffer / Deficit Indicator */}
                         <div>
                           {isOverloaded ? (
-                            <span className="text-rose-400 font-bold text-[11px]">
+                            <span className="text-wf-semantic-danger font-bold text-[11px]">
                               +{Math.abs(bufferHours)}h over capacity
                             </span>
                           ) : (
-                            <span className="text-emerald-400 font-medium text-[11px]">
+                            <span className="text-wf-semantic-success font-medium text-[11px]">
                               {bufferHours}h buffer left
                             </span>
                           )}
@@ -738,12 +738,12 @@ export default function WorkloadCapacityPage() {
 
                   {/* Expanded Task List & Rebalancing Drawer */}
                   {isExpanded && (
-                    <div className="border-t border-slate-800/80 bg-navy-950/40 p-4 space-y-3 animate-in fade-in">
+                    <div className="border-t border-wf-border-subtle bg-wf-surface-subtle/50 p-4 space-y-3 animate-in fade-in">
                       <div className="flex items-center justify-between">
-                        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                        <h5 className="text-xs font-bold uppercase tracking-wider text-wf-text-primary">
                           Active Assigned Tasks ({empTasks.length})
                         </h5>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] text-wf-text-secondary">
                           Manager reassignments execute atomic database RPC transactions
                         </span>
                       </div>
@@ -753,13 +753,13 @@ export default function WorkloadCapacityPage() {
                           {empTasks.map((t) => (
                             <div
                               key={t.id}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-navy-900/80 p-3"
+                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-wf-border-default bg-wf-surface-card p-3 shadow-sm"
                             >
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-2">
                                   <Link
                                     href={`/tasks/${t.id}`}
-                                    className="text-xs font-bold text-white hover:text-violet-300"
+                                    className="text-xs font-bold text-wf-text-primary hover:text-wf-brand-burgundy dark:hover:text-wf-cream"
                                   >
                                     {t.title}
                                   </Link>
@@ -776,7 +776,7 @@ export default function WorkloadCapacityPage() {
                                     {t.priority}
                                   </Badge>
                                 </div>
-                                <span className="text-[11px] text-slate-400">
+                                <span className="text-[11px] text-wf-text-secondary">
                                   {t.projectName} • Status: {t.status}
                                 </span>
                               </div>
@@ -784,24 +784,24 @@ export default function WorkloadCapacityPage() {
                               <div className="flex items-center gap-2">
                                 {/* Hour Adjuster */}
                                 {isManagerOrAdmin && (
-                                  <div className="flex items-center gap-1 bg-navy-850 border border-slate-700/80 rounded-lg p-0.5">
+                                  <div className="flex items-center gap-1 bg-wf-surface-subtle border border-wf-border-default rounded-xl p-0.5">
                                     <button
                                       type="button"
                                       onClick={() => handleAdjustTaskHours(t.id, Number(t.estimatedHours) || 0, -1)}
                                       disabled={actionLoading || Number(t.estimatedHours) <= 1}
-                                      className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
+                                      className="p-1 text-wf-text-secondary hover:text-wf-text-primary disabled:opacity-30"
                                       title="Decrease estimated hours"
                                     >
                                       <Minus className="h-3 w-3" />
                                     </button>
-                                    <span className="font-mono text-xs font-bold text-white px-1">
+                                    <span className="font-mono text-xs font-bold text-wf-text-primary px-1">
                                       {t.estimatedHours}h
                                     </span>
                                     <button
                                       type="button"
                                       onClick={() => handleAdjustTaskHours(t.id, Number(t.estimatedHours) || 0, 1)}
                                       disabled={actionLoading}
-                                      className="p-1 text-slate-400 hover:text-white"
+                                      className="p-1 text-wf-text-secondary hover:text-wf-text-primary"
                                       title="Increase estimated hours"
                                     >
                                       <Plus className="h-3 w-3" />
@@ -815,7 +815,7 @@ export default function WorkloadCapacityPage() {
                                     value={t.assignedTo || 'unassigned'}
                                     onChange={(e) => handleReassignTask(t.id, e.target.value)}
                                     disabled={actionLoading}
-                                    className="rounded-lg border border-slate-700 bg-navy-850 px-2 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                                    className="rounded-xl border border-wf-border-default bg-wf-surface-subtle px-2 py-1 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none transition-colors"
                                   >
                                     <option value="unassigned">Unassigned (Backlog)</option>
                                     {employees.map((opt) => (
@@ -836,7 +836,7 @@ export default function WorkloadCapacityPage() {
                           ))}
                         </div>
                       ) : (
-                        <div className="p-4 text-center text-xs text-slate-400">
+                        <div className="p-4 text-center text-xs text-wf-text-secondary">
                           No active tasks assigned to this member.
                         </div>
                       )}
@@ -847,9 +847,9 @@ export default function WorkloadCapacityPage() {
             })}
 
             {filteredEmployees.length === 0 && (
-              <div className="p-8 text-center text-slate-400">
-                <Users className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-                <p className="text-xs text-slate-300">No team members match current search or filters.</p>
+              <div className="p-8 text-center text-wf-text-secondary">
+                <Users className="mx-auto h-8 w-8 text-wf-text-tertiary mb-2" />
+                <p className="text-xs text-wf-text-secondary">No team members match current search or filters.</p>
               </div>
             )}
           </div>

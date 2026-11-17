@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/authContext';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Sparkles, Mail, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
@@ -33,51 +34,52 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-navy-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-wf-canvas text-wf-text-primary flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20"><ThemeToggle variant="compact" /></div>
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-3 z-10">
-        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 shadow-glow mb-2">
+        <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-wf-brand-burgundy text-white shadow-sm mb-2">
           <Sparkles className="h-7 w-7 text-white" />
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+        <h1 className="text-3xl font-extrabold text-wf-text-primary tracking-tight">
           Reset Password
         </h1>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-wf-text-secondary">
           Enter your email to receive password reset instructions
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <Card className="border-slate-800 bg-navy-900/90 shadow-2xl p-6 sm:p-8 backdrop-blur-xl">
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-elevated p-6 sm:p-8 backdrop-blur-xl">
           <form onSubmit={handleReset} className="space-y-4">
             {errorMessage && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-3 text-xs text-wf-semantic-danger flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-wf-semantic-danger shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {successMessage && (
-              <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3 text-xs text-emerald-300 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div className="rounded-xl border border-wf-semantic-success-border bg-wf-semantic-success-bg p-3 text-xs text-wf-semantic-success flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-wf-semantic-success shrink-0" />
                 <span>{successMessage}</span>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-300">
+              <label className="block text-xs font-semibold text-wf-text-secondary">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
                 <input
                   type="email"
                   required
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700/80 bg-navy-950/80 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                  className="w-full rounded-xl border border-wf-border-default bg-wf-surface-subtle pl-9 pr-3 py-2 text-sm text-wf-text-primary placeholder:text-wf-text-tertiary focus:border-wf-border-focus focus:outline-none"
                 />
               </div>
             </div>
@@ -93,10 +95,10 @@ export default function ForgotPasswordPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-slate-400">
+          <div className="mt-6 text-center text-xs text-wf-text-secondary">
             <Link
               href="/login"
-              className="inline-flex items-center text-violet-400 hover:text-violet-300"
+              className="inline-flex items-center text-wf-brand-burgundy dark:text-wf-cream hover:underline font-medium"
             >
               <ArrowLeft className="h-3.5 w-3.5 mr-1" />
               <span>Back to Sign In</span>

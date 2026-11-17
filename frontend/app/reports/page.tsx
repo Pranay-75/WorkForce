@@ -292,42 +292,42 @@ export default function ReportsPage() {
 
       {/* AI Executive Report Briefing */}
       {aiReport && (
-        <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-850 to-navy-900 shadow-card">
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-400" />
-              <CardTitle className="text-base">Executive Intelligence Briefing</CardTitle>
+              <Sparkles className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />
+              <CardTitle className="text-base text-wf-text-primary">Executive Intelligence Briefing</CardTitle>
             </div>
-            <Badge variant={aiReport.is_ai_generated ? 'violet' : 'slate'} size="sm">
+            <Badge variant={aiReport.is_ai_generated ? 'burgundy' : 'neutral'} size="sm">
               {aiReport.is_ai_generated ? 'Powered by Gemini 3.8-Flash' : 'Deterministic Telemetry'}
             </Badge>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+            <p className="text-xs sm:text-sm text-wf-text-primary leading-relaxed font-medium">
               {aiReport.executive_briefing}
             </p>
 
-            <div className="rounded-xl border border-slate-800 bg-navy-950/60 p-3.5 space-y-1">
-              <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider block">
+            <div className="rounded-xl border border-wf-border-default bg-wf-surface-subtle p-3.5 space-y-1">
+              <span className="text-[11px] font-bold text-wf-brand-burgundy dark:text-wf-cream uppercase tracking-wider block">
                 Sprint Velocity &amp; Cadence Evaluation:
               </span>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-wf-text-secondary leading-relaxed">
                 {aiReport.velocity_analysis}
               </p>
             </div>
 
             <div className="space-y-1.5 pt-1">
-              <span className="text-xs font-bold text-slate-300 block">
+              <span className="text-xs font-bold text-wf-text-primary block">
                 Recommended Strategic Planning Priorities:
               </span>
               <ul className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 {aiReport.strategic_priorities.map((item, idx) => (
                   <li
                     key={idx}
-                    className="rounded-xl border border-slate-800/80 bg-navy-900/60 p-2.5 text-xs text-slate-300 flex items-start gap-2"
+                    className="rounded-xl border border-wf-border-default bg-wf-surface-subtle/70 p-2.5 text-xs text-wf-text-primary flex items-start gap-2"
                   >
-                    <span className="text-violet-400 font-bold">#{idx + 1}</span>
-                    <span>{item}</span>
+                    <span className="text-wf-brand-burgundy dark:text-wf-cream font-bold">#{idx + 1}</span>
+                    <span className="text-wf-text-secondary">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -338,51 +338,51 @@ export default function ReportsPage() {
 
       {/* Analytics Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium uppercase text-slate-400">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-wf-text-secondary">
               Total Recorded Work Effort
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-white">
+            <div className="text-2xl font-bold font-mono text-wf-text-primary">
               {totalEffortHours} Hours
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-wf-text-tertiary mt-1">
               Across {projects.length} project initiative{projects.length !== 1 ? 's' : ''} ({tasks.length} total tasks)
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium uppercase text-slate-400">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-wf-text-secondary">
               Task Velocity & Completion Rate
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-emerald-400">
+            <div className="text-2xl font-bold font-mono text-wf-semantic-success">
               {taskCompletionRate}%
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-wf-text-tertiary mt-1">
               {completedTasksCount} of {tasks.length} tasks marked completed
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium uppercase text-slate-400">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-wf-text-secondary">
               Compliance Audit Logs
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-cyan-400">
+            <div className="text-2xl font-bold font-mono text-wf-semantic-info">
               {isLive
                 ? (liveAuditCount !== null ? `${liveAuditCount} Logged` : 'Active')
                 : `${mockAuditEvents.length} Recorded`}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-wf-text-tertiary mt-1">
               Immutable organization governance trail preserved
             </p>
           </CardContent>
@@ -390,17 +390,17 @@ export default function ReportsPage() {
       </div>
 
       {/* Department Workload Summary Table */}
-      <Card>
+      <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
         <CardHeader>
-          <CardTitle>Department Capacity &amp; Utilization Summary</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-wf-text-primary">Department Capacity &amp; Utilization Summary</CardTitle>
+          <CardDescription className="text-wf-text-secondary">
             Aggregated metrics for quarterly resource planning and hiring forecasts
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-200">
-              <thead className="border-b border-slate-800 bg-navy-900/90 text-[11px] uppercase tracking-wider text-slate-400">
+            <table className="w-full text-left text-xs text-wf-text-primary">
+              <thead className="border-b border-wf-border-default bg-wf-surface-subtle text-[11px] uppercase tracking-wider text-wf-text-secondary">
                 <tr>
                   <th className="px-4 py-3">Department</th>
                   <th className="px-4 py-3">Headcount</th>
@@ -410,7 +410,7 @@ export default function ReportsPage() {
                   <th className="px-4 py-3">Health Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-wf-border-subtle">
                 {departmentList.map((dept) => {
                   const deptEmps = employees.filter((e) => e.department === dept);
                   const count = deptEmps.length;
@@ -419,14 +419,14 @@ export default function ReportsPage() {
                   const util = capacity > 0 ? Math.round((load / capacity) * 100) : 0;
 
                   return (
-                    <tr key={dept} className="hover:bg-navy-800/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-white">{dept}</td>
-                      <td className="px-4 py-3 font-mono">{count} member{count !== 1 ? 's' : ''}</td>
-                      <td className="px-4 py-3 font-mono text-slate-400">{capacity}h</td>
-                      <td className="px-4 py-3 font-mono text-cyan-400">{load}h</td>
+                    <tr key={dept} className="hover:bg-wf-surface-subtle/50 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-wf-text-primary">{dept}</td>
+                      <td className="px-4 py-3 font-mono text-wf-text-secondary">{count} member{count !== 1 ? 's' : ''}</td>
+                      <td className="px-4 py-3 font-mono text-wf-text-secondary">{capacity}h</td>
+                      <td className="px-4 py-3 font-mono font-medium text-wf-text-primary">{load}h</td>
                       <td className="px-4 py-3">
                         <div className="w-32 space-y-1">
-                          <span className="font-mono font-bold text-xs">{util}%</span>
+                          <span className="font-mono font-bold text-xs text-wf-text-primary">{util}%</span>
                           <ProgressBar value={util} />
                         </div>
                       </td>
@@ -434,10 +434,10 @@ export default function ReportsPage() {
                         <Badge
                           variant={
                             util > 100
-                              ? 'rose'
+                              ? 'danger'
                               : util >= 80
-                              ? 'amber'
-                              : 'emerald'
+                              ? 'warning'
+                              : 'success'
                           }
                           size="sm"
                         >
@@ -454,7 +454,7 @@ export default function ReportsPage() {
 
                 {departmentList.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={6} className="px-4 py-8 text-center text-wf-text-tertiary">
                       No departments registered in this workspace yet.
                     </td>
                   </tr>

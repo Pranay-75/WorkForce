@@ -533,7 +533,7 @@ function LoginFormContent() {
                   onBlur={() => handleBlur('email')}
                   aria-invalid={!!(touched.email && fieldErrors.email)}
                   className={cn(
-                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
+                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-3 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                     touched.email && fieldErrors.email
                       ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
                       : 'border-wf-border-default focus:border-violet-500'
@@ -577,7 +577,7 @@ function LoginFormContent() {
                   onBlur={() => handleBlur('password')}
                   aria-invalid={!!(touched.password && fieldErrors.password)}
                   className={cn(
-                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
+                    'w-full rounded-xl border bg-wf-surface-card pl-9 pr-10 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:outline-none transition-all',
                     touched.password && fieldErrors.password
                       ? 'border-rose-500/80 focus:border-rose-500 ring-1 ring-rose-500/30'
                       : 'border-wf-border-default focus:border-violet-500'
@@ -664,7 +664,7 @@ function LoginFormContent() {
                       placeholder="name@company.com"
                       value={setupEmail}
                       onChange={(e) => setSetupEmail(e.target.value)}
-                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                   <p className="text-[11px] text-wf-text-secondary">
@@ -707,7 +707,7 @@ function LoginFormContent() {
                       placeholder="e.g. Alex Chen"
                       value={setupFullName}
                       onChange={(e) => setSetupFullName(e.target.value)}
-                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -723,7 +723,7 @@ function LoginFormContent() {
                       placeholder="e.g. Engineering, Marketing, Product"
                       value={setupDepartment}
                       onChange={(e) => setSetupDepartment(e.target.value)}
-                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                   <p className="text-[11px] text-wf-text-secondary">
@@ -743,7 +743,7 @@ function LoginFormContent() {
                       placeholder="At least 8 characters"
                       value={setupPassword}
                       onChange={(e) => setSetupPassword(e.target.value)}
-                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-10 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-10 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                     <button
                       type="button"
@@ -767,7 +767,7 @@ function LoginFormContent() {
                       placeholder="Re-enter password"
                       value={setupConfirmPassword}
                       onChange={(e) => setSetupConfirmPassword(e.target.value)}
-                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm text-white placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
+                      className="w-full rounded-xl border border-wf-border-default bg-wf-surface-card pl-9 pr-3 py-2 text-sm placeholder:text-wf-text-tertiary text-wf-text-primary focus:border-violet-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -800,7 +800,7 @@ function LoginFormContent() {
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Verification Link Sent</h4>
+                  <h4 className="text-sm font-bold text-wf-text-primary">Verification Link Sent</h4>
                   <p className="text-xs text-wf-text-secondary mt-1">
                     A confirmation link has been sent to <strong>{setupEmail}</strong>. Please check your inbox and click the link to confirm your email address.
                   </p>

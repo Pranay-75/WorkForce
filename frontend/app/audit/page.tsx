@@ -106,29 +106,29 @@ export default function AuditPage() {
       </div>
 
       {auditError && (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-xs text-rose-300">
+        <div className="flex items-center gap-2 rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-4 text-xs text-wf-semantic-danger">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{auditError}</span>
         </div>
       )}
 
       {/* Filter and Search Bar */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-xl border border-slate-800 bg-navy-900/80 p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-xl border border-wf-border-default bg-wf-surface-card p-4 shadow-card">
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-wf-text-tertiary" />
           <input
             type="text"
             placeholder="Search audit actions, actors, or details..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-slate-700/80 bg-navy-850 px-3 py-1.5 pl-9 text-xs text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-lg border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 pl-9 text-xs text-wf-text-primary placeholder:text-wf-text-tertiary focus:border-wf-border-focus focus:outline-none"
           />
         </div>
 
         <select
           value={selectedAction}
           onChange={(e) => setSelectedAction(e.target.value)}
-          className="rounded-lg border border-slate-700/80 bg-navy-850 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+          className="rounded-lg border border-wf-border-default bg-wf-surface-subtle px-3 py-1.5 text-xs text-wf-text-primary focus:border-wf-border-focus focus:outline-none"
         >
           <option value="all">All Entity Types</option>
           <option value="Recommendation">AI Recommendation Decisions</option>
@@ -143,7 +143,7 @@ export default function AuditPage() {
       {isLive && isAuditLoading && auditEvents.length === 0 && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 rounded-xl border border-slate-800 bg-navy-900/40 animate-pulse p-4" />
+            <div key={i} className="h-28 rounded-xl border border-wf-border-default bg-wf-surface-subtle/50 animate-pulse p-4" />
           ))}
         </div>
       )}
@@ -151,15 +151,15 @@ export default function AuditPage() {
       {/* Audit Timeline List */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center min-h-[300px] space-y-3">
-          <RefreshCw className="h-7 w-7 animate-spin text-violet-400" />
-          <p className="text-xs text-slate-400">Loading immutable organization audit events...</p>
+          <RefreshCw className="h-7 w-7 animate-spin text-wf-brand-burgundy dark:text-wf-cream" />
+          <p className="text-xs text-wf-text-secondary">Loading immutable organization audit events...</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredEvents.map((ev) => (
             <Card
               key={ev.id}
-              className="border-slate-800/90 hover:border-slate-700 transition-colors"
+              className="border-wf-border-default bg-wf-surface-card hover:border-wf-border-strong transition-colors shadow-card"
             >
               <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="space-y-1.5 flex-1">
@@ -167,38 +167,38 @@ export default function AuditPage() {
                     <Badge
                       variant={
                         ev.entityType === 'Recommendation'
-                          ? 'violet'
+                          ? 'burgundy'
                           : ev.entityType === 'Project'
-                          ? 'cyan'
+                          ? 'neutral'
                           : ev.entityType === 'Task'
-                          ? 'emerald'
-                          : 'slate'
+                          ? 'success'
+                          : 'neutral'
                       }
                       size="sm"
                     >
                       {ev.entityType}
                     </Badge>
-                    <span className="text-xs font-bold text-white">
+                    <span className="text-xs font-bold text-wf-text-primary">
                       {ev.action}
                     </span>
                   </div>
 
-                  <h4 className="text-sm font-semibold text-violet-300">
+                  <h4 className="text-sm font-semibold text-wf-brand-burgundy dark:text-wf-cream">
                     {ev.entityTitle}
                   </h4>
 
-                <p className="text-xs text-slate-300 leading-relaxed font-mono break-all">
+                <p className="text-xs text-wf-text-secondary leading-relaxed font-mono break-all">
                   {ev.details}
                 </p>
 
-                <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-1">
-                  <span>Actor: <strong>{ev.actorName}</strong></span>
+                <div className="flex items-center gap-2 text-[11px] text-wf-text-tertiary pt-1">
+                  <span>Actor: <strong className="text-wf-text-primary font-semibold">{ev.actorName}</strong></span>
                   <span>•</span>
-                  <span>Timestamp: <strong className="text-slate-300 font-mono">{new Date(ev.timestamp).toLocaleString()}</strong></span>
+                  <span>Timestamp: <strong className="text-wf-text-primary font-mono">{new Date(ev.timestamp).toLocaleString()}</strong></span>
                 </div>
               </div>
 
-              <Badge variant="slate" size="sm" className="font-mono text-[10px] shrink-0">
+              <Badge variant="neutral" size="sm" className="font-mono text-[10px] shrink-0">
                 Event ID: {ev.id.slice(0, 12)}...
               </Badge>
             </div>
@@ -206,9 +206,9 @@ export default function AuditPage() {
         ))}
 
         {!isAuditLoading && filteredEvents.length === 0 && (
-          <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-8 text-center text-slate-400">
-            <History className="mx-auto h-8 w-8 text-slate-500 mb-2" />
-            <p className="text-xs font-medium text-slate-300">
+          <div className="rounded-xl border border-wf-border-default bg-wf-surface-card p-8 text-center text-wf-text-secondary shadow-card">
+            <History className="mx-auto h-8 w-8 text-wf-text-tertiary mb-2" />
+            <p className="text-xs font-medium text-wf-text-secondary">
               No audit events found matching filters.
             </p>
           </div>

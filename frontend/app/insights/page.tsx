@@ -195,17 +195,17 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Employee Performance &amp; Operational Risk
             </h2>
             <Badge variant="rose" size="sm">
               {isLive ? 'Live Operational Risk Matrix' : 'Operational Risk Demo'}
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Deterministic workload congestion metrics, capacity distributions, and scheduling health
           </p>
         </div>
@@ -218,7 +218,7 @@ export default function InsightsPage() {
             disabled={aiLoading}
             className="flex items-center gap-1.5"
           >
-            <Sparkles className={`h-3.5 w-3.5 text-violet-400 ${aiLoading ? 'animate-spin' : ''}`} />
+            <Sparkles className={`h-3.5 w-3.5 text-wf-brand-burgundy dark:text-wf-cream ${aiLoading ? 'animate-spin' : ''}`} />
             <span>{aiLoading ? 'Generating AI...' : 'Refresh AI Insights'}</span>
           </Button>
 
@@ -241,14 +241,14 @@ export default function InsightsPage() {
       </div>
 
       {/* Ethical Framework Disclaimer Alert */}
-      <div className="rounded-2xl border border-violet-500/30 bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 p-5 shadow-card">
+      <div className="rounded-2xl border border-wf-border-default bg-wf-surface-card p-5 shadow-card">
         <div className="flex items-start gap-3.5">
-          <ShieldCheck className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+          <ShieldCheck className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream shrink-0 mt-0.5" />
           <div className="space-y-1 text-xs">
-            <span className="font-bold text-white text-sm block">
+            <span className="font-bold text-wf-text-primary text-sm block">
               Ethical Risk &amp; Operational Metric Guidelines
             </span>
-            <p className="text-slate-300 leading-relaxed">
+            <p className="text-wf-text-secondary leading-relaxed">
               WorkForce strictly frames all risk indexes as <strong>operational capacity and delivery metrics</strong>. Scores are calculated deterministically from active assigned task hours divided by weekly capacity. They are designed to assist managers in balancing workloads and do not constitute psychological or clinical predictions.
             </p>
           </div>
@@ -257,10 +257,10 @@ export default function InsightsPage() {
 
       {/* AI Executive Insights Card */}
       {aiInsights && (
-        <Card className="border-violet-500/40 bg-gradient-to-br from-navy-900 via-navy-850 to-navy-900 shadow-card">
+        <Card className="border-wf-border-default bg-wf-surface-card shadow-card">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-400" />
+              <Sparkles className="h-5 w-5 text-wf-brand-burgundy dark:text-wf-cream" />
               <CardTitle className="text-base">Executive Operational Synthesis</CardTitle>
             </div>
             <Badge variant={aiInsights.is_ai_generated ? 'violet' : 'slate'} size="sm">
@@ -268,20 +268,20 @@ export default function InsightsPage() {
             </Badge>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+            <p className="text-xs sm:text-sm text-wf-text-primary leading-relaxed font-medium">
               {aiInsights.executive_summary}
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-wf-border-subtle">
               <div className="space-y-2">
-                <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                <span className="text-xs font-bold text-wf-semantic-danger flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" />
                   Identified Operational Bottlenecks
                 </span>
-                <ul className="space-y-1.5 text-xs text-slate-300">
+                <ul className="space-y-1.5 text-xs text-wf-text-secondary">
                   {aiInsights.identified_risks.map((risk, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
-                      <span className="text-rose-400 font-bold">•</span>
+                      <span className="text-wf-semantic-danger font-bold">•</span>
                       <span>{risk}</span>
                     </li>
                   ))}
@@ -289,14 +289,14 @@ export default function InsightsPage() {
               </div>
 
               <div className="space-y-2">
-                <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-xs font-bold text-wf-semantic-info flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
                   Actionable Mitigation Strategies
                 </span>
-                <ul className="space-y-1.5 text-xs text-slate-300">
+                <ul className="space-y-1.5 text-xs text-wf-text-secondary">
                   {aiInsights.actionable_recommendations.map((rec, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
-                      <span className="text-cyan-400 font-bold">→</span>
+                      <span className="text-wf-semantic-info font-bold">→</span>
                       <span>{rec}</span>
                     </li>
                   ))}
@@ -321,49 +321,49 @@ export default function InsightsPage() {
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[11px] uppercase font-bold text-slate-400">
+              <span className="text-[11px] uppercase font-bold text-wf-text-secondary">
                 Verified Team Members
               </span>
-              <div className="text-2xl font-bold font-mono text-emerald-400">
+              <div className="text-2xl font-bold font-mono text-wf-semantic-success">
                 {avgOnTime}
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-wf-text-tertiary">
                 {isLive && avgOnTime === 'N/A' ? 'Awaiting completed tasks' : 'Reliable delivery track record'}
               </p>
             </div>
-            <Users className="h-8 w-8 text-emerald-400 opacity-80" />
+            <Users className="h-8 w-8 text-wf-semantic-success opacity-80" />
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[11px] uppercase font-bold text-slate-400">
+              <span className="text-[11px] uppercase font-bold text-wf-text-secondary">
                 Sprint Work Effort
               </span>
-              <div className="text-2xl font-bold font-mono text-cyan-400">
+              <div className="text-2xl font-bold font-mono text-wf-brand-burgundy dark:text-wf-cream">
                 {isLive ? `${totalEffortHours} hrs` : '88.6 hrs / wk'}
               </div>
-              <p className="text-[11px] text-slate-400">Across active initiatives</p>
+              <p className="text-[11px] text-wf-text-tertiary">Across active initiatives</p>
             </div>
-            <Activity className="h-8 w-8 text-cyan-400 opacity-80" />
+            <Activity className="h-8 w-8 text-wf-brand-burgundy dark:text-wf-cream opacity-80" />
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[11px] uppercase font-bold text-slate-400">
+              <span className="text-[11px] uppercase font-bold text-wf-text-secondary">
                 Governance Compliance
               </span>
-              <div className="text-2xl font-bold font-mono text-violet-400">
+              <div className="text-2xl font-bold font-mono text-wf-brand-burgundy dark:text-wf-cream">
                 {governanceCompliance}
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-wf-text-tertiary">
                 {isLive && governanceCompliance === 'N/A' ? 'Audit trail logging active' : 'Human sign-off on all assignments'}
               </p>
             </div>
-            <AlertTriangle className="h-8 w-8 text-rose-400 opacity-80" />
+            <AlertTriangle className="h-8 w-8 text-wf-semantic-danger opacity-80" />
           </CardContent>
         </Card>
       </div>
@@ -378,8 +378,8 @@ export default function InsightsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-200">
-              <thead className="border-b border-slate-800 bg-navy-900/90 text-[11px] uppercase tracking-wider text-slate-400">
+            <table className="w-full text-left text-xs text-wf-text-primary">
+              <thead className="border-b border-wf-border-default bg-wf-surface-subtle text-[11px] uppercase tracking-wider text-wf-text-secondary">
                 <tr>
                   <th className="px-4 py-3">Team Member</th>
                   <th className="px-4 py-3">Department</th>
@@ -389,7 +389,7 @@ export default function InsightsPage() {
                   <th className="px-4 py-3">Status Assessment</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-wf-border-subtle">
                 {sortedByRisk.map((emp) => {
                   const riskPct = Math.round(emp.burnoutRiskScore * 100);
                   const utilPct = emp.weeklyCapacityHours > 0
@@ -397,26 +397,26 @@ export default function InsightsPage() {
                     : 0;
 
                   return (
-                    <tr key={emp.id} className="hover:bg-navy-800/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-white">
-                        <Link href={`/employees/${emp.id}`} className="hover:text-violet-300 transition-colors">
+                    <tr key={emp.id} className="hover:bg-wf-surface-subtle/50 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-wf-text-primary">
+                        <Link href={`/employees/${emp.id}`} className="hover:text-wf-brand-burgundy dark:hover:text-wf-cream transition-colors">
                           {emp.fullName}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-400">{emp.department}</td>
+                      <td className="px-4 py-3 text-wf-text-secondary">{emp.department}</td>
                       <td className="px-4 py-3 font-mono">
-                        <span className={utilPct > 100 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
+                        <span className={utilPct > 100 ? 'text-wf-semantic-danger font-bold' : 'text-wf-text-primary'}>
                           {emp.currentLoadHours}h ({utilPct}%)
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono text-emerald-400">
+                      <td className="px-4 py-3 font-mono text-wf-semantic-success">
                         {emp.onTimeCompletionRate !== null ? `${emp.onTimeCompletionRate}%` : 'N/A'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="w-32 space-y-1">
                           <div className="flex justify-between font-mono text-[10px]">
-                            <span>Score:</span>
-                            <span className={riskPct > 60 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
+                            <span className="text-wf-text-secondary">Score:</span>
+                            <span className={riskPct > 60 ? 'text-wf-semantic-danger font-bold' : 'text-wf-text-primary'}>
                               {riskPct}%
                             </span>
                           </div>
@@ -444,7 +444,7 @@ export default function InsightsPage() {
 
                 {sortedByRisk.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={6} className="px-4 py-8 text-center text-wf-text-secondary">
                       No team members found in the current organization.
                     </td>
                   </tr>

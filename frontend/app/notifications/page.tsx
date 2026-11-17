@@ -134,17 +134,17 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-wf-border-default pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">
+            <h2 className="text-2xl font-extrabold tracking-tight text-wf-text-primary">
               Notification &amp; Alert Center
             </h2>
-            <Badge variant={unreadCount > 0 ? 'amber' : 'emerald'} size="sm">
+            <Badge variant={unreadCount > 0 ? 'warning' : 'success'} size="sm">
               {unreadCount} Unread
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-wf-text-secondary mt-1">
             Real-time capacity overload warnings, deadline updates, and operational alerts
           </p>
         </div>
@@ -163,12 +163,12 @@ export default function NotificationsPage() {
 
       {/* Actionable Error Banner */}
       {loadError && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-start justify-between gap-3">
+        <div className="rounded-xl border border-wf-semantic-danger-border bg-wf-semantic-danger-bg p-4 text-xs text-wf-semantic-danger flex items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-wf-semantic-danger shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-rose-200">Failed to load organization alerts</p>
-              <p className="text-[11px] text-rose-300/80 mt-0.5">{loadError}</p>
+              <p className="font-semibold text-wf-semantic-danger">Failed to load organization alerts</p>
+              <p className="text-[11px] text-wf-semantic-danger/80 mt-0.5">{loadError}</p>
             </div>
           </div>
           <Button
@@ -193,12 +193,12 @@ export default function NotificationsPage() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-20 rounded-xl border border-slate-800 bg-navy-900/40 p-4 animate-pulse flex items-center gap-4"
+              className="h-20 rounded-xl border border-wf-border-default bg-wf-surface-subtle/50 p-4 animate-pulse flex items-center gap-4"
             >
-              <div className="h-10 w-10 bg-slate-800 rounded-xl shrink-0" />
+              <div className="h-10 w-10 bg-wf-surface-subtle rounded-xl shrink-0" />
               <div className="space-y-2 flex-1">
-                <div className="h-4 w-40 bg-slate-800 rounded" />
-                <div className="h-3 w-80 bg-slate-800/60 rounded" />
+                <div className="h-4 w-40 bg-wf-surface-subtle rounded" />
+                <div className="h-3 w-80 bg-wf-surface-subtle/60 rounded" />
               </div>
             </div>
           ))}
@@ -207,12 +207,12 @@ export default function NotificationsPage() {
 
       {/* Empty State */}
       {!(isLive && (isTasksLoading || isMembersLoading || isLogsLoading)) && !loadError && notifications.length === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-navy-900/40 p-12 text-center space-y-3">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-400">
+        <div className="rounded-xl border border-wf-border-default bg-wf-surface-card p-12 text-center space-y-3 shadow-card">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-wf-semantic-success-border bg-wf-semantic-success-bg text-wf-semantic-success">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h3 className="text-base font-bold text-white">All Systems Operational</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <h3 className="text-base font-bold text-wf-text-primary">All Systems Operational</h3>
+          <p className="text-xs text-wf-text-secondary max-w-sm mx-auto">
             No capacity overloads, pending task bottlenecks, or unassigned deliverables detected for your organization.
           </p>
         </div>
@@ -224,10 +224,10 @@ export default function NotificationsPage() {
           return (
             <Card
               key={n.id}
-              className={`border-slate-800 transition-all ${
+              className={`transition-all ${
                 !n.isRead
-                  ? 'border-violet-500/50 bg-navy-900/95 shadow-sm'
-                  : 'bg-navy-900/40 opacity-75'
+                  ? 'border-wf-border-focus bg-wf-surface-card shadow-card'
+                  : 'border-wf-border-default bg-wf-surface-subtle/60 opacity-80'
               }`}
             >
               <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -235,12 +235,12 @@ export default function NotificationsPage() {
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
                       n.type === 'capacity_alert'
-                        ? 'border-rose-500/40 bg-rose-950/40 text-rose-400'
+                        ? 'border-wf-semantic-danger-border bg-wf-semantic-danger-bg text-wf-semantic-danger'
                         : n.type === 'recommendation_ready'
-                        ? 'border-violet-500/40 bg-violet-950/40 text-violet-400'
+                        ? 'border-wf-semantic-info-border bg-wf-semantic-info-bg text-wf-semantic-info'
                         : n.type === 'deadline_warning'
-                        ? 'border-amber-500/40 bg-amber-950/40 text-amber-400'
-                        : 'border-cyan-500/40 bg-cyan-950/40 text-cyan-400'
+                        ? 'border-wf-semantic-warning-border bg-wf-semantic-warning-bg text-wf-semantic-warning'
+                        : 'border-wf-semantic-success-border bg-wf-semantic-success-bg text-wf-semantic-success'
                     }`}
                   >
                     {n.type === 'capacity_alert' && <AlertTriangle className="h-5 w-5" />}
@@ -251,15 +251,15 @@ export default function NotificationsPage() {
 
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-white">{n.title}</h4>
+                      <h4 className="text-sm font-bold text-wf-text-primary">{n.title}</h4>
                       {!n.isRead && (
-                        <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                        <span className="h-2 w-2 rounded-full bg-wf-brand-burgundy dark:bg-wf-cream animate-pulse" />
                       )}
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                    <p className="text-xs text-wf-text-secondary leading-relaxed max-w-2xl">
                       {n.message}
                     </p>
-                    <span className="text-[10px] text-slate-400 font-mono block pt-0.5">
+                    <span className="text-[10px] text-wf-text-tertiary font-mono block pt-0.5">
                       {n.timestamp}
                     </span>
                   </div>
@@ -268,7 +268,7 @@ export default function NotificationsPage() {
                 <div className="flex items-center gap-2 self-end sm:self-center">
                   {!n.isRead && (
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
                       className="text-xs"
                       onClick={() => handleDismiss(n.id)}
@@ -291,10 +291,10 @@ export default function NotificationsPage() {
         })}
 
         {notifications.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-400 space-y-2">
-            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
-            <h4 className="text-base font-bold text-white">All Clear</h4>
-            <p className="text-xs text-slate-400">
+          <div className="rounded-xl border border-dashed border-wf-border-default p-12 text-center text-wf-text-secondary space-y-2">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-wf-semantic-success mb-2" />
+            <h4 className="text-base font-bold text-wf-text-primary">All Clear</h4>
+            <p className="text-xs text-wf-text-secondary">
               No operational alerts, capacity bottlenecks, or critical deadlines pending.
             </p>
           </div>
